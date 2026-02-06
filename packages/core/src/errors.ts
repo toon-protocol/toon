@@ -1,0 +1,39 @@
+/**
+ * Custom error classes for @agent-society/core.
+ */
+
+/**
+ * Base error class for all agent-society errors.
+ * Provides a consistent error interface with error codes and cause chaining.
+ */
+export class AgentSocietyError extends Error {
+  public readonly code: string;
+
+  constructor(message: string, code: string, cause?: Error) {
+    super(message, { cause });
+    this.name = 'AgentSocietyError';
+    this.code = code;
+  }
+}
+
+/**
+ * Error thrown when parsing a Nostr event fails.
+ * Used for malformed events, wrong kind, invalid JSON, or missing required fields.
+ */
+export class InvalidEventError extends AgentSocietyError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'INVALID_EVENT', cause);
+    this.name = 'InvalidEventError';
+  }
+}
+
+/**
+ * Error thrown when peer discovery fails.
+ * Used for invalid pubkeys or relay failures.
+ */
+export class PeerDiscoveryError extends AgentSocietyError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'PEER_DISCOVERY_FAILED', cause);
+    this.name = 'PeerDiscoveryError';
+  }
+}
