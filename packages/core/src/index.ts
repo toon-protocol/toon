@@ -18,15 +18,29 @@ export {
 export type { IlpPeerInfo, SpspInfo, SpspRequest, SpspResponse, Subscription } from './types.js';
 
 // Error classes
-export { AgentSocietyError, InvalidEventError, PeerDiscoveryError } from './errors.js';
+export {
+  AgentSocietyError,
+  InvalidEventError,
+  PeerDiscoveryError,
+  SpspError,
+  SpspTimeoutError,
+} from './errors.js';
 
 // Event parsers and builders
 export {
   parseIlpPeerInfo,
   parseSpspInfo,
+  parseSpspRequest,
+  parseSpspResponse,
   buildIlpPeerInfoEvent,
   buildSpspInfoEvent,
+  buildSpspRequestEvent,
+  buildSpspResponseEvent,
+  type SpspRequestEventResult,
 } from './events/index.js';
 
 // Peer discovery
 export { NostrPeerDiscovery } from './discovery/index.js';
+
+// SPSP client and server
+export { NostrSpspClient, NostrSpspServer } from './spsp/index.js';
