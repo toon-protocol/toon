@@ -1,0 +1,152 @@
+/**
+ * SPSP server for publishing SPSP parameters to Nostr.
+ */
+
+import { SimplePool, type SubCloser } from 'nostr-tools/pool';
+import { getPublicKey } from 'nostr-tools/pure';
+import type { Filter } from 'nostr-tools/filter';
+import { SpspError } from '../errors.js';
+import { SPSP_REQUEST_KIND } from '../constants.js';
+import { buildSpspInfoEvent, buildSpspResponseEvent, parseSpspRequest } from '../events/index.js';
+import type { SpspInfo, Subscription, SpspResponse } from '../types.js';
+
+/**
+ * Server for publishing SPSP parameters via Nostr kind:10047 events.
+ */
+export class NostrSpspServer {
+  private readonly relayUrls: string[];
+  private readonly secretKey: Uint8Array;
+  private readonly pool: SimplePool;
+
+  /**
+   * Creates a new NostrSpspServer instance.
+   *
+   * @param relayUrls - Array of relay WebSocket URLs to publish to
+   * @param secretKey - The 32-byte secret key for signing events
+   * @param pool - Optional SimplePool instance (creates new one if not provided)
+   */
+  constructor(relayUrls: string[], secretKey: Uint8Array, pool?: SimplePool) {
+    this.relayUrls = relayUrls;
+    this.secretKey = secretKey;
+    this.pool = pool ?? new SimplePool();
+  }
+
+  /**
+   * Publishes SPSP parameters as a kind:10047 replaceable event.
+   *
+   * Signs the event with the configured secret key and publishes to all
+   * configured relays. Waits for at least one relay to confirm before resolving.
+   *
+   * @param info - The SPSP info to publish
+   * @throws SpspError if no relay confirms the publish
+   */
+  async publishSpspInfo(info: SpspInfo): Promise<void> {
+    const event = buildSpspInfoEvent(info, this.secretKey);
+
+    const publishPromises = this.pool.publish(this.relayUrls, event);
+
+    try {
+      await Promise.any(publishPromises);
+    } catch (error) {
+      if (error instanceof AggregateError) {
+        throw new SpspError(
+          'Failed to publish SPSP info to any relay',
+          error.errors[0] instanceof Error ? error.errors[0] : undefined
+        );
+      }
+      throw new SpspError(
+        'Failed to publish SPSP info',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Handles incoming SPSP requests and responds with fresh parameters.
+   *
+   * Subscribes to kind:23194 events addressed to this server's pubkey.
+   * For each incoming request, calls the generator function to produce
+   * fresh SpspInfo, then sends an encrypted response.
+   *
+   * @param generator - Function that produces fresh SpspInfo for each request
+   * @returns A Subscription object with unsubscribe() method to stop handling requests
+   */
+  handleSpspRequests(
+    generator: () => SpspInfo | Promise<SpspInfo>
+  ): Subscription {
+    const myPubkey = getPublicKey(this.secretKey);
+
+    const filter: Filter = {
+      kinds: [SPSP_REQUEST_KIND],
+      '#p': [myPubkey],
+    };
+
+    const sub: SubCloser = this.pool.subscribeMany(this.relayUrls, filter, {
+      onevent: (event) => {
+        // Handle each request in a non-throwing way
+        this.processRequest(event, generator).catch(() => {
+          // Silently ignore all errors - never throw from subscription callback
+        });
+      },
+    });
+
+    return {
+      unsubscribe: () => {
+        sub.close();
+      },
+    };
+  }
+
+  /**
+   * Processes a single SPSP request event.
+   * All errors are caught and logged silently.
+   */
+  private async processRequest(
+    event: { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number; sig: string },
+    generator: () => SpspInfo | Promise<SpspInfo>
+  ): Promise<void> {
+    // Extract sender pubkey from event
+    const senderPubkey = event.pubkey;
+
+    // Decrypt and parse request
+    let request;
+    try {
+      request = parseSpspRequest(event, this.secretKey, senderPubkey);
+    } catch {
+      // Invalid request - silently ignore
+      return;
+    }
+
+    // Call generator to get fresh SpspInfo
+    let spspInfo;
+    try {
+      spspInfo = await Promise.resolve(generator());
+    } catch {
+      // Generator error - silently ignore
+      return;
+    }
+
+    // Build response
+    const response: SpspResponse = {
+      requestId: request.requestId,
+      destinationAccount: spspInfo.destinationAccount,
+      sharedSecret: spspInfo.sharedSecret,
+    };
+
+    // Build and publish encrypted response event
+    const responseEvent = buildSpspResponseEvent(
+      response,
+      senderPubkey,
+      this.secretKey,
+      event.id
+    );
+
+    try {
+      const publishPromises = this.pool.publish(this.relayUrls, responseEvent);
+      await Promise.any(publishPromises);
+    } catch {
+      // Publish error - silently ignore
+      return;
+    }
+  }
+}

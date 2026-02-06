@@ -3,9 +3,10 @@
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
-import { ILP_PEER_INFO_KIND, SPSP_INFO_KIND } from '../constants.js';
+import { nip44 } from 'nostr-tools';
+import { ILP_PEER_INFO_KIND, SPSP_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
-import type { IlpPeerInfo, SpspInfo } from '../types.js';
+import type { IlpPeerInfo, SpspInfo, SpspRequest, SpspResponse } from '../types.js';
 
 /**
  * Type guard to check if a value is a non-null object.
@@ -120,5 +121,134 @@ export function parseSpspInfo(event: NostrEvent): SpspInfo {
   return {
     destinationAccount,
     sharedSecret,
+  };
+}
+
+/**
+ * Parses and decrypts a kind:23195 Nostr event into an SpspResponse object.
+ *
+ * @param event - The Nostr event to parse
+ * @param secretKey - The recipient's secret key for decryption
+ * @param senderPubkey - The sender's pubkey (event author)
+ * @returns The parsed SpspResponse object
+ * @throws InvalidEventError if the event is malformed, decryption fails, or missing required fields
+ */
+export function parseSpspResponse(
+  event: NostrEvent,
+  secretKey: Uint8Array,
+  senderPubkey: string
+): SpspResponse {
+  if (event.kind !== SPSP_RESPONSE_KIND) {
+    throw new InvalidEventError(
+      `Expected event kind ${SPSP_RESPONSE_KIND}, got ${event.kind}`
+    );
+  }
+
+  let decrypted: string;
+  try {
+    const conversationKey = nip44.getConversationKey(secretKey, senderPubkey);
+    decrypted = nip44.decrypt(event.content, conversationKey);
+  } catch (err) {
+    throw new InvalidEventError(
+      'Failed to decrypt event content',
+      err instanceof Error ? err : undefined
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decrypted);
+  } catch (err) {
+    throw new InvalidEventError(
+      'Failed to parse decrypted content as JSON',
+      err instanceof Error ? err : undefined
+    );
+  }
+
+  if (!isObject(parsed)) {
+    throw new InvalidEventError('Decrypted content must be a JSON object');
+  }
+
+  const { requestId, destinationAccount, sharedSecret } = parsed;
+
+  if (typeof requestId !== 'string' || requestId.length === 0) {
+    throw new InvalidEventError('Missing or invalid required field: requestId');
+  }
+
+  if (typeof destinationAccount !== 'string' || destinationAccount.length === 0) {
+    throw new InvalidEventError(
+      'Missing or invalid required field: destinationAccount'
+    );
+  }
+
+  if (typeof sharedSecret !== 'string' || sharedSecret.length === 0) {
+    throw new InvalidEventError('Missing or invalid required field: sharedSecret');
+  }
+
+  return {
+    requestId,
+    destinationAccount,
+    sharedSecret,
+  };
+}
+
+/**
+ * Parses and decrypts a kind:23194 Nostr event into an SpspRequest object.
+ *
+ * @param event - The Nostr event to parse
+ * @param secretKey - The recipient's secret key for decryption
+ * @param senderPubkey - The sender's pubkey (event author)
+ * @returns The parsed SpspRequest object
+ * @throws InvalidEventError if the event is malformed, decryption fails, or missing required fields
+ */
+export function parseSpspRequest(
+  event: NostrEvent,
+  secretKey: Uint8Array,
+  senderPubkey: string
+): SpspRequest {
+  if (event.kind !== SPSP_REQUEST_KIND) {
+    throw new InvalidEventError(
+      `Expected event kind ${SPSP_REQUEST_KIND}, got ${event.kind}`
+    );
+  }
+
+  let decrypted: string;
+  try {
+    const conversationKey = nip44.getConversationKey(secretKey, senderPubkey);
+    decrypted = nip44.decrypt(event.content, conversationKey);
+  } catch (err) {
+    throw new InvalidEventError(
+      'Failed to decrypt event content',
+      err instanceof Error ? err : undefined
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decrypted);
+  } catch (err) {
+    throw new InvalidEventError(
+      'Failed to parse decrypted content as JSON',
+      err instanceof Error ? err : undefined
+    );
+  }
+
+  if (!isObject(parsed)) {
+    throw new InvalidEventError('Decrypted content must be a JSON object');
+  }
+
+  const { requestId, timestamp } = parsed;
+
+  if (typeof requestId !== 'string' || requestId.length === 0) {
+    throw new InvalidEventError('Missing or invalid required field: requestId');
+  }
+
+  if (typeof timestamp !== 'number' || !Number.isInteger(timestamp)) {
+    throw new InvalidEventError('Missing or invalid required field: timestamp');
+  }
+
+  return {
+    requestId,
+    timestamp,
   };
 }
