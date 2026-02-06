@@ -62,3 +62,57 @@ export interface Subscription {
   /** Stops receiving updates and closes the underlying relay subscription */
   unsubscribe(): void;
 }
+
+/**
+ * Configuration for trust score calculation weights and thresholds.
+ */
+export interface TrustConfig {
+  /** Weight for social distance component (0-1) */
+  socialDistanceWeight: number;
+  /** Weight for mutual followers component (0-1) */
+  mutualFollowersWeight: number;
+  /** Weight for reputation component (0-1) */
+  reputationWeight: number;
+  /** Social distance beyond which trust = 0 (default: 3) */
+  maxSocialDistance: number;
+  /** Mutual follower count for maximum contribution (default: 10) */
+  maxMutualFollowers: number;
+}
+
+/**
+ * Breakdown of individual component scores in trust calculation.
+ */
+export interface TrustBreakdown {
+  /** Score contribution from social distance (0-1) */
+  socialDistanceScore: number;
+  /** Score contribution from mutual followers (0-1) */
+  mutualFollowersScore: number;
+  /** Score contribution from reputation (0-1) */
+  reputationScore: number;
+}
+
+/**
+ * Result of trust score calculation between two pubkeys.
+ */
+export interface TrustScore {
+  /** Overall trust score (0-1), where 1.0 = maximum trust */
+  score: number;
+  /** Raw social distance (hops in follow graph) */
+  socialDistance: number;
+  /** Count of mutual followers */
+  mutualFollowerCount: number;
+  /** Component score breakdown */
+  breakdown: TrustBreakdown;
+}
+
+/**
+ * Configuration for mapping trust scores to ILP credit limits.
+ */
+export interface CreditLimitConfig {
+  /** Maximum credit limit in asset units */
+  maxCredit: number;
+  /** Minimum credit limit in asset units */
+  minCredit: number;
+  /** Mapping function type: linear or exponential */
+  curve: 'linear' | 'exponential';
+}

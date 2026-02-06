@@ -15,7 +15,17 @@ export {
 } from './constants.js';
 
 // TypeScript interfaces
-export type { IlpPeerInfo, SpspInfo, SpspRequest, SpspResponse, Subscription } from './types.js';
+export type {
+  IlpPeerInfo,
+  SpspInfo,
+  SpspRequest,
+  SpspResponse,
+  Subscription,
+  TrustConfig,
+  TrustBreakdown,
+  TrustScore,
+  CreditLimitConfig,
+} from './types.js';
 
 // Error classes
 export {
@@ -24,6 +34,7 @@ export {
   PeerDiscoveryError,
   SpspError,
   SpspTimeoutError,
+  TrustCalculationError,
 } from './errors.js';
 
 // Event parsers and builders
@@ -44,3 +55,11 @@ export { NostrPeerDiscovery } from './discovery/index.js';
 
 // SPSP client and server
 export { NostrSpspClient, NostrSpspServer } from './spsp/index.js';
+
+// Trust calculation
+export {
+  SocialTrustManager,
+  DEFAULT_TRUST_CONFIG,
+  calculateCreditLimit,
+  DEFAULT_CREDIT_LIMIT_CONFIG,
+} from './trust/index.js';
