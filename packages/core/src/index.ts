@@ -60,3 +60,13 @@ export {
   calculateCreditLimit,
   DEFAULT_CREDIT_LIMIT_CONFIG,
 } from './trust/index.js';
+
+// Bootstrap service
+export {
+  BootstrapService,
+  BootstrapError,
+  type KnownPeer,
+  type BootstrapConfig,
+  type BootstrapResult,
+  type ConnectorAdminClient,
+} from './bootstrap.js';
