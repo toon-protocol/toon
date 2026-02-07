@@ -215,7 +215,9 @@ export class BootstrapService {
     };
 
     try {
+      console.log(`[Bootstrap] Query filter:`, JSON.stringify(filter));
       const events = await this.pool.querySync([knownPeer.relayUrl], filter);
+      console.log(`[Bootstrap] Query returned ${events.length} events`);
 
       if (events.length === 0) {
         throw new BootstrapError(
@@ -376,5 +378,14 @@ export class BootstrapService {
    */
   getPubkey(): string {
     return this.pubkey;
+  }
+
+  /**
+   * Publish our ILP info to a specific relay.
+   *
+   * @param relayUrl - The relay URL to publish to (defaults to 'ws://localhost:7100')
+   */
+  async publishToRelay(relayUrl: string = 'ws://localhost:7100'): Promise<void> {
+    await this.publishOurInfo(relayUrl);
   }
 }
