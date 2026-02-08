@@ -1,7 +1,7 @@
 /**
  * Bootstrap service for peer discovery and network initialization.
  *
- * Handles the initial peer discovery and SPSP handshake process
+ * Handles the initial peer discovery and registration process
  * with known peers to bootstrap into the ILP network.
  */
 
@@ -10,10 +10,11 @@ import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
 import { AgentSocietyError } from './errors.js';
+import { GenesisPeerLoader, ArDrivePeerRegistry } from './discovery/index.js';
+import type { GenesisPeer } from './discovery/index.js';
 import { ILP_PEER_INFO_KIND } from './constants.js';
 import { parseIlpPeerInfo, buildIlpPeerInfoEvent } from './events/index.js';
-import { NostrSpspClient } from './spsp/index.js';
-import type { IlpPeerInfo, SpspInfo } from './types.js';
+import type { IlpPeerInfo } from './types.js';
 
 /** Regular expression for validating 64-character lowercase hex pubkeys */
 const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
@@ -46,10 +47,12 @@ export interface KnownPeer {
 export interface BootstrapConfig {
   /** List of known peers to bootstrap with */
   knownPeers: KnownPeer[];
-  /** Timeout for SPSP requests in milliseconds (default: 10000) */
-  spspTimeout?: number;
   /** Timeout for relay queries in milliseconds (default: 5000) */
   queryTimeout?: number;
+  /** Enable ArDrive peer lookup (default: true) */
+  ardriveEnabled?: boolean;
+  /** Default relay URL for ArDrive-sourced peers that lack relay URLs */
+  defaultRelayUrl?: string;
 }
 
 /**
@@ -60,39 +63,43 @@ export interface BootstrapResult {
   knownPeer: KnownPeer;
   /** The peer's ILP info from their kind:10032 event */
   peerInfo: IlpPeerInfo;
-  /** The SPSP parameters received from the peer */
-  spspInfo: SpspInfo;
+  /** The ID used when registering with the connector (e.g., "nostr-aabb11cc22dd33ee") */
+  registeredPeerId: string;
 }
 
 /**
  * Callback interface for connector Admin API operations.
+ * Matches the agent-runtime admin API shape: POST /admin/peers
  */
 export interface ConnectorAdminClient {
   /**
-   * Add a peer to the connector's routing table.
-   * @param peerId - Unique identifier for the peer
-   * @param btpUrl - BTP WebSocket URL for the peer
-   * @param ilpAddress - ILP address prefix for routing
+   * Add a peer to the connector via the admin API.
+   * @param config - Peer configuration matching the agent-runtime API shape
    */
-  addPeer(peerId: string, btpUrl: string, ilpAddress: string): Promise<void>;
+  addPeer(config: {
+    id: string;
+    url: string;
+    authToken: string;
+    routes?: { prefix: string; priority?: number }[];
+  }): Promise<void>;
 
   /**
-   * Add a route to the connector's routing table.
-   * @param prefix - ILP address prefix to route
-   * @param nextHop - Peer ID to route to
+   * Remove a peer from the connector via the admin API.
+   * Maps to DELETE /admin/peers/:id in the agent-runtime admin API.
+   * Optional — not all callers will implement peer removal.
+   * @param peerId - The peer ID to remove
    */
-  addRoute(prefix: string, nextHop: string): Promise<void>;
+  removePeer?(peerId: string): Promise<void>;
 }
 
 /**
  * Service for bootstrapping into the ILP network via known Nostr peers.
  *
  * The bootstrap process:
- * 1. Connect to the known peer's relay
- * 2. Query for their kind:10032 (ILP Peer Info) event
- * 3. Perform a direct SPSP handshake (free, not ILP-routed)
- * 4. Add the peer to the connector's routing table via Admin API
- * 5. Publish our own kind:10032 to the peer's relay
+ * 1. Load peers from genesis config, ArDrive, and env var
+ * 2. For each peer, query their relay for kind:10032 (ILP Peer Info)
+ * 3. Register peer via connector admin API
+ * 4. Publish our own kind:10032 to the peer's relay
  */
 export class BootstrapService {
   private readonly config: Required<BootstrapConfig>;
@@ -118,8 +125,9 @@ export class BootstrapService {
   ) {
     this.config = {
       knownPeers: config.knownPeers,
-      spspTimeout: config.spspTimeout ?? 10000,
       queryTimeout: config.queryTimeout ?? 5000,
+      ardriveEnabled: config.ardriveEnabled ?? true,
+      defaultRelayUrl: config.defaultRelayUrl ?? '',
     };
     this.secretKey = secretKey;
     this.pubkey = getPublicKey(secretKey);
@@ -135,18 +143,78 @@ export class BootstrapService {
   }
 
   /**
+   * Load peers from genesis config, ArDrive, and optional env var JSON.
+   * Merges all sources, deduplicating by pubkey (ArDrive overrides genesis for matching pubkeys).
+   */
+  async loadPeers(additionalPeersJson?: string): Promise<GenesisPeer[]> {
+    const genesisPeers = GenesisPeerLoader.loadAllPeers(additionalPeersJson);
+
+    const ardrivePeers: GenesisPeer[] = [];
+    if (this.config.ardriveEnabled) {
+      try {
+        const ardriveMap = await ArDrivePeerRegistry.fetchPeers();
+        for (const [pubkey, info] of ardriveMap) {
+          if (!this.config.defaultRelayUrl) continue;
+          ardrivePeers.push({
+            pubkey,
+            relayUrl: this.config.defaultRelayUrl,
+            ilpAddress: info.ilpAddress,
+            btpEndpoint: info.btpEndpoint,
+          });
+        }
+      } catch (error) {
+        console.warn(
+          '[Bootstrap] ArDrive peer fetch failed, using genesis peers only:',
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+      }
+    }
+
+    // Merge: ArDrive overrides genesis for matching pubkeys
+    const merged = new Map<string, GenesisPeer>();
+    for (const peer of genesisPeers) {
+      merged.set(peer.pubkey, peer);
+    }
+    for (const peer of ardrivePeers) {
+      merged.set(peer.pubkey, peer);
+    }
+
+    return [...merged.values()];
+  }
+
+  /**
    * Bootstrap with all known peers.
    *
-   * Attempts to bootstrap with each known peer in order.
+   * Loads peers from genesis config, ArDrive, and optional env var JSON,
+   * then attempts to bootstrap with each peer in order.
    * Returns results for successfully bootstrapped peers.
    * Continues to next peer on failure.
    *
+   * @param additionalPeersJson - Optional JSON string of additional peers to merge
    * @returns Array of successful bootstrap results
    */
-  async bootstrap(): Promise<BootstrapResult[]> {
+  async bootstrap(additionalPeersJson?: string): Promise<BootstrapResult[]> {
     const results: BootstrapResult[] = [];
 
-    for (const knownPeer of this.config.knownPeers) {
+    // Load and merge peers from all sources
+    const allPeers = await this.loadPeers(additionalPeersJson);
+
+    // Convert GenesisPeers to KnownPeers and merge with config peers
+    const knownPeersMap = new Map<string, KnownPeer>();
+    for (const peer of this.config.knownPeers) {
+      knownPeersMap.set(peer.pubkey, peer);
+    }
+    for (const peer of allPeers) {
+      if (!knownPeersMap.has(peer.pubkey)) {
+        knownPeersMap.set(peer.pubkey, {
+          pubkey: peer.pubkey,
+          relayUrl: peer.relayUrl,
+          btpEndpoint: peer.btpEndpoint,
+        });
+      }
+    }
+
+    for (const knownPeer of knownPeersMap.values()) {
       try {
         const result = await this.bootstrapWithPeer(knownPeer);
         results.push(result);
@@ -169,8 +237,8 @@ export class BootstrapService {
    * Bootstrap with a single known peer.
    *
    * @param knownPeer - The known peer to bootstrap with
-   * @returns Bootstrap result with peer info and SPSP params
-   * @throws BootstrapError if bootstrap fails
+   * @returns Bootstrap result with peer info and registered peer ID
+   * @throws BootstrapError if pubkey is invalid or peer info query fails
    */
   async bootstrapWithPeer(knownPeer: KnownPeer): Promise<BootstrapResult> {
     // Validate pubkey format
@@ -184,24 +252,35 @@ export class BootstrapService {
     console.log(`[Bootstrap] Querying ${knownPeer.relayUrl} for peer info...`);
     const peerInfo = await this.queryPeerInfo(knownPeer);
 
-    // Step 2: Perform direct SPSP handshake
-    console.log(`[Bootstrap] Performing SPSP handshake with ${knownPeer.pubkey.slice(0, 16)}...`);
-    const spspInfo = await this.directSpspHandshake(knownPeer);
-
-    // Step 3: Add peer to connector if admin client is set
+    // Step 2: Add peer to connector if admin client is set (non-fatal)
+    const registeredPeerId = `nostr-${knownPeer.pubkey.slice(0, 16)}`;
     if (this.connectorAdmin) {
-      console.log(`[Bootstrap] Adding peer to connector routing table...`);
-      await this.addPeerToConnector(knownPeer, peerInfo);
+      try {
+        console.log(`[Bootstrap] Adding peer to connector routing table...`);
+        await this.addPeerToConnector(knownPeer, peerInfo);
+      } catch (error) {
+        console.warn(
+          `[Bootstrap] Failed to register peer ${registeredPeerId} with connector:`,
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+      }
     }
 
-    // Step 4: Publish our own kind:10032 to their relay
-    console.log(`[Bootstrap] Publishing our ILP info to ${knownPeer.relayUrl}...`);
-    await this.publishOurInfo(knownPeer.relayUrl);
+    // Step 3: Publish our own kind:10032 to their relay (non-fatal)
+    try {
+      console.log(`[Bootstrap] Publishing our ILP info to ${knownPeer.relayUrl}...`);
+      await this.publishOurInfo(knownPeer.relayUrl);
+    } catch (error) {
+      console.warn(
+        `[Bootstrap] Failed to publish ILP info to ${knownPeer.relayUrl}:`,
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
 
     return {
       knownPeer,
       peerInfo,
-      spspInfo,
+      registeredPeerId,
     };
   }
 
@@ -338,38 +417,7 @@ export class BootstrapService {
   }
 
   /**
-   * Perform a direct SPSP handshake with a known peer.
-   *
-   * This uses the peer's relay for the SPSP request/response exchange.
-   * During bootstrap, this is "free" (not routed through ILP).
-   */
-  private async directSpspHandshake(knownPeer: KnownPeer): Promise<SpspInfo> {
-    // Use the peer's relay for the SPSP handshake
-    console.log(`[Bootstrap] Creating SPSP client for ${knownPeer.relayUrl}`);
-    const spspClient = new NostrSpspClient(
-      [knownPeer.relayUrl],
-      this.pool,
-      this.secretKey
-    );
-
-    try {
-      console.log(`[Bootstrap] Requesting SPSP info (timeout: ${this.config.spspTimeout}ms)...`);
-      const result = await spspClient.requestSpspInfo(knownPeer.pubkey, {
-        timeout: this.config.spspTimeout,
-      });
-      console.log(`[Bootstrap] SPSP info received: ${result.destinationAccount}`);
-      return result;
-    } catch (error) {
-      console.error(`[Bootstrap] SPSP handshake error:`, error);
-      throw new BootstrapError(
-        `SPSP handshake failed with ${knownPeer.pubkey.slice(0, 16)}...: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  /**
-   * Add a peer to the connector's routing table via Admin API.
+   * Add a peer to the connector via Admin API.
    */
   private async addPeerToConnector(
     knownPeer: KnownPeer,
@@ -379,25 +427,14 @@ export class BootstrapService {
       throw new BootstrapError('Connector admin client not set');
     }
 
-    try {
-      // Generate a peer ID from the pubkey (first 16 chars)
-      const peerId = `nostr-${knownPeer.pubkey.slice(0, 16)}`;
+    const peerId = `nostr-${knownPeer.pubkey.slice(0, 16)}`;
 
-      // Add the peer
-      await this.connectorAdmin.addPeer(
-        peerId,
-        peerInfo.btpEndpoint,
-        peerInfo.ilpAddress
-      );
-
-      // Add a route for the peer's ILP address prefix
-      await this.connectorAdmin.addRoute(peerInfo.ilpAddress, peerId);
-    } catch (error) {
-      throw new BootstrapError(
-        `Failed to add peer to connector`,
-        error instanceof Error ? error : undefined
-      );
-    }
+    await this.connectorAdmin.addPeer({
+      id: peerId,
+      url: peerInfo.btpEndpoint,
+      authToken: '',
+      routes: [{ prefix: peerInfo.ilpAddress }],
+    });
   }
 
   /**
