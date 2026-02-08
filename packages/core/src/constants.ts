@@ -12,12 +12,6 @@
 export const ILP_PEER_INFO_KIND = 10032;
 
 /**
- * SPSP Info (kind 10047)
- * Replaceable event containing SPSP destination_account and shared_secret.
- */
-export const SPSP_INFO_KIND = 10047;
-
-/**
  * SPSP Request (kind 23194)
  * Ephemeral request for fresh SPSP parameters (NIP-47 style).
  */

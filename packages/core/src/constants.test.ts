@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   ILP_PEER_INFO_KIND,
-  SPSP_INFO_KIND,
   SPSP_REQUEST_KIND,
   SPSP_RESPONSE_KIND,
 } from './constants.js';
@@ -9,10 +8,6 @@ import {
 describe('Event Kind Constants', () => {
   it('should define ILP_PEER_INFO_KIND as 10032', () => {
     expect(ILP_PEER_INFO_KIND).toBe(10032);
-  });
-
-  it('should define SPSP_INFO_KIND as 10047', () => {
-    expect(SPSP_INFO_KIND).toBe(10047);
   });
 
   it('should define SPSP_REQUEST_KIND as 23194', () => {
@@ -26,8 +21,6 @@ describe('Event Kind Constants', () => {
   it('should have replaceable event kinds in 10000-19999 range', () => {
     expect(ILP_PEER_INFO_KIND).toBeGreaterThanOrEqual(10000);
     expect(ILP_PEER_INFO_KIND).toBeLessThan(20000);
-    expect(SPSP_INFO_KIND).toBeGreaterThanOrEqual(10000);
-    expect(SPSP_INFO_KIND).toBeLessThan(20000);
   });
 
   it('should have ephemeral event kinds in 20000-29999 range', () => {

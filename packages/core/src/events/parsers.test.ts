@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
-import { parseIlpPeerInfo, parseSpspInfo, parseSpspRequest, parseSpspResponse } from './parsers.js';
-import { buildIlpPeerInfoEvent, buildSpspInfoEvent, buildSpspRequestEvent } from './builders.js';
+import { parseIlpPeerInfo, parseSpspRequest, parseSpspResponse } from './parsers.js';
+import { buildIlpPeerInfoEvent, buildSpspRequestEvent } from './builders.js';
 import { InvalidEventError } from '../errors.js';
-import { ILP_PEER_INFO_KIND, SPSP_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
-import type { IlpPeerInfo, SpspInfo, SpspRequest, SpspResponse } from '../types.js';
+import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 
 // Test fixtures
 function createTestIlpPeerInfo(): IlpPeerInfo {
@@ -22,13 +22,6 @@ function createTestIlpPeerInfoWithSettlement(): IlpPeerInfo {
   return {
     ...createTestIlpPeerInfo(),
     settlementEngine: 'xrp-paychan',
-  };
-}
-
-function createTestSpspInfo(): SpspInfo {
-  return {
-    destinationAccount: 'g.example.receiver',
-    sharedSecret: 'c2VjcmV0MTIz', // base64 encoded "secret123"
   };
 }
 
@@ -80,12 +73,12 @@ describe('parseIlpPeerInfo', () => {
 
   it('throws for wrong event kind', () => {
     // Arrange
-    const event = createMockEvent(SPSP_INFO_KIND, JSON.stringify(createTestIlpPeerInfo()));
+    const event = createMockEvent(SPSP_REQUEST_KIND, JSON.stringify(createTestIlpPeerInfo()));
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
     expect(() => parseIlpPeerInfo(event)).toThrow(
-      `Expected event kind ${ILP_PEER_INFO_KIND}, got ${SPSP_INFO_KIND}`
+      `Expected event kind ${ILP_PEER_INFO_KIND}, got ${SPSP_REQUEST_KIND}`
     );
   });
 
@@ -197,105 +190,6 @@ describe('parseIlpPeerInfo', () => {
   });
 });
 
-describe('parseSpspInfo', () => {
-  it('parses valid kind:10047 event', () => {
-    // Arrange
-    const secretKey = generateSecretKey();
-    const info = createTestSpspInfo();
-    const event = buildSpspInfoEvent(info, secretKey);
-
-    // Act
-    const result = parseSpspInfo(event);
-
-    // Assert
-    expect(result.destinationAccount).toBe('g.example.receiver');
-    expect(result.sharedSecret).toBe('c2VjcmV0MTIz');
-  });
-
-  it('throws for wrong event kind', () => {
-    // Arrange
-    const event = createMockEvent(ILP_PEER_INFO_KIND, JSON.stringify(createTestSpspInfo()));
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow(
-      `Expected event kind ${SPSP_INFO_KIND}, got ${ILP_PEER_INFO_KIND}`
-    );
-  });
-
-  it('throws for invalid JSON content', () => {
-    // Arrange
-    const event = createMockEvent(SPSP_INFO_KIND, '{invalid');
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow('Failed to parse event content as JSON');
-  });
-
-  it('throws for non-object JSON content', () => {
-    // Arrange
-    const event = createMockEvent(SPSP_INFO_KIND, '123');
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow('Event content must be a JSON object');
-  });
-
-  it('throws for missing destinationAccount', () => {
-    // Arrange
-    const content = JSON.stringify({
-      sharedSecret: 'c2VjcmV0MTIz',
-    });
-    const event = createMockEvent(SPSP_INFO_KIND, content);
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow(
-      'Missing or invalid required field: destinationAccount'
-    );
-  });
-
-  it('throws for missing sharedSecret', () => {
-    // Arrange
-    const content = JSON.stringify({
-      destinationAccount: 'g.example.receiver',
-    });
-    const event = createMockEvent(SPSP_INFO_KIND, content);
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow('Missing or invalid required field: sharedSecret');
-  });
-
-  it('throws for empty destinationAccount', () => {
-    // Arrange
-    const content = JSON.stringify({
-      destinationAccount: '',
-      sharedSecret: 'c2VjcmV0MTIz',
-    });
-    const event = createMockEvent(SPSP_INFO_KIND, content);
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow(
-      'Missing or invalid required field: destinationAccount'
-    );
-  });
-
-  it('throws for empty sharedSecret', () => {
-    // Arrange
-    const content = JSON.stringify({
-      destinationAccount: 'g.example.receiver',
-      sharedSecret: '',
-    });
-    const event = createMockEvent(SPSP_INFO_KIND, content);
-
-    // Act & Assert
-    expect(() => parseSpspInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseSpspInfo(event)).toThrow('Missing or invalid required field: sharedSecret');
-  });
-});
-
 // Helper to create encrypted SPSP response event
 function createEncryptedSpspResponseEvent(
   payload: SpspResponse,
@@ -346,12 +240,12 @@ describe('parseSpspResponse', () => {
     // Arrange
     const recipientSecretKey = generateSecretKey();
     const senderPubkey = getPublicKey(generateSecretKey());
-    const event = createMockEvent(SPSP_INFO_KIND, 'encrypted-content');
+    const event = createMockEvent(ILP_PEER_INFO_KIND, 'encrypted-content');
 
     // Act & Assert
     expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
     expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      `Expected event kind ${SPSP_RESPONSE_KIND}, got ${SPSP_INFO_KIND}`
+      `Expected event kind ${SPSP_RESPONSE_KIND}, got ${ILP_PEER_INFO_KIND}`
     );
   });
 
@@ -616,12 +510,12 @@ describe('parseSpspRequest', () => {
     // Arrange
     const recipientSecretKey = generateSecretKey();
     const senderPubkey = getPublicKey(generateSecretKey());
-    const event = createMockEvent(SPSP_INFO_KIND, 'encrypted-content');
+    const event = createMockEvent(ILP_PEER_INFO_KIND, 'encrypted-content');
 
     // Act & Assert
     expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
     expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      `Expected event kind ${SPSP_REQUEST_KIND}, got ${SPSP_INFO_KIND}`
+      `Expected event kind ${SPSP_REQUEST_KIND}, got ${ILP_PEER_INFO_KIND}`
     );
   });
 

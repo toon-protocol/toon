@@ -4,9 +4,9 @@
 
 import type { NostrEvent } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
-import { ILP_PEER_INFO_KIND, SPSP_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
-import type { IlpPeerInfo, SpspInfo, SpspRequest, SpspResponse } from '../types.js';
+import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 
 /**
  * Type guard to check if a value is a non-null object.
@@ -75,52 +75,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     assetCode,
     assetScale,
     ...(settlementEngine !== undefined && { settlementEngine }),
-  };
-}
-
-/**
- * Parses a kind:10047 Nostr event into an SpspInfo object.
- *
- * @param event - The Nostr event to parse
- * @returns The parsed SpspInfo object
- * @throws InvalidEventError if the event is malformed or missing required fields
- */
-export function parseSpspInfo(event: NostrEvent): SpspInfo {
-  if (event.kind !== SPSP_INFO_KIND) {
-    throw new InvalidEventError(
-      `Expected event kind ${SPSP_INFO_KIND}, got ${event.kind}`
-    );
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(event.content);
-  } catch (err) {
-    throw new InvalidEventError(
-      'Failed to parse event content as JSON',
-      err instanceof Error ? err : undefined
-    );
-  }
-
-  if (!isObject(parsed)) {
-    throw new InvalidEventError('Event content must be a JSON object');
-  }
-
-  const { destinationAccount, sharedSecret } = parsed;
-
-  if (typeof destinationAccount !== 'string' || destinationAccount.length === 0) {
-    throw new InvalidEventError(
-      'Missing or invalid required field: destinationAccount'
-    );
-  }
-
-  if (typeof sharedSecret !== 'string' || sharedSecret.length === 0) {
-    throw new InvalidEventError('Missing or invalid required field: sharedSecret');
-  }
-
-  return {
-    destinationAccount,
-    sharedSecret,
   };
 }
 

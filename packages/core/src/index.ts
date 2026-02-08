@@ -9,7 +9,6 @@ export const VERSION = '0.1.0';
 // Event kind constants
 export {
   ILP_PEER_INFO_KIND,
-  SPSP_INFO_KIND,
   SPSP_REQUEST_KIND,
   SPSP_RESPONSE_KIND,
 } from './constants.js';
@@ -40,11 +39,9 @@ export {
 // Event parsers and builders
 export {
   parseIlpPeerInfo,
-  parseSpspInfo,
   parseSpspRequest,
   parseSpspResponse,
   buildIlpPeerInfoEvent,
-  buildSpspInfoEvent,
   buildSpspRequestEvent,
   buildSpspResponseEvent,
   type SpspRequestEventResult,
@@ -63,3 +60,13 @@ export {
   calculateCreditLimit,
   DEFAULT_CREDIT_LIMIT_CONFIG,
 } from './trust/index.js';
+
+// Bootstrap service
+export {
+  BootstrapService,
+  BootstrapError,
+  type KnownPeer,
+  type BootstrapConfig,
+  type BootstrapResult,
+  type ConnectorAdminClient,
+} from './bootstrap.js';

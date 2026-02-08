@@ -9,33 +9,11 @@ import type { VerifiedEvent, NostrEvent } from 'nostr-tools/pure';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
 import { NostrSpspClient } from './NostrSpspClient.js';
-import { SPSP_INFO_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import { SPSP_RESPONSE_KIND } from '../constants.js';
 import { SpspError, SpspTimeoutError } from '../errors.js';
 import type { SpspResponse } from '../types.js';
 
 const MOCK_RELAY_URLS = ['wss://relay1.example.com', 'wss://relay2.example.com'];
-
-/**
- * Helper to create a kind:10047 SPSP Info event.
- */
-function createSpspInfoEvent(
-  pubkey: string,
-  info: { destinationAccount?: string; sharedSecret?: string } = {},
-  created_at = Math.floor(Date.now() / 1000)
-): VerifiedEvent {
-  return {
-    id: `mock-id-${pubkey.slice(0, 8)}`,
-    pubkey,
-    kind: SPSP_INFO_KIND,
-    content: JSON.stringify({
-      destinationAccount: info.destinationAccount ?? 'g.test.receiver',
-      sharedSecret: info.sharedSecret ?? 'dGVzdC1zZWNyZXQ=', // base64 "test-secret"
-    }),
-    tags: [],
-    created_at,
-    sig: 'mock-sig',
-  } as unknown as VerifiedEvent;
-}
 
 describe('NostrSpspClient', () => {
   let mockPool: SimplePool;
@@ -51,41 +29,23 @@ describe('NostrSpspClient', () => {
     vi.clearAllMocks();
   });
 
-  // Task 8: Unit tests for class instantiation (AC: 1, 5)
   describe('constructor', () => {
     it('creates instance with relay URLs', () => {
       const client = new NostrSpspClient(MOCK_RELAY_URLS);
       expect(client).toBeInstanceOf(NostrSpspClient);
     });
 
-    it('creates instance with custom SimplePool', async () => {
+    it('creates instance with custom SimplePool', () => {
       const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      vi.mocked(mockPool.querySync).mockResolvedValue([]);
-
-      await client.getSpspInfo('a'.repeat(64));
-
-      expect(mockPool.querySync).toHaveBeenCalled();
+      expect(client).toBeInstanceOf(NostrSpspClient);
     });
 
     it('creates internal SimplePool if none provided', () => {
-      // This test verifies no error is thrown when no pool provided
       const client = new NostrSpspClient(MOCK_RELAY_URLS);
       expect(client).toBeInstanceOf(NostrSpspClient);
     });
 
-    it('stores relays correctly', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      vi.mocked(mockPool.querySync).mockResolvedValue([]);
-
-      await client.getSpspInfo('a'.repeat(64));
-
-      expect(mockPool.querySync).toHaveBeenCalledWith(
-        MOCK_RELAY_URLS,
-        expect.any(Object)
-      );
-    });
-
-    it('accepts optional secretKey parameter', () => {
+    it('accepts secretKey parameter', () => {
       const secretKey = generateSecretKey();
       const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, secretKey);
       expect(client).toBeInstanceOf(NostrSpspClient);
@@ -94,279 +54,7 @@ describe('NostrSpspClient', () => {
     it('derives pubkey from secretKey', () => {
       const secretKey = generateSecretKey();
       const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, secretKey);
-      // We can't directly access private fields, but we can verify it works
-      // by ensuring no error is thrown during construction
       expect(client).toBeInstanceOf(NostrSpspClient);
-      // The pubkey derivation is tested indirectly via requestSpspInfo tests
-    });
-
-    it('works without secretKey for read-only operations', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      vi.mocked(mockPool.querySync).mockResolvedValue([]);
-
-      // getSpspInfo should work without secretKey
-      const result = await client.getSpspInfo('a'.repeat(64));
-      expect(result).toBeNull();
-    });
-  });
-
-  // Task 9: Unit tests for getSpspInfo happy path (AC: 2, 4, 5)
-  describe('getSpspInfo - happy path', () => {
-    it('returns SpspInfo when kind:10047 event exists', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const mockEvent = createSpspInfoEvent(pubkey, {
-        destinationAccount: 'g.test.alice',
-        sharedSecret: 'YWxpY2Utc2VjcmV0', // base64 "alice-secret"
-      });
-      vi.mocked(mockPool.querySync).mockResolvedValue([mockEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).not.toBeNull();
-      expect(result?.destinationAccount).toBe('g.test.alice');
-      expect(result?.sharedSecret).toBe('YWxpY2Utc2VjcmV0');
-    });
-
-    it('returns most recent event when multiple exist (AC: 4)', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-
-      vi.mocked(mockPool.querySync).mockResolvedValue([
-        createSpspInfoEvent(pubkey, { destinationAccount: 'g.old' }, 1000),
-        createSpspInfoEvent(pubkey, { destinationAccount: 'g.newest' }, 3000),
-        createSpspInfoEvent(pubkey, { destinationAccount: 'g.middle' }, 2000),
-      ]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result?.destinationAccount).toBe('g.newest');
-    });
-
-    it('correctly parses destinationAccount field', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'b'.repeat(64);
-      const mockEvent = createSpspInfoEvent(pubkey, {
-        destinationAccount: 'g.ilp.xrp.alice',
-      });
-      vi.mocked(mockPool.querySync).mockResolvedValue([mockEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result?.destinationAccount).toBe('g.ilp.xrp.alice');
-    });
-
-    it('correctly parses sharedSecret field', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'c'.repeat(64);
-      const mockEvent = createSpspInfoEvent(pubkey, {
-        sharedSecret: 'c3VwZXItc2VjcmV0LWtleQ==', // base64 "super-secret-key"
-      });
-      vi.mocked(mockPool.querySync).mockResolvedValue([mockEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result?.sharedSecret).toBe('c3VwZXItc2VjcmV0LWtleQ==');
-    });
-
-    it('constructs correct filter for kind:10047 query', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const targetPubkey = 'd'.repeat(64);
-      vi.mocked(mockPool.querySync).mockResolvedValue([]);
-
-      await client.getSpspInfo(targetPubkey);
-
-      expect(mockPool.querySync).toHaveBeenCalledWith(MOCK_RELAY_URLS, {
-        kinds: [SPSP_INFO_KIND],
-        authors: [targetPubkey],
-      });
-    });
-  });
-
-  // Task 10: Unit tests for getSpspInfo null cases (AC: 3, 5)
-  describe('getSpspInfo - null cases', () => {
-    it('returns null when no events found', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      vi.mocked(mockPool.querySync).mockResolvedValue([]);
-
-      const result = await client.getSpspInfo('a'.repeat(64));
-
-      expect(result).toBeNull();
-    });
-
-    it('returns null when event content is malformed (invalid JSON)', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const malformedEvent = {
-        id: 'bad-id',
-        pubkey,
-        kind: SPSP_INFO_KIND,
-        content: 'not valid json',
-        tags: [],
-        created_at: Math.floor(Date.now() / 1000),
-        sig: 'mock-sig',
-      } as unknown as VerifiedEvent;
-      vi.mocked(mockPool.querySync).mockResolvedValue([malformedEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).toBeNull();
-    });
-
-    it('returns null when required destinationAccount field missing', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const missingFieldEvent = {
-        id: 'missing-id',
-        pubkey,
-        kind: SPSP_INFO_KIND,
-        content: JSON.stringify({
-          sharedSecret: 'c2VjcmV0', // Missing destinationAccount
-        }),
-        tags: [],
-        created_at: Math.floor(Date.now() / 1000),
-        sig: 'mock-sig',
-      } as unknown as VerifiedEvent;
-      vi.mocked(mockPool.querySync).mockResolvedValue([missingFieldEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).toBeNull();
-    });
-
-    it('returns null when required sharedSecret field missing', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const missingFieldEvent = {
-        id: 'missing-id',
-        pubkey,
-        kind: SPSP_INFO_KIND,
-        content: JSON.stringify({
-          destinationAccount: 'g.test', // Missing sharedSecret
-        }),
-        tags: [],
-        created_at: Math.floor(Date.now() / 1000),
-        sig: 'mock-sig',
-      } as unknown as VerifiedEvent;
-      vi.mocked(mockPool.querySync).mockResolvedValue([missingFieldEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).toBeNull();
-    });
-
-    it('returns null when destinationAccount is empty string', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const emptyFieldEvent = {
-        id: 'empty-id',
-        pubkey,
-        kind: SPSP_INFO_KIND,
-        content: JSON.stringify({
-          destinationAccount: '',
-          sharedSecret: 'c2VjcmV0',
-        }),
-        tags: [],
-        created_at: Math.floor(Date.now() / 1000),
-        sig: 'mock-sig',
-      } as unknown as VerifiedEvent;
-      vi.mocked(mockPool.querySync).mockResolvedValue([emptyFieldEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).toBeNull();
-    });
-
-    it('returns null when sharedSecret is empty string', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const pubkey = 'a'.repeat(64);
-      const emptyFieldEvent = {
-        id: 'empty-id',
-        pubkey,
-        kind: SPSP_INFO_KIND,
-        content: JSON.stringify({
-          destinationAccount: 'g.test',
-          sharedSecret: '',
-        }),
-        tags: [],
-        created_at: Math.floor(Date.now() / 1000),
-        sig: 'mock-sig',
-      } as unknown as VerifiedEvent;
-      vi.mocked(mockPool.querySync).mockResolvedValue([emptyFieldEvent]);
-
-      const result = await client.getSpspInfo(pubkey);
-
-      expect(result).toBeNull();
-    });
-  });
-
-  // Task 11: Unit tests for error handling (AC: 2, 5)
-  describe('getSpspInfo - error handling', () => {
-    it('throws SpspError for invalid pubkey format', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-
-      await expect(client.getSpspInfo('invalid')).rejects.toThrow(SpspError);
-      await expect(client.getSpspInfo('invalid')).rejects.toThrow(
-        'Invalid pubkey format'
-      );
-    });
-
-    it('throws SpspError for uppercase hex pubkey', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-
-      await expect(client.getSpspInfo('A'.repeat(64))).rejects.toThrow(
-        SpspError
-      );
-    });
-
-    it('throws SpspError for wrong length pubkey', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-
-      await expect(client.getSpspInfo('a'.repeat(63))).rejects.toThrow(
-        SpspError
-      );
-      await expect(client.getSpspInfo('a'.repeat(65))).rejects.toThrow(
-        SpspError
-      );
-    });
-
-    it('throws SpspError with correct error code', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-
-      try {
-        await client.getSpspInfo('invalid');
-        expect.fail('Expected error to be thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(SpspError);
-        expect((error as SpspError).code).toBe('SPSP_FAILED');
-      }
-    });
-
-    it('wraps relay errors in SpspError with cause', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      const originalError = new Error('Network failure');
-      vi.mocked(mockPool.querySync).mockRejectedValue(originalError);
-
-      try {
-        await client.getSpspInfo('a'.repeat(64));
-        expect.fail('Expected error to be thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(SpspError);
-        expect((error as SpspError).cause).toBe(originalError);
-        expect((error as SpspError).code).toBe('SPSP_FAILED');
-        expect((error as SpspError).message).toBe(
-          'Failed to query relays for SPSP info'
-        );
-      }
-    });
-
-    it('wraps non-Error relay failures in SpspError', async () => {
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
-      vi.mocked(mockPool.querySync).mockRejectedValue('string error');
-
-      await expect(client.getSpspInfo('a'.repeat(64))).rejects.toThrow(
-        SpspError
-      );
     });
   });
 

@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   VERSION,
   ILP_PEER_INFO_KIND,
-  SPSP_INFO_KIND,
   SPSP_REQUEST_KIND,
   SPSP_RESPONSE_KIND,
 } from './index.js';
@@ -21,10 +20,6 @@ describe('@agent-society/core', () => {
   describe('exports event kind constants', () => {
     it('should export ILP_PEER_INFO_KIND', () => {
       expect(ILP_PEER_INFO_KIND).toBe(10032);
-    });
-
-    it('should export SPSP_INFO_KIND', () => {
-      expect(SPSP_INFO_KIND).toBe(10047);
     });
 
     it('should export SPSP_REQUEST_KIND', () => {

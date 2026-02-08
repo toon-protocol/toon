@@ -1,17 +1,16 @@
 /**
- * SPSP server for publishing SPSP parameters to Nostr.
+ * SPSP server for handling encrypted SPSP requests via Nostr.
  */
 
 import { SimplePool, type SubCloser } from 'nostr-tools/pool';
 import { getPublicKey } from 'nostr-tools/pure';
 import type { Filter } from 'nostr-tools/filter';
-import { SpspError } from '../errors.js';
 import { SPSP_REQUEST_KIND } from '../constants.js';
-import { buildSpspInfoEvent, buildSpspResponseEvent, parseSpspRequest } from '../events/index.js';
+import { buildSpspResponseEvent, parseSpspRequest } from '../events/index.js';
 import type { SpspInfo, Subscription, SpspResponse } from '../types.js';
 
 /**
- * Server for publishing SPSP parameters via Nostr kind:10047 events.
+ * Server for handling encrypted SPSP requests via NIP-44 encrypted Nostr messages.
  */
 export class NostrSpspServer {
   private readonly relayUrls: string[];
@@ -29,36 +28,6 @@ export class NostrSpspServer {
     this.relayUrls = relayUrls;
     this.secretKey = secretKey;
     this.pool = pool ?? new SimplePool();
-  }
-
-  /**
-   * Publishes SPSP parameters as a kind:10047 replaceable event.
-   *
-   * Signs the event with the configured secret key and publishes to all
-   * configured relays. Waits for at least one relay to confirm before resolving.
-   *
-   * @param info - The SPSP info to publish
-   * @throws SpspError if no relay confirms the publish
-   */
-  async publishSpspInfo(info: SpspInfo): Promise<void> {
-    const event = buildSpspInfoEvent(info, this.secretKey);
-
-    const publishPromises = this.pool.publish(this.relayUrls, event);
-
-    try {
-      await Promise.any(publishPromises);
-    } catch (error) {
-      if (error instanceof AggregateError) {
-        throw new SpspError(
-          'Failed to publish SPSP info to any relay',
-          error.errors[0] instanceof Error ? error.errors[0] : undefined
-        );
-      }
-      throw new SpspError(
-        'Failed to publish SPSP info',
-        error instanceof Error ? error : undefined
-      );
-    }
   }
 
   /**

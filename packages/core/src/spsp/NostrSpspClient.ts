@@ -5,17 +5,17 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
-import { SpspError, SpspTimeoutError, InvalidEventError } from '../errors.js';
-import { parseSpspInfo, parseSpspResponse, buildSpspRequestEvent } from '../events/index.js';
-import { SPSP_INFO_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import { SpspError, SpspTimeoutError } from '../errors.js';
+import { parseSpspResponse, buildSpspRequestEvent } from '../events/index.js';
+import { SPSP_RESPONSE_KIND } from '../constants.js';
 import type { SpspInfo } from '../types.js';
 
 /** Regular expression for validating 64-character lowercase hex pubkeys */
 const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
 
 /**
- * Client for querying SPSP parameters published via Nostr kind:10047 events.
- * Supports both static queries (getSpspInfo) and dynamic requests (requestSpspInfo).
+ * Client for requesting SPSP parameters via encrypted Nostr messages.
+ * Uses NIP-44 encryption for secure end-to-end SPSP handshakes.
  */
 export class NostrSpspClient {
   private readonly relayUrls: string[];
@@ -28,7 +28,7 @@ export class NostrSpspClient {
    *
    * @param relayUrls - Array of relay WebSocket URLs to query
    * @param pool - Optional SimplePool instance (creates new one if not provided)
-   * @param secretKey - Optional secret key for sending encrypted SPSP requests
+   * @param secretKey - Secret key for sending encrypted SPSP requests
    */
   constructor(relayUrls: string[], pool?: SimplePool, secretKey?: Uint8Array) {
     this.relayUrls = relayUrls;
@@ -36,65 +36,6 @@ export class NostrSpspClient {
     this.secretKey = secretKey;
     if (secretKey) {
       this.pubkey = getPublicKey(secretKey);
-    }
-  }
-
-  /**
-   * Retrieves SPSP parameters for a given pubkey.
-   *
-   * Queries kind:10047 events from configured relays and returns the parsed
-   * SPSP info from the most recent event.
-   *
-   * @param pubkey - The 64-character hex pubkey to get SPSP info for
-   * @returns SpspInfo if found, null if no valid SPSP info exists
-   * @throws SpspError if pubkey format is invalid or relay query fails
-   */
-  async getSpspInfo(pubkey: string): Promise<SpspInfo | null> {
-    if (!PUBKEY_REGEX.test(pubkey)) {
-      throw new SpspError(
-        'Invalid pubkey format: must be 64-character lowercase hex string'
-      );
-    }
-
-    const filter: Filter = {
-      kinds: [SPSP_INFO_KIND],
-      authors: [pubkey],
-    };
-
-    let events;
-    try {
-      events = await this.pool.querySync(this.relayUrls, filter);
-    } catch (error) {
-      throw new SpspError(
-        'Failed to query relays for SPSP info',
-        error instanceof Error ? error : undefined
-      );
-    }
-
-    if (events.length === 0) {
-      return null;
-    }
-
-    // Sort by created_at descending and use the most recent
-    const sortedEvents = events.sort((a, b) => b.created_at - a.created_at);
-    const mostRecent = sortedEvents[0];
-
-    // This should never happen since we check length above, but TypeScript needs it
-    if (!mostRecent) {
-      return null;
-    }
-
-    try {
-      return parseSpspInfo(mostRecent);
-    } catch (error) {
-      if (error instanceof InvalidEventError) {
-        // Malformed event = no valid SPSP info
-        return null;
-      }
-      throw new SpspError(
-        'Failed to parse SPSP info',
-        error instanceof Error ? error : undefined
-      );
     }
   }
 
