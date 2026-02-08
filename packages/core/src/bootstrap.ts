@@ -8,6 +8,7 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
+import WebSocket from 'ws';
 import { AgentSocietyError } from './errors.js';
 import { ILP_PEER_INFO_KIND } from './constants.js';
 import { parseIlpPeerInfo, buildIlpPeerInfoEvent } from './events/index.js';
@@ -206,6 +207,7 @@ export class BootstrapService {
 
   /**
    * Query a peer's relay for their kind:10032 ILP Peer Info event.
+   * Uses direct WebSocket connection for reliable container-to-container communication.
    */
   private async queryPeerInfo(knownPeer: KnownPeer): Promise<IlpPeerInfo> {
     const filter: Filter = {
@@ -214,35 +216,125 @@ export class BootstrapService {
       limit: 1,
     };
 
-    try {
-      console.log(`[Bootstrap] Query filter:`, JSON.stringify(filter));
-      const events = await this.pool.querySync([knownPeer.relayUrl], filter);
-      console.log(`[Bootstrap] Query returned ${events.length} events`);
+    console.log(`[Bootstrap] Query filter:`, JSON.stringify(filter));
+    console.log(`[Bootstrap] Connecting to ${knownPeer.relayUrl}...`);
 
-      if (events.length === 0) {
-        throw new BootstrapError(
-          `No kind:${ILP_PEER_INFO_KIND} event found for peer ${knownPeer.pubkey.slice(0, 16)}...`
+    return new Promise((resolve, reject) => {
+      const events: any[] = [];
+      const timeout = this.config.queryTimeout ?? 5000;
+      const ws = new WebSocket(knownPeer.relayUrl);
+      const subId = `bootstrap-${Date.now()}`;
+      let resolved = false;
+
+      const cleanup = () => {
+        if (!resolved) {
+          resolved = true;
+          try {
+            ws.close();
+          } catch {
+            // Ignore close errors
+          }
+        }
+      };
+
+      ws.on('open', () => {
+        console.log(`[Bootstrap] Connected to ${knownPeer.relayUrl}, sending REQ`);
+        ws.send(JSON.stringify(['REQ', subId, filter]));
+      });
+
+      ws.on('message', (data: Buffer | string) => {
+        const msg = JSON.parse(data.toString());
+        console.log(`[Bootstrap] Received message type: ${msg[0]}`);
+
+        if (msg[0] === 'EVENT' && msg[1] === subId) {
+          console.log(`[Bootstrap] Received event: ${msg[2].id.slice(0, 16)}...`);
+          events.push(msg[2]);
+        } else if (msg[0] === 'EOSE' && msg[1] === subId) {
+          console.log(`[Bootstrap] EOSE received, found ${events.length} events`);
+          cleanup();
+
+          if (events.length === 0) {
+            reject(
+              new BootstrapError(
+                `No kind:${ILP_PEER_INFO_KIND} event found for peer ${knownPeer.pubkey.slice(0, 16)}...`
+              )
+            );
+            return;
+          }
+
+          // Sort by created_at descending and use most recent
+          const sortedEvents = events.sort((a, b) => b.created_at - a.created_at);
+          const mostRecent = sortedEvents[0];
+
+          try {
+            const peerInfo = parseIlpPeerInfo(mostRecent);
+            resolve(peerInfo);
+          } catch (error) {
+            reject(
+              new BootstrapError(
+                `Failed to parse peer info`,
+                error instanceof Error ? error : undefined
+              )
+            );
+          }
+        } else if (msg[0] === 'NOTICE') {
+          console.log(`[Bootstrap] Notice from relay: ${msg[1]}`);
+        }
+      });
+
+      ws.on('error', (error: Error) => {
+        console.error(`[Bootstrap] WebSocket error:`, error.message);
+        cleanup();
+        reject(
+          new BootstrapError(
+            `Failed to connect to ${knownPeer.relayUrl}: ${error.message}`,
+            error
+          )
         );
-      }
+      });
 
-      // Sort by created_at descending and use most recent
-      const sortedEvents = events.sort((a, b) => b.created_at - a.created_at);
-      const mostRecent = sortedEvents[0];
+      ws.on('close', () => {
+        console.log(`[Bootstrap] Connection closed`);
+        if (!resolved) {
+          cleanup();
+          reject(
+            new BootstrapError(
+              `Connection closed before receiving events from ${knownPeer.relayUrl}`
+            )
+          );
+        }
+      });
 
-      if (!mostRecent) {
-        throw new BootstrapError('No events found after sorting');
-      }
+      // Set timeout
+      setTimeout(() => {
+        if (resolved) return;
+        console.log(`[Bootstrap] Query timeout after ${timeout}ms`);
+        cleanup();
 
-      return parseIlpPeerInfo(mostRecent);
-    } catch (error) {
-      if (error instanceof BootstrapError) {
-        throw error;
-      }
-      throw new BootstrapError(
-        `Failed to query peer info from ${knownPeer.relayUrl}`,
-        error instanceof Error ? error : undefined
-      );
-    }
+        if (events.length > 0) {
+          const sortedEvents = events.sort((a, b) => b.created_at - a.created_at);
+          const mostRecent = sortedEvents[0];
+
+          try {
+            const peerInfo = parseIlpPeerInfo(mostRecent);
+            resolve(peerInfo);
+          } catch (error) {
+            reject(
+              new BootstrapError(
+                `Failed to parse peer info`,
+                error instanceof Error ? error : undefined
+              )
+            );
+          }
+        } else {
+          reject(
+            new BootstrapError(
+              `Query timeout: No events received from ${knownPeer.relayUrl} after ${timeout}ms`
+            )
+          );
+        }
+      }, timeout);
+    });
   }
 
   /**
@@ -253,6 +345,7 @@ export class BootstrapService {
    */
   private async directSpspHandshake(knownPeer: KnownPeer): Promise<SpspInfo> {
     // Use the peer's relay for the SPSP handshake
+    console.log(`[Bootstrap] Creating SPSP client for ${knownPeer.relayUrl}`);
     const spspClient = new NostrSpspClient(
       [knownPeer.relayUrl],
       this.pool,
@@ -260,12 +353,16 @@ export class BootstrapService {
     );
 
     try {
-      return await spspClient.requestSpspInfo(knownPeer.pubkey, {
+      console.log(`[Bootstrap] Requesting SPSP info (timeout: ${this.config.spspTimeout}ms)...`);
+      const result = await spspClient.requestSpspInfo(knownPeer.pubkey, {
         timeout: this.config.spspTimeout,
       });
+      console.log(`[Bootstrap] SPSP info received: ${result.destinationAccount}`);
+      return result;
     } catch (error) {
+      console.error(`[Bootstrap] SPSP handshake error:`, error);
       throw new BootstrapError(
-        `SPSP handshake failed with ${knownPeer.pubkey.slice(0, 16)}...`,
+        `SPSP handshake failed with ${knownPeer.pubkey.slice(0, 16)}...: ${error instanceof Error ? error.message : 'Unknown error'}`,
         error instanceof Error ? error : undefined
       );
     }
