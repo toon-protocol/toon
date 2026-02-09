@@ -6,9 +6,13 @@ import { SimplePool } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
 import { SpspError, SpspTimeoutError } from '../errors.js';
-import { parseSpspResponse, buildSpspRequestEvent } from '../events/index.js';
+import {
+  parseSpspResponse,
+  buildSpspRequestEvent,
+  type SpspRequestSettlementInfo,
+} from '../events/index.js';
 import { SPSP_RESPONSE_KIND } from '../constants.js';
-import type { SpspInfo } from '../types.js';
+import type { SpspInfo, SettlementNegotiationResult } from '../types.js';
 
 /** Regular expression for validating 64-character lowercase hex pubkeys */
 const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
@@ -49,14 +53,15 @@ export class NostrSpspClient {
    * @param recipientPubkey - The 64-character hex pubkey of the recipient
    * @param options - Optional configuration
    * @param options.timeout - Timeout in milliseconds (default: 10000)
-   * @returns SpspInfo with fresh destination account and shared secret
+   * @param options.settlementInfo - Optional settlement preferences to include in the request
+   * @returns SpspInfo with fresh destination account and shared secret, plus optional settlement result
    * @throws SpspError if secret key not provided, invalid pubkey, or publish fails
    * @throws SpspTimeoutError if no response received within timeout
    */
   async requestSpspInfo(
     recipientPubkey: string,
-    options?: { timeout?: number }
-  ): Promise<SpspInfo> {
+    options?: { timeout?: number; settlementInfo?: SpspRequestSettlementInfo }
+  ): Promise<SpspInfo & { settlement?: SettlementNegotiationResult }> {
     const timeout = options?.timeout ?? 10000;
 
     // Validate secret key is provided
@@ -74,7 +79,11 @@ export class NostrSpspClient {
     }
 
     // Build the encrypted request event
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, this.secretKey);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      this.secretKey,
+      options?.settlementInfo
+    );
 
     // Publish request to relays
     try {
@@ -93,7 +102,7 @@ export class NostrSpspClient {
     const myPubkey = this.pubkey;
     const mySecretKey = this.secretKey;
 
-    return new Promise<SpspInfo>((resolve, reject) => {
+    return new Promise<SpspInfo & { settlement?: SettlementNegotiationResult }>((resolve, reject) => {
       let resolved = false;
 
       // Subscribe for kind:23195 events tagged with our pubkey
@@ -126,10 +135,24 @@ export class NostrSpspClient {
             clearTimeout(timeoutId);
             sub.close();
 
-            resolve({
+            const result: SpspInfo & { settlement?: SettlementNegotiationResult } = {
               destinationAccount: response.destinationAccount,
               sharedSecret: response.sharedSecret,
-            });
+            };
+
+            // Include settlement result if present in response
+            if (response.negotiatedChain && response.settlementAddress) {
+              result.settlement = {
+                negotiatedChain: response.negotiatedChain,
+                settlementAddress: response.settlementAddress,
+                tokenAddress: response.tokenAddress,
+                tokenNetworkAddress: response.tokenNetworkAddress,
+                channelId: response.channelId,
+                settlementTimeout: response.settlementTimeout,
+              };
+            }
+
+            resolve(result);
           } catch {
             // Invalid response, ignore and continue waiting
           }

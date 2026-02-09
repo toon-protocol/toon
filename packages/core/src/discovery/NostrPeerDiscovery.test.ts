@@ -728,6 +728,8 @@ describe('NostrPeerDiscovery', () => {
           btpEndpoint: 'wss://btp.example',
           assetCode: 'XRP',
           assetScale: 9,
+          supportedChains: [],
+          settlementAddresses: {},
         });
       });
 

@@ -24,6 +24,12 @@ export type {
   TrustBreakdown,
   TrustScore,
   CreditLimitConfig,
+  OpenChannelParams,
+  OpenChannelResult,
+  ChannelState,
+  ConnectorChannelClient,
+  SettlementNegotiationConfig,
+  SettlementNegotiationResult,
 } from './types.js';
 
 // Error classes
@@ -41,10 +47,12 @@ export {
   parseIlpPeerInfo,
   parseSpspRequest,
   parseSpspResponse,
+  validateChainId,
   buildIlpPeerInfoEvent,
   buildSpspRequestEvent,
   buildSpspResponseEvent,
   type SpspRequestEventResult,
+  type SpspRequestSettlementInfo,
 } from './events/index.js';
 
 // Peer discovery
@@ -58,7 +66,12 @@ export {
 } from './discovery/index.js';
 
 // SPSP client and server
-export { NostrSpspClient, NostrSpspServer } from './spsp/index.js';
+export {
+  NostrSpspClient,
+  NostrSpspServer,
+  negotiateSettlementChain,
+  resolveTokenForChain,
+} from './spsp/index.js';
 
 // Trust calculation
 export {
