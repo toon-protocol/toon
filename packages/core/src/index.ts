@@ -69,6 +69,9 @@ export {
 export {
   NostrSpspClient,
   NostrSpspServer,
+  IlpSpspClient,
+  type IlpSpspClientConfig,
+  type IlpSpspRequestOptions,
   negotiateSettlementChain,
   resolveTokenForChain,
 } from './spsp/index.js';
@@ -85,8 +88,17 @@ export {
 export {
   BootstrapService,
   BootstrapError,
+  RelayMonitor,
+  createAgentRuntimeClient,
   type KnownPeer,
   type BootstrapConfig,
+  type BootstrapServiceConfig,
   type BootstrapResult,
   type ConnectorAdminClient,
-} from './bootstrap.js';
+  type BootstrapPhase,
+  type BootstrapEvent,
+  type BootstrapEventListener,
+  type AgentRuntimeClient,
+  type IlpSendResult,
+  type RelayMonitorConfig,
+} from './bootstrap/index.js';
