@@ -27,6 +27,8 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@ardrive/turbo-sdk": "^1.21.0",
+    "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
     "ws": "^8.18.0"
   },

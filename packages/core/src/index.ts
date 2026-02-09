@@ -48,7 +48,14 @@ export {
 } from './events/index.js';
 
 // Peer discovery
-export { NostrPeerDiscovery } from './discovery/index.js';
+export {
+  NostrPeerDiscovery,
+  GenesisPeerLoader,
+  type GenesisPeer,
+  ArDrivePeerRegistry,
+  SocialPeerDiscovery,
+  type SocialPeerDiscoveryConfig,
+} from './discovery/index.js';
 
 // SPSP client and server
 export { NostrSpspClient, NostrSpspServer } from './spsp/index.js';
