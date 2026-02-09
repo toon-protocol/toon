@@ -171,7 +171,11 @@ describe('BootstrapService', () => {
       const results = await service.bootstrap();
 
       expect(results.length).toBe(1);
-      expect(results[0].peerInfo).toEqual(validPeerInfo);
+      expect(results[0].peerInfo).toEqual({
+        ...validPeerInfo,
+        supportedChains: [],
+        settlementAddresses: {},
+      });
       expect(mockAdmin.addPeer).toHaveBeenCalled();
       // Verify no SPSP-related properties
       expect((results[0] as Record<string, unknown>)['spspInfo']).toBeUndefined();

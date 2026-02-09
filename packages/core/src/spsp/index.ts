@@ -6,3 +6,4 @@
 
 export { NostrSpspClient } from './NostrSpspClient.js';
 export { NostrSpspServer } from './NostrSpspServer.js';
+export { negotiateSettlementChain, resolveTokenForChain } from './settlement.js';

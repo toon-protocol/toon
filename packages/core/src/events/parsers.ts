@@ -9,6 +9,21 @@ import { InvalidEventError } from '../errors.js';
 import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 
 /**
+ * Validates a chain identifier string.
+ * Valid format: {blockchain}:{network} or {blockchain}:{network}:{chainId}
+ * Minimum 2 segments, maximum 3, separated by `:`. All segments must be non-empty.
+ *
+ * @param chainId - The chain identifier to validate
+ * @returns true if the chain identifier is valid
+ */
+export function validateChainId(chainId: string): boolean {
+  if (!chainId) return false;
+  const segments = chainId.split(':');
+  if (segments.length < 2 || segments.length > 3) return false;
+  return segments.every((s) => s.length > 0);
+}
+
+/**
  * Type guard to check if a value is a non-null object.
  */
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -69,12 +84,74 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     throw new InvalidEventError('Invalid optional field: settlementEngine must be a string');
   }
 
+  // Parse new settlement fields
+  const { supportedChains, settlementAddresses, preferredTokens, tokenNetworks } = parsed;
+
+  // supportedChains validation
+  if (supportedChains !== undefined) {
+    if (!Array.isArray(supportedChains)) {
+      throw new InvalidEventError('supportedChains must be an array');
+    }
+    if (supportedChains.length === 0) {
+      throw new InvalidEventError('supportedChains must be a non-empty array when provided');
+    }
+    for (const chainId of supportedChains) {
+      if (typeof chainId !== 'string' || !validateChainId(chainId)) {
+        throw new InvalidEventError(`Invalid chain identifier: ${String(chainId)}`);
+      }
+    }
+  }
+
+  // settlementAddresses validation
+  if (settlementAddresses !== undefined) {
+    if (!isObject(settlementAddresses)) {
+      throw new InvalidEventError('settlementAddresses must be an object');
+    }
+    for (const [key, value] of Object.entries(settlementAddresses)) {
+      if (!validateChainId(key)) {
+        throw new InvalidEventError(`Invalid chain identifier in settlementAddresses: ${key}`);
+      }
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new InvalidEventError('settlementAddresses values must be non-empty strings');
+      }
+    }
+    // Cross-field validation: settlementAddresses keys must be in supportedChains
+    if (Array.isArray(supportedChains)) {
+      const chainSet = new Set(supportedChains as string[]);
+      for (const key of Object.keys(settlementAddresses)) {
+        if (!chainSet.has(key)) {
+          throw new InvalidEventError(`settlementAddresses key '${key}' is not in supportedChains`);
+        }
+      }
+    }
+  }
+
+  // preferredTokens validation
+  if (preferredTokens !== undefined) {
+    if (!isObject(preferredTokens)) {
+      throw new InvalidEventError('preferredTokens must be an object');
+    }
+  }
+
+  // tokenNetworks validation
+  if (tokenNetworks !== undefined) {
+    if (!isObject(tokenNetworks)) {
+      throw new InvalidEventError('tokenNetworks must be an object');
+    }
+  }
+
   return {
     ilpAddress,
     btpEndpoint,
     assetCode,
     assetScale,
     ...(settlementEngine !== undefined && { settlementEngine }),
+    supportedChains: supportedChains !== undefined ? (supportedChains as string[]) : [],
+    settlementAddresses: settlementAddresses !== undefined
+      ? (settlementAddresses as Record<string, string>)
+      : {},
+    ...(preferredTokens !== undefined && { preferredTokens: preferredTokens as Record<string, string> }),
+    ...(tokenNetworks !== undefined && { tokenNetworks: tokenNetworks as Record<string, string> }),
   };
 }
 
@@ -139,10 +216,47 @@ export function parseSpspResponse(
     throw new InvalidEventError('Missing or invalid required field: sharedSecret');
   }
 
+  // Parse optional settlement fields
+  const { negotiatedChain, settlementAddress, tokenAddress, tokenNetworkAddress, channelId, settlementTimeout } = parsed;
+
+  if (negotiatedChain !== undefined) {
+    if (typeof negotiatedChain !== 'string' || negotiatedChain.length === 0 || !validateChainId(negotiatedChain)) {
+      throw new InvalidEventError(`Invalid negotiatedChain: ${String(negotiatedChain)}`);
+    }
+  }
+
+  if (settlementAddress !== undefined && (typeof settlementAddress !== 'string' || settlementAddress.length === 0)) {
+    throw new InvalidEventError('settlementAddress must be a non-empty string');
+  }
+
+  if (tokenAddress !== undefined && typeof tokenAddress !== 'string') {
+    throw new InvalidEventError('tokenAddress must be a string');
+  }
+
+  if (tokenNetworkAddress !== undefined && typeof tokenNetworkAddress !== 'string') {
+    throw new InvalidEventError('tokenNetworkAddress must be a string');
+  }
+
+  if (channelId !== undefined && (typeof channelId !== 'string' || channelId.length === 0)) {
+    throw new InvalidEventError('channelId must be a non-empty string');
+  }
+
+  if (settlementTimeout !== undefined) {
+    if (!Number.isInteger(settlementTimeout) || (settlementTimeout as number) <= 0) {
+      throw new InvalidEventError('settlementTimeout must be a positive integer');
+    }
+  }
+
   return {
     requestId,
     destinationAccount,
     sharedSecret,
+    ...(negotiatedChain !== undefined && { negotiatedChain: negotiatedChain as string }),
+    ...(settlementAddress !== undefined && { settlementAddress: settlementAddress as string }),
+    ...(tokenAddress !== undefined && { tokenAddress: tokenAddress as string }),
+    ...(tokenNetworkAddress !== undefined && { tokenNetworkAddress: tokenNetworkAddress as string }),
+    ...(channelId !== undefined && { channelId: channelId as string }),
+    ...(settlementTimeout !== undefined && { settlementTimeout: settlementTimeout as number }),
   };
 }
 
@@ -201,8 +315,59 @@ export function parseSpspRequest(
     throw new InvalidEventError('Missing or invalid required field: timestamp');
   }
 
+  // Parse optional settlement fields
+  const { ilpAddress, supportedChains, settlementAddresses, preferredTokens } = parsed;
+
+  if (ilpAddress !== undefined && (typeof ilpAddress !== 'string' || ilpAddress.length === 0)) {
+    throw new InvalidEventError('ilpAddress must be a non-empty string');
+  }
+
+  if (supportedChains !== undefined) {
+    if (!Array.isArray(supportedChains)) {
+      throw new InvalidEventError('supportedChains must be an array');
+    }
+    for (const chainId of supportedChains) {
+      if (typeof chainId !== 'string' || !validateChainId(chainId)) {
+        throw new InvalidEventError(`Invalid chain identifier in SPSP request: ${String(chainId)}`);
+      }
+    }
+  }
+
+  if (settlementAddresses !== undefined) {
+    if (!isObject(settlementAddresses)) {
+      throw new InvalidEventError('settlementAddresses must be an object');
+    }
+    for (const [key, value] of Object.entries(settlementAddresses)) {
+      if (!validateChainId(key)) {
+        throw new InvalidEventError(`Invalid chain identifier in SPSP request: ${key}`);
+      }
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new InvalidEventError('settlementAddresses values must be non-empty strings');
+      }
+    }
+    // Cross-field validation: settlementAddresses keys must be in supportedChains
+    if (Array.isArray(supportedChains)) {
+      const chainSet = new Set(supportedChains as string[]);
+      for (const key of Object.keys(settlementAddresses)) {
+        if (!chainSet.has(key)) {
+          throw new InvalidEventError(`settlementAddresses key '${key}' is not in supportedChains`);
+        }
+      }
+    }
+  }
+
+  if (preferredTokens !== undefined) {
+    if (!isObject(preferredTokens)) {
+      throw new InvalidEventError('preferredTokens must be an object');
+    }
+  }
+
   return {
     requestId,
     timestamp,
+    ...(ilpAddress !== undefined && { ilpAddress }),
+    ...(supportedChains !== undefined && { supportedChains: supportedChains as string[] }),
+    ...(settlementAddresses !== undefined && { settlementAddresses: settlementAddresses as Record<string, string> }),
+    ...(preferredTokens !== undefined && { preferredTokens: preferredTokens as Record<string, string> }),
   };
 }

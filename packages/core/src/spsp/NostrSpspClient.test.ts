@@ -537,4 +537,206 @@ describe('NostrSpspClient', () => {
       ).rejects.toThrow(SpspTimeoutError);
     }, 1000);
   });
+
+  // Task 12: Tests for settlement info passing and settlement result parsing
+  describe('requestSpspInfo - settlement info', () => {
+    it('passes settlementInfo to buildSpspRequestEvent', async () => {
+      const senderSecretKey = generateSecretKey();
+      const recipientSecretKey = generateSecretKey();
+      const recipientPubkey = getPublicKey(recipientSecretKey);
+      const senderPubkey = getPublicKey(senderSecretKey);
+
+      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+
+      const settlementInfo = {
+        supportedChains: ['evm:base:8453'],
+        settlementAddresses: { 'evm:base:8453': '0xMY_ADDR' },
+        preferredTokens: { 'evm:base:8453': '0xMY_TOKEN' },
+      };
+
+      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
+        setTimeout(() => {
+          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+          if (publishCall) {
+            const event = publishCall[1] as NostrEvent;
+            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+            const decrypted = nip44.decrypt(event.content, convKey);
+            const request = JSON.parse(decrypted);
+
+            // Verify settlement fields are in the request
+            expect(request.supportedChains).toEqual(['evm:base:8453']);
+            expect(request.settlementAddresses).toEqual({ 'evm:base:8453': '0xMY_ADDR' });
+            expect(request.preferredTokens).toEqual({ 'evm:base:8453': '0xMY_TOKEN' });
+
+            const response: SpspResponse = {
+              requestId: request.requestId,
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const responseEvent = createEncryptedResponseEvent(
+              response,
+              senderSecretKey,
+              senderPubkey,
+              recipientSecretKey
+            );
+            callbacks.onevent?.(responseEvent as VerifiedEvent);
+          }
+        }, 10);
+        return mockSubCloser;
+      });
+
+      await client.requestSpspInfo(recipientPubkey, {
+        timeout: 1000,
+        settlementInfo,
+      });
+
+      // Assertions are inside the subscribe callback above
+      expect(mockPool.publish).toHaveBeenCalled();
+    });
+
+    it('when response includes settlement fields, returned result has settlement object', async () => {
+      const senderSecretKey = generateSecretKey();
+      const recipientSecretKey = generateSecretKey();
+      const recipientPubkey = getPublicKey(recipientSecretKey);
+      const senderPubkey = getPublicKey(senderSecretKey);
+
+      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+
+      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
+        setTimeout(() => {
+          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+          if (publishCall) {
+            const event = publishCall[1] as NostrEvent;
+            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+            const decrypted = nip44.decrypt(event.content, convKey);
+            const request = JSON.parse(decrypted);
+
+            // Response with settlement fields
+            const response: SpspResponse = {
+              requestId: request.requestId,
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+              negotiatedChain: 'evm:base:8453',
+              settlementAddress: '0xSERVER_ADDR',
+              tokenAddress: '0xTOKEN',
+              tokenNetworkAddress: '0xTOKEN_NET',
+              channelId: '0xCHANNEL',
+              settlementTimeout: 86400,
+            };
+            const responseEvent = createEncryptedResponseEvent(
+              response,
+              senderSecretKey,
+              senderPubkey,
+              recipientSecretKey
+            );
+            callbacks.onevent?.(responseEvent as VerifiedEvent);
+          }
+        }, 10);
+        return mockSubCloser;
+      });
+
+      const result = await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
+
+      expect(result.destinationAccount).toBe('g.test.receiver');
+      expect(result.settlement).toBeDefined();
+      const settlement = result.settlement;
+      expect(settlement?.negotiatedChain).toBe('evm:base:8453');
+      expect(settlement?.settlementAddress).toBe('0xSERVER_ADDR');
+      expect(settlement?.tokenAddress).toBe('0xTOKEN');
+      expect(settlement?.tokenNetworkAddress).toBe('0xTOKEN_NET');
+      expect(settlement?.channelId).toBe('0xCHANNEL');
+      expect(settlement?.settlementTimeout).toBe(86400);
+    });
+
+    it('backward compat: no settlementInfo, request has no settlement fields', async () => {
+      const senderSecretKey = generateSecretKey();
+      const recipientSecretKey = generateSecretKey();
+      const recipientPubkey = getPublicKey(recipientSecretKey);
+      const senderPubkey = getPublicKey(senderSecretKey);
+
+      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+
+      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
+        setTimeout(() => {
+          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+          if (publishCall) {
+            const event = publishCall[1] as NostrEvent;
+            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+            const decrypted = nip44.decrypt(event.content, convKey);
+            const request = JSON.parse(decrypted);
+
+            // Verify no settlement fields in request
+            expect(request.supportedChains).toBeUndefined();
+            expect(request.settlementAddresses).toBeUndefined();
+
+            const response: SpspResponse = {
+              requestId: request.requestId,
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const responseEvent = createEncryptedResponseEvent(
+              response,
+              senderSecretKey,
+              senderPubkey,
+              recipientSecretKey
+            );
+            callbacks.onevent?.(responseEvent as VerifiedEvent);
+          }
+        }, 10);
+        return mockSubCloser;
+      });
+
+      // No settlementInfo option
+      const result = await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
+
+      expect(result.destinationAccount).toBe('g.test.receiver');
+    });
+
+    it('backward compat: response has no settlement fields, result has no settlement', async () => {
+      const senderSecretKey = generateSecretKey();
+      const recipientSecretKey = generateSecretKey();
+      const recipientPubkey = getPublicKey(recipientSecretKey);
+      const senderPubkey = getPublicKey(senderSecretKey);
+
+      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+
+      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
+        setTimeout(() => {
+          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+          if (publishCall) {
+            const event = publishCall[1] as NostrEvent;
+            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+            const decrypted = nip44.decrypt(event.content, convKey);
+            const request = JSON.parse(decrypted);
+
+            // Basic response with no settlement fields
+            const response: SpspResponse = {
+              requestId: request.requestId,
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const responseEvent = createEncryptedResponseEvent(
+              response,
+              senderSecretKey,
+              senderPubkey,
+              recipientSecretKey
+            );
+            callbacks.onevent?.(responseEvent as VerifiedEvent);
+          }
+        }, 10);
+        return mockSubCloser;
+      });
+
+      const result = await client.requestSpspInfo(recipientPubkey, {
+        timeout: 1000,
+        settlementInfo: {
+          supportedChains: ['evm:base:8453'],
+          settlementAddresses: { 'evm:base:8453': '0xADDR' },
+        },
+      });
+
+      expect(result.destinationAccount).toBe('g.test.receiver');
+      expect(result.settlement).toBeUndefined();
+    });
+  });
 });

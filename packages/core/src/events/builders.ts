@@ -41,15 +41,31 @@ export interface SpspRequestEventResult {
 }
 
 /**
+ * Optional settlement info to include in an SPSP request.
+ */
+export interface SpspRequestSettlementInfo {
+  /** The requester's ILP address */
+  ilpAddress?: string;
+  /** Chain identifiers the requester supports */
+  supportedChains?: string[];
+  /** Maps chain identifier to the requester's settlement address */
+  settlementAddresses?: Record<string, string>;
+  /** Maps chain identifier to the requester's preferred token contract address */
+  preferredTokens?: Record<string, string>;
+}
+
+/**
  * Builds and signs a kind:23194 encrypted SPSP request event.
  *
  * @param recipientPubkey - The recipient's pubkey (64-character hex)
  * @param secretKey - The sender's secret key for signing and encryption
+ * @param settlementInfo - Optional settlement preferences to include in the request
  * @returns The signed event and the requestId for response correlation
  */
 export function buildSpspRequestEvent(
   recipientPubkey: string,
-  secretKey: Uint8Array
+  secretKey: Uint8Array,
+  settlementInfo?: SpspRequestSettlementInfo
 ): SpspRequestEventResult {
   const requestId = crypto.randomUUID();
   const timestamp = Math.floor(Date.now() / 1000);
@@ -57,6 +73,7 @@ export function buildSpspRequestEvent(
   const payload: SpspRequest = {
     requestId,
     timestamp,
+    ...settlementInfo,
   };
 
   // Encrypt payload using NIP-44
