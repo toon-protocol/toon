@@ -8,3 +8,4 @@ export { NostrSpspClient } from './NostrSpspClient.js';
 export { NostrSpspServer } from './NostrSpspServer.js';
 export { IlpSpspClient, type IlpSpspClientConfig, type IlpSpspRequestOptions } from './IlpSpspClient.js';
 export { negotiateSettlementChain, resolveTokenForChain } from './settlement.js';
+export { negotiateAndOpenChannel, type NegotiateAndOpenChannelParams } from './negotiateAndOpenChannel.js';

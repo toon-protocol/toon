@@ -15,7 +15,7 @@ import type {
   ConnectorChannelClient,
   SettlementNegotiationConfig,
 } from '../types.js';
-import { negotiateSettlementChain, resolveTokenForChain } from './settlement.js';
+import { negotiateAndOpenChannel } from './negotiateAndOpenChannel.js';
 
 /**
  * Server for handling encrypted SPSP requests via NIP-44 encrypted Nostr messages.
@@ -155,87 +155,29 @@ export class NostrSpspServer {
   ): Promise<void> {
     const config = this.settlementConfig;
     const channelClient = this.channelClient;
-    const supportedChains = request.supportedChains;
 
-    if (!config || !channelClient || !supportedChains) {
+    if (!config || !channelClient || !request.supportedChains) {
       return;
     }
 
-    // Negotiate chain
-    const negotiatedChain = negotiateSettlementChain(
-      supportedChains,
-      config.ownSupportedChains,
-      request.preferredTokens,
-      config.ownPreferredTokens
-    );
-
-    if (negotiatedChain === null) {
-      // No chain intersection — graceful degradation
-      return;
-    }
-
-    // Resolve peer address from requester's settlement addresses
-    const peerAddress = request.settlementAddresses?.[negotiatedChain];
-    if (!peerAddress) {
-      // Missing peer address — graceful degradation
-      return;
-    }
-
-    // Resolve token
-    const token = resolveTokenForChain(
-      negotiatedChain,
-      request.preferredTokens,
-      config.ownPreferredTokens
-    );
-
-    // Derive peerId from sender pubkey
-    const peerId = `nostr-${senderPubkey.slice(0, 16)}`;
-
-    // Open channel via connector Admin API
-    let channelId: string;
     try {
-      const result = await channelClient.openChannel({
-        peerId,
-        chain: negotiatedChain,
-        token,
-        tokenNetwork: config.ownTokenNetworks?.[negotiatedChain],
-        peerAddress,
-        initialDeposit: config.initialDeposit ?? '0',
-        settlementTimeout: config.settlementTimeout ?? 86400,
+      const result = await negotiateAndOpenChannel({
+        request,
+        config,
+        channelClient,
+        senderPubkey,
       });
-      channelId = result.channelId;
-    } catch {
-      // Channel open failure — graceful degradation
-      return;
-    }
 
-    // Poll for channel to become open
-    const timeout = config.channelOpenTimeout ?? 30000;
-    const pollInterval = config.pollInterval ?? 1000;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < timeout) {
-      try {
-        const state = await channelClient.getChannelState(channelId);
-        if (state.status === 'open') {
-          // Channel is open — add settlement fields to response
-          response.negotiatedChain = negotiatedChain;
-          response.settlementAddress = config.ownSettlementAddresses[negotiatedChain];
-          response.tokenAddress = token;
-          response.tokenNetworkAddress = config.ownTokenNetworks?.[negotiatedChain];
-          response.channelId = channelId;
-          response.settlementTimeout = config.settlementTimeout ?? 86400;
-          return;
-        }
-      } catch {
-        // getChannelState error — graceful degradation
-        return;
+      if (result) {
+        response.negotiatedChain = result.negotiatedChain;
+        response.settlementAddress = result.settlementAddress;
+        response.tokenAddress = result.tokenAddress;
+        response.tokenNetworkAddress = result.tokenNetworkAddress;
+        response.channelId = result.channelId;
+        response.settlementTimeout = result.settlementTimeout;
       }
-
-      // Wait before next poll
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    } catch {
+      // Any error — graceful degradation (no settlement fields added)
     }
-
-    // Timeout — graceful degradation (no settlement fields added)
   }
 }

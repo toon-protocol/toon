@@ -103,7 +103,9 @@ export type BootstrapEvent =
 export type BootstrapEventListener = (event: BootstrapEvent) => void;
 
 /**
- * Result of sending an ILP packet via the agent-runtime.
+ * Result of sending an ILP packet via agent-runtime POST /ilp/send.
+ * Note: agent-runtime may return either `accepted` or `fulfilled` as the
+ * success indicator. AgentRuntimeClient normalizes to `accepted`.
  */
 export interface IlpSendResult {
   accepted: boolean;
