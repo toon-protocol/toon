@@ -121,7 +121,7 @@ export class RelayMonitor {
       kinds: [ILP_PEER_INFO_KIND],
     };
 
-    const subCloser = this.pool.subscribeMany([this.config.relayUrl], [filter], {
+    const subCloser = this.pool.subscribeMany([this.config.relayUrl], filter, {
       onevent: (event) => {
         if (isUnsubscribed) return;
 
