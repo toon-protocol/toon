@@ -10,6 +10,20 @@ import type { SpspRequestSettlementInfo } from '../events/builders.js';
 export const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
 
 /**
+ * A peer discovered via kind:10032 relay events but not yet peered with.
+ */
+export interface DiscoveredPeer {
+  /** Nostr pubkey of the discovered peer (64-char hex) */
+  pubkey: string;
+  /** Connector peer ID (e.g., "nostr-aabb11cc22dd33ee") */
+  peerId: string;
+  /** Parsed ILP peer info from the kind:10032 event */
+  peerInfo: IlpPeerInfo;
+  /** Timestamp (seconds since epoch) when the peer was first discovered */
+  discoveredAt: number;
+}
+
+/**
  * Represents a known peer for bootstrap.
  */
 export interface KnownPeer {

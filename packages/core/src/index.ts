@@ -91,7 +91,10 @@ export {
   BootstrapService,
   BootstrapError,
   RelayMonitor,
+  createHttpRuntimeClient,
   createAgentRuntimeClient,
+  createDirectRuntimeClient,
+  createDirectConnectorAdmin,
   type KnownPeer,
   type BootstrapConfig,
   type BootstrapServiceConfig,
@@ -103,4 +106,27 @@ export {
   type AgentRuntimeClient,
   type IlpSendResult,
   type RelayMonitorConfig,
+  type ConnectorNodeLike,
+  type SendPacketParams,
+  type SendPacketResult,
+  type DirectRuntimeClientConfig,
+  type ConnectorAdminLike,
+  type RegisterPeerParams,
+  createDirectChannelClient,
+  type ConnectorChannelLike,
+  type DiscoveredPeer,
 } from './bootstrap/index.js';
+
+// Compose - embedded connector orchestration
+export {
+  createAgentSocietyNode,
+  type AgentSocietyNodeConfig,
+  type AgentSocietyNode,
+  type AgentSocietyNodeStartResult,
+  type EmbeddableConnectorLike,
+  type PacketHandler,
+  type HandlePacketRequest,
+  type HandlePacketAcceptResponse,
+  type HandlePacketRejectResponse,
+  type HandlePacketResponse,
+} from './compose.js';

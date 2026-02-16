@@ -1,6 +1,6 @@
 {
   "name": "@agent-society/core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Core library for Nostr-based ILP peer discovery and SPSP",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,6 +40,14 @@
     "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
     "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "@agent-society/connector": ">=1.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@agent-society/connector": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@agent-society/relay": "^1.0.0",
