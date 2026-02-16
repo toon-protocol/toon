@@ -74,6 +74,8 @@ export {
   type IlpSpspRequestOptions,
   negotiateSettlementChain,
   resolveTokenForChain,
+  negotiateAndOpenChannel,
+  type NegotiateAndOpenChannelParams,
 } from './spsp/index.js';
 
 // Trust calculation

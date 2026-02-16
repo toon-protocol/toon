@@ -12,7 +12,7 @@ import { parseIlpPeerInfo } from '../events/index.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { NostrSpspClient } from '../spsp/index.js';
 import type { IlpPeerInfo, Subscription } from '../types.js';
-import type { ConnectorAdminClient } from '../bootstrap.js';
+import type { ConnectorAdminClient } from '../bootstrap/index.js';
 
 /**
  * Configuration for SocialPeerDiscovery.
@@ -101,7 +101,7 @@ export class SocialPeerDiscovery {
 
     const subCloser = this.pool.subscribeMany(
       this.config.relayUrls,
-      [{ kinds: [3], authors: [this.pubkey] }],
+      { kinds: [3], authors: [this.pubkey] },
       {
         onevent: (event) => {
           const followedPubkeys = event.tags

@@ -48,7 +48,9 @@ describe('createAgentRuntimeClient', () => {
         data: 'dGVzdA==',
       });
 
-      expect(result).toEqual(mockResponse);
+      expect(result.accepted).toBe(true);
+      expect(result.fulfillment).toBe('abc123');
+      expect(result.data).toBe('base64data');
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:3000/ilp/send',
         expect.objectContaining({
@@ -137,6 +139,69 @@ describe('createAgentRuntimeClient', () => {
           data: 'dGVzdA==',
         })
       ).rejects.toThrow(/Network error/);
+    });
+
+    describe('field name compatibility (accepted vs fulfilled)', () => {
+      const defaultParams = {
+        destination: 'g.peer1',
+        amount: '0',
+        data: 'dGVzdA==',
+      };
+
+      it('should normalize response with { accepted: true } to accepted === true', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ accepted: true, fulfillment: 'ff' }),
+        });
+
+        const client = createAgentRuntimeClient('http://localhost:3000');
+        const result = await client.sendIlpPacket(defaultParams);
+        expect(result.accepted).toBe(true);
+      });
+
+      it('should normalize response with { fulfilled: true } to accepted === true', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ fulfilled: true, fulfillment: 'ff' }),
+        });
+
+        const client = createAgentRuntimeClient('http://localhost:3000');
+        const result = await client.sendIlpPacket(defaultParams);
+        expect(result.accepted).toBe(true);
+      });
+
+      it('should normalize response with { fulfilled: false } to accepted === false', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ fulfilled: false, code: 'F00', message: 'reject' }),
+        });
+
+        const client = createAgentRuntimeClient('http://localhost:3000');
+        const result = await client.sendIlpPacket(defaultParams);
+        expect(result.accepted).toBe(false);
+      });
+
+      it('should default to accepted === false when neither field is present', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ code: 'F00', message: 'reject' }),
+        });
+
+        const client = createAgentRuntimeClient('http://localhost:3000');
+        const result = await client.sendIlpPacket(defaultParams);
+        expect(result.accepted).toBe(false);
+      });
+
+      it('should prefer accepted over fulfilled when both are present', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ accepted: true, fulfilled: false }),
+        });
+
+        const client = createAgentRuntimeClient('http://localhost:3000');
+        const result = await client.sendIlpPacket(defaultParams);
+        expect(result.accepted).toBe(true);
+      });
     });
 
     it('should include timeout in request body when provided', async () => {

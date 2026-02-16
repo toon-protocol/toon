@@ -52,8 +52,8 @@ export function negotiateSettlementChain(
     }
   }
 
-  // Fall back to first intersection match
-  return intersection[0];
+  // Fall back to first intersection match (length > 0 guaranteed by check above)
+  return intersection[0] ?? null;
 }
 
 /**

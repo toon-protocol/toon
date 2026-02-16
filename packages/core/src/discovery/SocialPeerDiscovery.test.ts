@@ -5,7 +5,7 @@ import { ILP_PEER_INFO_KIND } from '../constants.js';
 import type { SimplePool } from 'nostr-tools/pool';
 import type { VerifiedEvent } from 'nostr-tools/pure';
 import type { IlpPeerInfo } from '../types.js';
-import type { ConnectorAdminClient } from '../bootstrap.js';
+import type { ConnectorAdminClient } from '../bootstrap/index.js';
 import type { NostrSpspClient } from '../spsp/index.js';
 
 vi.mock('nostr-tools/pure', () => ({

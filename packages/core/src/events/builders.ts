@@ -52,6 +52,8 @@ export interface SpspRequestSettlementInfo {
   settlementAddresses?: Record<string, string>;
   /** Maps chain identifier to the requester's preferred token contract address */
   preferredTokens?: Record<string, string>;
+  /** Maps chain identifier to TokenNetwork contract address (EVM only) */
+  tokenNetworks?: Record<string, string>;
 }
 
 /**

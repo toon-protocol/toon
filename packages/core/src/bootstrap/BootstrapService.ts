@@ -111,7 +111,7 @@ export class BootstrapService {
    * that creates the client after construction.
    */
   setAgentRuntimeClient(client: AgentRuntimeClient): void {
-    (this as { agentRuntimeClient?: AgentRuntimeClient }).agentRuntimeClient = client;
+    (this as unknown as { agentRuntimeClient?: AgentRuntimeClient }).agentRuntimeClient = client;
   }
 
   /**
