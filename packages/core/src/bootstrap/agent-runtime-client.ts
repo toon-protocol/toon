@@ -6,13 +6,13 @@ import { BootstrapError } from './BootstrapService.js';
 import type { AgentRuntimeClient, IlpSendResult } from './types.js';
 
 /**
- * Creates an AgentRuntimeClient that sends ILP packets via HTTP.
+ * Creates an HTTP-based AgentRuntimeClient that sends ILP packets via POST /ilp/send.
  *
  * @param baseUrl - Base URL of the agent-runtime (e.g., "http://localhost:3000")
  * @returns An AgentRuntimeClient instance
  * @throws BootstrapError if baseUrl is not a valid URL
  */
-export function createAgentRuntimeClient(baseUrl: string): AgentRuntimeClient {
+export function createHttpRuntimeClient(baseUrl: string): AgentRuntimeClient {
   // Validate baseUrl is a valid URL
   try {
     new URL(baseUrl);
@@ -67,3 +67,9 @@ export function createAgentRuntimeClient(baseUrl: string): AgentRuntimeClient {
     },
   };
 }
+
+/**
+ * Backward-compatible alias for createHttpRuntimeClient.
+ * @deprecated Use createHttpRuntimeClient instead
+ */
+export const createAgentRuntimeClient = createHttpRuntimeClient;

@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createAgentRuntimeClient } from './agent-runtime-client.js';
+import { createHttpRuntimeClient, createAgentRuntimeClient } from './agent-runtime-client.js';
 import { BootstrapError } from './BootstrapService.js';
 
-describe('createAgentRuntimeClient', () => {
+describe('createHttpRuntimeClient', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
@@ -17,13 +17,17 @@ describe('createAgentRuntimeClient', () => {
     global.fetch = originalFetch;
   });
 
+  it('should export createAgentRuntimeClient as backward-compatible alias', () => {
+    expect(createAgentRuntimeClient).toBe(createHttpRuntimeClient);
+  });
+
   it('should throw BootstrapError for invalid baseUrl', () => {
-    expect(() => createAgentRuntimeClient('not-a-url')).toThrow(BootstrapError);
-    expect(() => createAgentRuntimeClient('')).toThrow(BootstrapError);
+    expect(() => createHttpRuntimeClient('not-a-url')).toThrow(BootstrapError);
+    expect(() => createHttpRuntimeClient('')).toThrow(BootstrapError);
   });
 
   it('should create client for valid baseUrl', () => {
-    const client = createAgentRuntimeClient('http://localhost:3000');
+    const client = createHttpRuntimeClient('http://localhost:3000');
     expect(client).toBeDefined();
     expect(client.sendIlpPacket).toBeInstanceOf(Function);
   });

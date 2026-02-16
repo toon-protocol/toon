@@ -1,6 +1,6 @@
 /**
  * Shared settlement negotiation and channel opening logic.
- * Used by both NostrSpspServer (direct Nostr SPSP) and BLS /handle-payment (ILP-routed SPSP).
+ * Used by both NostrSpspServer (direct Nostr SPSP) and BLS /handle-packet (ILP-routed SPSP).
  */
 
 import type {

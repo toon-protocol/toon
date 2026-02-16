@@ -41,6 +41,14 @@
     "nostr-tools": "^2.20.0",
     "ws": "^8.18.0"
   },
+  "peerDependencies": {
+    "@agent-society/connector": ">=1.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@agent-society/connector": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@agent-society/relay": "^1.0.0",
     "@types/ws": "^8.5.10"

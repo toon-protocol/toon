@@ -1,6 +1,6 @@
 /**
- * Tests for RelayMonitor - relay subscription, event processing,
- * reverse registration, and SPSP handshake orchestration.
+ * Tests for RelayMonitor - relay subscription, passive discovery,
+ * explicit peering via peerWith(), and SPSP handshake orchestration.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
@@ -62,15 +62,13 @@ describe('RelayMonitor', () => {
   };
 
   let mockAdmin: ConnectorAdminClient & {
-    addPeer: ReturnType<typeof vi.fn>;
-    removePeer: ReturnType<typeof vi.fn>;
+    addPeer: Mock;
+    removePeer: Mock;
   };
-  let mockAgentRuntime: AgentRuntimeClient & {
-    sendIlpPacket: ReturnType<typeof vi.fn>;
-  };
-  let mockToonEncoder: ReturnType<typeof vi.fn>;
-  let mockToonDecoder: ReturnType<typeof vi.fn>;
-  let mockSpspRequestSpspInfo: ReturnType<typeof vi.fn>;
+  let mockAgentRuntime: AgentRuntimeClient;
+  let mockToonEncoder: (event: NostrEvent) => Uint8Array;
+  let mockToonDecoder: (bytes: Uint8Array) => NostrEvent;
+  let mockSpspRequestSpspInfo: Mock;
 
   function createMonitor(basePricePerByte?: bigint): RelayMonitor {
     return new RelayMonitor(
@@ -82,6 +80,14 @@ describe('RelayMonitor', () => {
         basePricePerByte,
       }
     );
+  }
+
+  /** Create a monitor with admin + runtime wired up (ready for peerWith). */
+  function createWiredMonitor(basePricePerByte?: bigint): RelayMonitor {
+    const monitor = createMonitor(basePricePerByte);
+    monitor.setConnectorAdmin(mockAdmin);
+    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    return monitor;
   }
 
   function makeEvent(
@@ -116,74 +122,174 @@ describe('RelayMonitor', () => {
       removePeer: vi.fn().mockResolvedValue(undefined),
     };
     mockAgentRuntime = {
-      sendIlpPacket: vi.fn(async (): Promise<IlpSendResult> => ({
+      sendIlpPacket: vi.fn<[], Promise<IlpSendResult>>().mockResolvedValue({
         accepted: true,
         fulfillment: 'test-fulfillment',
         data: Buffer.from('response').toString('base64'),
-      })),
+      }),
     };
-    mockToonEncoder = vi.fn((_event: NostrEvent) =>
+    mockToonEncoder = vi.fn<[NostrEvent], Uint8Array>((_event) =>
       new TextEncoder().encode('encoded-toon-data')
     );
-    mockToonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+    mockToonDecoder = vi.fn<[Uint8Array], NostrEvent>((_bytes) => ({}) as NostrEvent);
 
     // Reset mock IlpSpspClient so requestSpspInfo is fresh
-    mockSpspRequestSpspInfo = vi.fn(async () => ({
+    mockSpspRequestSpspInfo = vi.fn().mockResolvedValue({
       destinationAccount: 'g.test.peer.spsp.123',
       sharedSecret: 'secret123',
-    }));
+    });
     (IlpSpspClient as unknown as Mock).mockImplementation(() => ({
       requestSpspInfo: mockSpspRequestSpspInfo,
     }));
   });
 
-  // --- Precondition checks ---
+  // --- Discovery-only mode (no admin/runtime needed) ---
 
-  it('throws BootstrapError if connectorAdmin not set before start()', () => {
+  it('start() works without connectorAdmin or agentRuntimeClient (discovery-only)', () => {
     const monitor = createMonitor();
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
-    expect(() => monitor.start()).toThrow(BootstrapError);
-    expect(() => monitor.start()).toThrow('connectorAdmin must be set');
+    // Should NOT throw
+    const sub = monitor.start();
+    expect(sub).toHaveProperty('unsubscribe');
+    sub.unsubscribe();
   });
 
-  it('throws BootstrapError if agentRuntimeClient not set before start()', () => {
+  it('emits bootstrap:peer-discovered event on new event (discovery-only)', () => {
+    const events: BootstrapEvent[] = [];
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    expect(() => monitor.start()).toThrow(BootstrapError);
-    expect(() => monitor.start()).toThrow('agentRuntimeClient must be set');
+    monitor.on((event) => events.push(event));
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({
+      type: 'bootstrap:peer-discovered',
+      peerPubkey,
+      ilpAddress: 'g.test.peer',
+    });
   });
 
   // --- Subscription ---
 
   it('subscribes to relay for kind:10032 events with correct filter', () => {
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
-
-    const pool = (SimplePool as unknown as Mock).mock.results[0].value;
+    const pool = (SimplePool as unknown as Mock).mock.results[0]!.value;
     monitor.start();
 
     expect(pool.subscribeMany).toHaveBeenCalledWith(
       ['ws://localhost:7100'],
-      [{ kinds: [ILP_PEER_INFO_KIND] }],
+      { kinds: [ILP_PEER_INFO_KIND] },
       expect.objectContaining({ onevent: expect.any(Function) })
     );
   });
 
-  // --- Peer registration ---
+  // --- getDiscoveredPeers / isPeered ---
 
-  it('registers discovered peer via addPeer() with correct peerId and routes', async () => {
+  it('getDiscoveredPeers() returns discovered peers not yet peered with', () => {
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
+    monitor.start();
+
+    fireEvent(makeValidEvent(peerPubkey, 1000));
+    fireEvent(makeValidEvent(peerPubkey2, 1001));
+
+    const discovered = monitor.getDiscoveredPeers();
+    expect(discovered).toHaveLength(2);
+    expect(discovered.map((p) => p.pubkey)).toContain(peerPubkey);
+    expect(discovered.map((p) => p.pubkey)).toContain(peerPubkey2);
+  });
+
+  it('isPeered() returns false for discovered but not peered', () => {
+    const monitor = createMonitor();
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+
+    expect(monitor.isPeered(peerPubkey)).toBe(false);
+  });
+
+  it('isPeered() returns true after peerWith()', async () => {
+    const monitor = createWiredMonitor();
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+    await monitor.peerWith(peerPubkey);
+
+    expect(monitor.isPeered(peerPubkey)).toBe(true);
+  });
+
+  it('getDiscoveredPeers() excludes peered peers', async () => {
+    const monitor = createWiredMonitor();
+    monitor.start();
+
+    fireEvent(makeValidEvent(peerPubkey, 1000));
+    fireEvent(makeValidEvent(peerPubkey2, 1001));
+
+    await monitor.peerWith(peerPubkey);
+
+    const discovered = monitor.getDiscoveredPeers();
+    expect(discovered).toHaveLength(1);
+    expect(discovered[0]!.pubkey).toBe(peerPubkey2);
+  });
+
+  // --- peerWith() precondition checks ---
+
+  it('peerWith() throws if peer not discovered', async () => {
+    const monitor = createWiredMonitor();
+    monitor.start();
+
+    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow(BootstrapError);
+    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow('not discovered yet');
+  });
+
+  it('peerWith() throws if connectorAdmin not set', async () => {
+    const monitor = createMonitor();
     monitor.setAgentRuntimeClient(mockAgentRuntime);
     monitor.start();
 
-    expect(capturedOnevent).toBeTruthy();
     fireEvent(makeValidEvent());
 
-    await vi.waitFor(() => {
-      expect(mockAdmin.addPeer).toHaveBeenCalled();
-    });
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(BootstrapError);
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow('connectorAdmin must be set');
+  });
+
+  it('peerWith() throws if agentRuntimeClient not set', async () => {
+    const monitor = createMonitor();
+    monitor.setConnectorAdmin(mockAdmin);
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(BootstrapError);
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow('agentRuntimeClient must be set');
+  });
+
+  // --- peerWith() idempotency ---
+
+  it('peerWith() is idempotent (second call is no-op)', async () => {
+    const monitor = createWiredMonitor();
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+
+    await monitor.peerWith(peerPubkey);
+    await monitor.peerWith(peerPubkey);
+
+    // addPeer should only be called once for initial registration
+    // (plus possibly once for settlement update, depending on SPSP response)
+    const initialRegistrations = mockAdmin.addPeer.mock.calls.filter(
+      (call: unknown[]) => !(call[0] as { settlement?: unknown }).settlement
+    );
+    expect(initialRegistrations).toHaveLength(1);
+  });
+
+  // --- Peer registration via peerWith ---
+
+  it('peerWith() registers discovered peer via addPeer() with correct peerId and routes', async () => {
+    const monitor = createWiredMonitor();
+    monitor.start();
+
+    fireEvent(makeValidEvent());
+    await monitor.peerWith(peerPubkey);
 
     expect(mockAdmin.addPeer).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -195,19 +301,14 @@ describe('RelayMonitor', () => {
     );
   });
 
-  // --- SPSP handshake ---
+  // --- SPSP handshake via peerWith ---
 
-  it('sends paid SPSP handshake for newly discovered peer', async () => {
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+  it('peerWith() sends paid SPSP handshake for peer', async () => {
+    const monitor = createWiredMonitor();
     monitor.start();
 
     fireEvent(makeValidEvent());
-
-    await vi.waitFor(() => {
-      expect(mockSpspRequestSpspInfo).toHaveBeenCalled();
-    });
+    await monitor.peerWith(peerPubkey);
 
     expect(mockSpspRequestSpspInfo).toHaveBeenCalledWith(
       peerPubkey,
@@ -219,7 +320,7 @@ describe('RelayMonitor', () => {
     );
   });
 
-  it('updates registration with channel/settlement info from handshake', async () => {
+  it('peerWith() updates registration with channel/settlement info from handshake', async () => {
     mockSpspRequestSpspInfo.mockResolvedValueOnce({
       destinationAccount: 'g.test.peer.spsp.123',
       sharedSecret: 'secret123',
@@ -230,16 +331,11 @@ describe('RelayMonitor', () => {
       },
     });
 
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    const monitor = createWiredMonitor();
     monitor.start();
 
     fireEvent(makeValidEvent());
-
-    await vi.waitFor(() => {
-      expect(mockAdmin.addPeer).toHaveBeenCalledTimes(2);
-    });
+    await monitor.peerWith(peerPubkey);
 
     // Second call should include settlement info
     expect(mockAdmin.addPeer).toHaveBeenCalledWith(
@@ -256,41 +352,14 @@ describe('RelayMonitor', () => {
 
   // --- Event emissions ---
 
-  it('emits bootstrap:peer-discovered event on new event', async () => {
+  it('emits bootstrap:peer-registered event after peerWith()', async () => {
     const events: BootstrapEvent[] = [];
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    const monitor = createWiredMonitor();
     monitor.on((event) => events.push(event));
     monitor.start();
 
     fireEvent(makeValidEvent());
-
-    await vi.waitFor(() => {
-      expect(events.some((e) => e.type === 'bootstrap:peer-discovered')).toBe(true);
-    });
-
-    const discovered = events.find((e) => e.type === 'bootstrap:peer-discovered');
-    expect(discovered).toEqual({
-      type: 'bootstrap:peer-discovered',
-      peerPubkey,
-      ilpAddress: 'g.test.peer',
-    });
-  });
-
-  it('emits bootstrap:peer-registered event after registration', async () => {
-    const events: BootstrapEvent[] = [];
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
-    monitor.on((event) => events.push(event));
-    monitor.start();
-
-    fireEvent(makeValidEvent());
-
-    await vi.waitFor(() => {
-      expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(true);
-    });
+    await monitor.peerWith(peerPubkey);
 
     const registered = events.find((e) => e.type === 'bootstrap:peer-registered');
     expect(registered).toEqual({
@@ -301,7 +370,7 @@ describe('RelayMonitor', () => {
     });
   });
 
-  it('emits bootstrap:channel-opened event after handshake with channel', async () => {
+  it('emits bootstrap:channel-opened event after peerWith() handshake with channel', async () => {
     mockSpspRequestSpspInfo.mockResolvedValueOnce({
       destinationAccount: 'g.test.peer.spsp.123',
       sharedSecret: 'secret123',
@@ -313,17 +382,12 @@ describe('RelayMonitor', () => {
     });
 
     const events: BootstrapEvent[] = [];
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    const monitor = createWiredMonitor();
     monitor.on((event) => events.push(event));
     monitor.start();
 
     fireEvent(makeValidEvent());
-
-    await vi.waitFor(() => {
-      expect(events.some((e) => e.type === 'bootstrap:channel-opened')).toBe(true);
-    });
+    await monitor.peerWith(peerPubkey);
 
     const opened = events.find((e) => e.type === 'bootstrap:channel-opened');
     expect(opened).toEqual({
@@ -334,60 +398,22 @@ describe('RelayMonitor', () => {
     });
   });
 
-  // --- Idempotency (AC 6) ---
-
-  it('duplicate kind:10032 from same pubkey does NOT re-register (idempotent)', async () => {
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
-    monitor.start();
-
-    const event1 = makeValidEvent(peerPubkey, 1000);
-    const event2 = makeValidEvent(peerPubkey, 1001);
-
-    fireEvent(event1);
-
-    // Wait for full processing (SPSP handshake happens after registeredPeers.add)
-    await vi.waitFor(() => {
-      expect(mockSpspRequestSpspInfo).toHaveBeenCalledTimes(1);
-    });
-
-    // Second event from same pubkey (newer timestamp) — should be skipped
-    fireEvent(event2);
-
-    // Small delay to ensure processing would have occurred
-    await new Promise((r) => setTimeout(r, 50));
-
-    // addPeer should only be called once (initial registration)
-    // No second initial registration since peer is already in registeredPeers
-    const addPeerCalls = mockAdmin.addPeer.mock.calls;
-    const initialRegistrations = addPeerCalls.filter(
-      (call: unknown[]) => !(call[0] as { settlement?: unknown }).settlement
-    );
-    expect(initialRegistrations).toHaveLength(1);
-  });
-
   // --- Deregistration (AC 7) ---
 
-  it('kind:10032 with empty content triggers deregistration', async () => {
+  it('kind:10032 with empty content triggers deregistration of a peered peer', async () => {
     const events: BootstrapEvent[] = [];
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    const monitor = createWiredMonitor();
     monitor.on((event) => events.push(event));
     monitor.start();
 
-    // First register the peer
+    // First discover and peer
     fireEvent(makeValidEvent(peerPubkey, 1000));
-
-    // Wait for full processing (SPSP handshake happens after registeredPeers.add)
-    await vi.waitFor(() => {
-      expect(mockSpspRequestSpspInfo).toHaveBeenCalledTimes(1);
-    });
+    await monitor.peerWith(peerPubkey);
 
     // Then send empty content event with newer timestamp
     fireEvent(makeEvent(peerPubkey, '', 1001));
 
+    // Wait for async removePeer
     await vi.waitFor(() => {
       expect(events.some((e) => e.type === 'bootstrap:peer-deregistered')).toBe(true);
     });
@@ -403,31 +429,42 @@ describe('RelayMonitor', () => {
     });
   });
 
+  it('empty content for a discovered-but-not-peered peer does NOT emit deregistered', () => {
+    const events: BootstrapEvent[] = [];
+    const monitor = createMonitor();
+    monitor.on((event) => events.push(event));
+    monitor.start();
+
+    // Discover but don't peer
+    fireEvent(makeValidEvent(peerPubkey, 1000));
+
+    // Send empty content
+    fireEvent(makeEvent(peerPubkey, '', 1001));
+
+    const deregistered = events.filter((e) => e.type === 'bootstrap:peer-deregistered');
+    expect(deregistered).toHaveLength(0);
+
+    // Peer should be removed from discoveredPeers
+    expect(monitor.getDiscoveredPeers().find((p) => p.pubkey === peerPubkey)).toBeUndefined();
+  });
+
   // --- Stale events ---
 
-  it('stale events (older timestamp) are ignored', async () => {
+  it('stale events (older timestamp) are ignored', () => {
+    const events: BootstrapEvent[] = [];
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    monitor.on((event) => events.push(event));
     monitor.start();
 
     // Send newer event first
     fireEvent(makeValidEvent(peerPubkey, 2000));
 
-    await vi.waitFor(() => {
-      expect(mockAdmin.addPeer).toHaveBeenCalledTimes(1);
-    });
-
     // Send stale event (older timestamp)
     fireEvent(makeValidEvent(peerPubkey, 1000));
 
-    await new Promise((r) => setTimeout(r, 50));
-
-    // Should not re-process — still only 1 initial registration
-    const initialRegistrations = mockAdmin.addPeer.mock.calls.filter(
-      (call: unknown[]) => !(call[0] as { settlement?: unknown }).settlement
-    );
-    expect(initialRegistrations).toHaveLength(1);
+    // Only one discovery event
+    const discoveries = events.filter((e) => e.type === 'bootstrap:peer-discovered');
+    expect(discoveries).toHaveLength(1);
   });
 
   // --- Error handling ---
@@ -436,42 +473,38 @@ describe('RelayMonitor', () => {
     mockSpspRequestSpspInfo.mockRejectedValueOnce(new Error('SPSP timeout'));
 
     const events: BootstrapEvent[] = [];
-    const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    const monitor = createWiredMonitor();
     monitor.on((event) => events.push(event));
     monitor.start();
 
     fireEvent(makeValidEvent(peerPubkey, 1000));
-
-    await vi.waitFor(() => {
-      expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(true);
-    });
+    await monitor.peerWith(peerPubkey);
 
     // Peer was still registered
     expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(true);
+    // Handshake failure emitted
+    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(true);
 
-    // Can still process a different peer (monitoring continues)
+    // Can still peer with a different peer (monitoring continues)
     fireEvent(makeValidEvent(peerPubkey2, 1000));
+    await monitor.peerWith(peerPubkey2);
 
-    await vi.waitFor(() => {
-      const registered = events.filter((e) => e.type === 'bootstrap:peer-registered');
-      expect(registered).toHaveLength(2);
-    });
+    const registered = events.filter((e) => e.type === 'bootstrap:peer-registered');
+    expect(registered).toHaveLength(2);
   });
 
   // --- Unsubscribe ---
 
-  it('unsubscribe stops event processing', async () => {
+  it('unsubscribe stops event processing', () => {
+    const events: BootstrapEvent[] = [];
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    monitor.on((event) => events.push(event));
 
-    const pool = (SimplePool as unknown as Mock).mock.results[0].value;
+    const pool = (SimplePool as unknown as Mock).mock.results[0]!.value;
     const subscription = monitor.start();
 
     // Get the subCloser
-    const subCloser = pool.subscribeMany.mock.results[0].value;
+    const subCloser = pool.subscribeMany.mock.results[0]!.value;
 
     subscription.unsubscribe();
 
@@ -480,22 +513,21 @@ describe('RelayMonitor', () => {
     // Events after unsubscribe should be ignored
     fireEvent(makeValidEvent());
 
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockAdmin.addPeer).not.toHaveBeenCalled();
+    expect(events).toHaveLength(0);
   });
 
   // --- Excludes own pubkey ---
 
-  it('excludes own pubkey from discovery', async () => {
+  it('excludes own pubkey from discovery', () => {
+    const events: BootstrapEvent[] = [];
     const monitor = createMonitor();
-    monitor.setConnectorAdmin(mockAdmin);
-    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    monitor.on((event) => events.push(event));
     monitor.start();
 
     // Send event from our own pubkey
     fireEvent(makeValidEvent(pubkey));
 
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockAdmin.addPeer).not.toHaveBeenCalled();
+    expect(events).toHaveLength(0);
+    expect(monitor.getDiscoveredPeers()).toHaveLength(0);
   });
 });
