@@ -231,6 +231,12 @@ export interface CrosstownNode {
    * Available when using @crosstown/connector >=1.2.0.
    */
   readonly channelClient: ConnectorChannelClient | null;
+  /**
+   * Initiate peering with a discovered peer.
+   * The peer must have been discovered by the RelayMonitor first.
+   * Registers the peer with the connector and performs an SPSP handshake.
+   */
+  peerWith(pubkey: string): Promise<void>;
 }
 
 /**
@@ -326,20 +332,6 @@ export function createCrosstownNode(
   relayMonitor.setAgentRuntimeClient(directRuntimeClient);
   relayMonitor.setConnectorAdmin(directAdminClient);
 
-  // Auto-peer: when a peer is discovered, automatically initiate peering.
-  // This preserves backward-compatible behavior for createCrosstownNode() users.
-  // Direct RelayMonitor users get the new opt-in model via peerWith().
-  relayMonitor.on((event) => {
-    if (event.type === 'bootstrap:peer-discovered') {
-      relayMonitor.peerWith(event.peerPubkey).catch((error) => {
-        console.warn(
-          `[CrosstownNode] Auto-peer failed for ${event.peerPubkey.slice(0, 16)}...:`,
-          error instanceof Error ? error.message : 'Unknown error'
-        );
-      });
-    }
-  });
-
   // Track lifecycle state
   let started = false;
   let relayMonitorSubscription: Subscription | null = null;
@@ -348,6 +340,10 @@ export function createCrosstownNode(
     bootstrapService,
     relayMonitor,
     channelClient,
+
+    peerWith(pubkey: string): Promise<void> {
+      return relayMonitor.peerWith(pubkey);
+    },
 
     async start(): Promise<CrosstownNodeStartResult> {
       // Guard against double-start
