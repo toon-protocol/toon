@@ -5,7 +5,7 @@
  * openChannel() and getChannelState() methods as a ConnectorChannelClient,
  * enabling zero-latency embedded mode without network overhead.
  *
- * Requires @agent-society/connector >=1.2.0 which exposes these methods
+ * Requires @crosstown/connector >=1.2.0 which exposes these methods
  * as public API on ConnectorNode.
  */
 
@@ -20,8 +20,8 @@ import type {
 /**
  * Structural interface matching ConnectorNode's channel methods.
  *
- * Consumers pass an `@agent-society/connector` ConnectorNode instance without
- * agent-society needing to import `@agent-society/connector` as a dependency.
+ * Consumers pass an `@crosstown/connector` ConnectorNode instance without
+ * crosstown needing to import `@crosstown/connector` as a dependency.
  * TypeScript's structural type system handles compatibility automatically.
  */
 export interface ConnectorChannelLike {
@@ -55,8 +55,8 @@ export interface ConnectorChannelLike {
  *
  * @example
  * ```typescript
- * import { ConnectorNode } from '@agent-society/connector';
- * import { createDirectChannelClient } from '@agent-society/core/bootstrap';
+ * import { ConnectorNode } from '@crosstown/connector';
+ * import { createDirectChannelClient } from '@crosstown/core/bootstrap';
  *
  * const connector = new ConnectorNode({ ... });
  * const channelClient = createDirectChannelClient(connector);

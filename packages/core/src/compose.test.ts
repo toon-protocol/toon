@@ -1,12 +1,12 @@
 /**
- * Integration tests for Agent Society Node composition API.
+ * Integration tests for Crosstown Node composition API.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { NostrEvent } from 'nostr-tools/pure';
-import { createAgentSocietyNode } from './compose.js';
+import { createCrosstownNode } from './compose.js';
 import type {
-  AgentSocietyNodeConfig,
+  CrosstownNodeConfig,
   EmbeddableConnectorLike,
   HandlePacketRequest,
   HandlePacketAcceptResponse,
@@ -16,10 +16,10 @@ import type { IlpPeerInfo } from './types.js';
 import { BootstrapService } from './bootstrap/BootstrapService.js';
 import { RelayMonitor } from './bootstrap/RelayMonitor.js';
 
-describe('createAgentSocietyNode', () => {
+describe('createCrosstownNode', () => {
   let mockConnector: EmbeddableConnectorLike;
   let mockHandlePacket: Mock;
-  let baseConfig: AgentSocietyNodeConfig;
+  let baseConfig: CrosstownNodeConfig;
 
   beforeEach(() => {
     // Create mock connector
@@ -64,7 +64,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('returns an object with start, stop, bootstrapService, relayMonitor', () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     expect(node).toHaveProperty('start');
     expect(node).toHaveProperty('stop');
@@ -75,7 +75,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('start() calls connector.setPacketHandler() with the provided handlePacket callback', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     await node.start();
 
@@ -84,7 +84,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('start() calls bootstrapService.bootstrap() and returns results', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     const result = await node.start();
 
@@ -96,8 +96,8 @@ describe('createAgentSocietyNode', () => {
     expect(result.channelCount).toBe(0); // No channels
   });
 
-  it('start() returns AgentSocietyNodeStartResult with peerCount and channelCount', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+  it('start() returns CrosstownNodeStartResult with peerCount and channelCount', async () => {
+    const node = createCrosstownNode(baseConfig);
 
     const result = await node.start();
 
@@ -106,15 +106,15 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('start() called twice throws BootstrapError (double-start guard)', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     await node.start();
 
-    await expect(node.start()).rejects.toThrow('AgentSocietyNode already started');
+    await expect(node.start()).rejects.toThrow('CrosstownNode already started');
   });
 
   it('stop() unsubscribes the relay monitor subscription', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     // Spy on relayMonitor.start to capture the returned subscription
     const unsubscribeSpy = vi.fn();
@@ -129,7 +129,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('stop() is safe to call when not started (no-op)', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     // Call stop without calling start
     await expect(node.stop()).resolves.toBeUndefined();
@@ -138,7 +138,7 @@ describe('createAgentSocietyNode', () => {
   it('direct runtime client is wired correctly to bootstrapService', () => {
     const setClientSpy = vi.spyOn(BootstrapService.prototype, 'setAgentRuntimeClient');
 
-    createAgentSocietyNode(baseConfig);
+    createCrosstownNode(baseConfig);
 
     expect(setClientSpy).toHaveBeenCalledTimes(1);
     expect(setClientSpy).toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('createAgentSocietyNode', () => {
   it('direct admin client is wired correctly to bootstrapService', () => {
     const setAdminSpy = vi.spyOn(BootstrapService.prototype, 'setConnectorAdmin');
 
-    createAgentSocietyNode(baseConfig);
+    createCrosstownNode(baseConfig);
 
     expect(setAdminSpy).toHaveBeenCalledTimes(1);
     expect(setAdminSpy).toHaveBeenCalledWith(
@@ -162,7 +162,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('start() passes bootstrapped peer pubkeys as excludePubkeys to relayMonitor.start()', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     // Spy on relayMonitor.start to check the excludePubkeys parameter
     const startSpy = vi.spyOn(node.relayMonitor, 'start');
@@ -186,13 +186,13 @@ describe('createAgentSocietyNode', () => {
       },
     };
 
-    const node = createAgentSocietyNode(failingConfig);
+    const node = createCrosstownNode(failingConfig);
 
-    await expect(node.start()).rejects.toThrow('Failed to start AgentSocietyNode');
+    await expect(node.start()).rejects.toThrow('Failed to start CrosstownNode');
   });
 
   it('allows attaching event listeners before start()', async () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
 
     const bootstrapListener = vi.fn();
     const relayListener = vi.fn();
@@ -213,7 +213,7 @@ describe('createAgentSocietyNode', () => {
     const testSecretKey = new Uint8Array(32);
     testSecretKey.fill(0x42); // Valid non-zero secret key
 
-    const minimalConfig: AgentSocietyNodeConfig = {
+    const minimalConfig: CrosstownNodeConfig = {
       connector: mockConnector,
       handlePacket: mockHandlePacket as unknown as PacketHandler,
       secretKey: testSecretKey,
@@ -228,20 +228,20 @@ describe('createAgentSocietyNode', () => {
       ardriveEnabled: false, // Disable to avoid network calls
     };
 
-    const node = createAgentSocietyNode(minimalConfig);
+    const node = createCrosstownNode(minimalConfig);
 
     await expect(node.start()).resolves.toBeDefined();
   });
 
   it('passes through all config parameters to BootstrapService', () => {
-    const customConfig: AgentSocietyNodeConfig = {
+    const customConfig: CrosstownNodeConfig = {
       ...baseConfig,
       basePricePerByte: 42n,
       queryTimeout: 10000,
       defaultRelayUrl: 'ws://custom-relay:7200',
     };
 
-    const node = createAgentSocietyNode(customConfig);
+    const node = createCrosstownNode(customConfig);
 
     // Verify node is created successfully with custom config
     expect(node).toBeDefined();
@@ -249,13 +249,13 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('passes through config parameters to RelayMonitor', () => {
-    const customConfig: AgentSocietyNodeConfig = {
+    const customConfig: CrosstownNodeConfig = {
       ...baseConfig,
       relayUrl: 'ws://custom-relay:7300',
       basePricePerByte: 99n,
     };
 
-    const node = createAgentSocietyNode(customConfig);
+    const node = createCrosstownNode(customConfig);
 
     // Verify node is created successfully with custom config
     expect(node).toBeDefined();
@@ -263,7 +263,7 @@ describe('createAgentSocietyNode', () => {
   });
 
   it('channelClient is null when connector lacks openChannel/getChannelState', () => {
-    const node = createAgentSocietyNode(baseConfig);
+    const node = createCrosstownNode(baseConfig);
     expect(node.channelClient).toBeNull();
   });
 
@@ -278,7 +278,7 @@ describe('createAgentSocietyNode', () => {
       }),
     };
 
-    const node = createAgentSocietyNode({
+    const node = createCrosstownNode({
       ...baseConfig,
       connector: connectorWithChannels,
     });
@@ -298,7 +298,7 @@ describe('createAgentSocietyNode', () => {
       getChannelState: vi.fn().mockResolvedValue(channelState),
     };
 
-    const node = createAgentSocietyNode({
+    const node = createCrosstownNode({
       ...baseConfig,
       connector: connectorWithChannels,
     });

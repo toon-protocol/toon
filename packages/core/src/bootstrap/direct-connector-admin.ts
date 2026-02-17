@@ -40,7 +40,7 @@ export interface ConnectorAdminLike {
  * @example
  * ```typescript
  * import { ConnectorNode } from '@agent-runtime/connector';
- * import { createDirectConnectorAdmin } from '@agent-society/core/bootstrap';
+ * import { createDirectConnectorAdmin } from '@crosstown/core/bootstrap';
  *
  * const connector = new ConnectorNode({ ... });
  * const adminClient = createDirectConnectorAdmin(connector);

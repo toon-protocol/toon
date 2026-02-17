@@ -1,5 +1,5 @@
 /**
- * @agent-society/core
+ * @crosstown/core
  *
  * Core library for Nostr-based ILP peer discovery and SPSP.
  */
@@ -20,10 +20,6 @@ export type {
   SpspRequest,
   SpspResponse,
   Subscription,
-  TrustConfig,
-  TrustBreakdown,
-  TrustScore,
-  CreditLimitConfig,
   OpenChannelParams,
   OpenChannelResult,
   ChannelState,
@@ -34,12 +30,11 @@ export type {
 
 // Error classes
 export {
-  AgentSocietyError,
+  CrosstownError,
   InvalidEventError,
   PeerDiscoveryError,
   SpspError,
   SpspTimeoutError,
-  TrustCalculationError,
 } from './errors.js';
 
 // Event parsers and builders
@@ -63,6 +58,8 @@ export {
   ArDrivePeerRegistry,
   SocialPeerDiscovery,
   type SocialPeerDiscoveryConfig,
+  type SocialDiscoveryEvent,
+  type SocialDiscoveryEventListener,
 } from './discovery/index.js';
 
 // SPSP client and server
@@ -77,14 +74,6 @@ export {
   negotiateAndOpenChannel,
   type NegotiateAndOpenChannelParams,
 } from './spsp/index.js';
-
-// Trust calculation
-export {
-  SocialTrustManager,
-  DEFAULT_TRUST_CONFIG,
-  calculateCreditLimit,
-  DEFAULT_CREDIT_LIMIT_CONFIG,
-} from './trust/index.js';
 
 // Bootstrap service
 export {
@@ -119,10 +108,10 @@ export {
 
 // Compose - embedded connector orchestration
 export {
-  createAgentSocietyNode,
-  type AgentSocietyNodeConfig,
-  type AgentSocietyNode,
-  type AgentSocietyNodeStartResult,
+  createCrosstownNode,
+  type CrosstownNodeConfig,
+  type CrosstownNode,
+  type CrosstownNodeStartResult,
   type EmbeddableConnectorLike,
   type PacketHandler,
   type HandlePacketRequest,

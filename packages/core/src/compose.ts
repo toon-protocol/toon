@@ -1,7 +1,7 @@
 /**
- * Agent Society Node composition API.
+ * Crosstown Node composition API.
  *
- * Provides createAgentSocietyNode() — a single composition function that wires
+ * Provides createCrosstownNode() — a single composition function that wires
  * ConnectorNode ↔ BLS ↔ BootstrapService ↔ RelayMonitor ↔ SPSP into one object
  * with start() / stop() lifecycle, enabling zero-latency embedded mode without
  * manually wiring each component.
@@ -27,7 +27,7 @@ import { createDirectChannelClient } from './bootstrap/direct-channel-client.js'
  * Structural type for incoming ILP packet handler request.
  *
  * Matches the shape of BLS HandlePacketRequest without creating a cross-package
- * dependency from @agent-society/core → @agent-society/bls.
+ * dependency from @crosstown/core → @crosstown/bls.
  */
 export interface HandlePacketRequest {
   /** Payment amount as string (parsed to bigint) */
@@ -138,9 +138,9 @@ export interface EmbeddableConnectorLike {
 }
 
 /**
- * Configuration for creating an Agent Society Node.
+ * Configuration for creating an Crosstown Node.
  */
-export interface AgentSocietyNodeConfig {
+export interface CrosstownNodeConfig {
   /** The ConnectorNode instance (embeddable connector) */
   connector: EmbeddableConnectorLike;
   /**
@@ -190,9 +190,9 @@ export interface AgentSocietyNodeConfig {
 }
 
 /**
- * Result returned by AgentSocietyNode.start().
+ * Result returned by CrosstownNode.start().
  */
-export interface AgentSocietyNodeStartResult {
+export interface CrosstownNodeStartResult {
   /** Results from the bootstrap phase */
   bootstrapResults: BootstrapResult[];
   /** Number of peers successfully bootstrapped */
@@ -202,14 +202,14 @@ export interface AgentSocietyNodeStartResult {
 }
 
 /**
- * Agent Society Node instance with lifecycle methods.
+ * Crosstown Node instance with lifecycle methods.
  */
-export interface AgentSocietyNode {
+export interface CrosstownNode {
   /**
    * Wire components and run bootstrap.
    * Throws BootstrapError if already started or on bootstrap failure.
    */
-  start(): Promise<AgentSocietyNodeStartResult>;
+  start(): Promise<CrosstownNodeStartResult>;
   /**
    * Tear down subscriptions and clean up.
    * Safe to call when not started (no-op).
@@ -228,13 +228,19 @@ export interface AgentSocietyNode {
   /**
    * Channel client for payment channel operations.
    * Null if the connector does not expose openChannel()/getChannelState().
-   * Available when using @agent-society/connector >=1.2.0.
+   * Available when using @crosstown/connector >=1.2.0.
    */
   readonly channelClient: ConnectorChannelClient | null;
+  /**
+   * Initiate peering with a discovered peer.
+   * The peer must have been discovered by the RelayMonitor first.
+   * Registers the peer with the connector and performs an SPSP handshake.
+   */
+  peerWith(pubkey: string): Promise<void>;
 }
 
 /**
- * Create an Agent Society Node with integrated bootstrap and relay monitoring.
+ * Create an Crosstown Node with integrated bootstrap and relay monitoring.
  *
  * This composition function wires ConnectorNode ↔ DirectRuntimeClient ↔
  * DirectConnectorAdmin ↔ BootstrapService ↔ RelayMonitor into a single object
@@ -242,17 +248,17 @@ export interface AgentSocietyNode {
  * manually wiring each component.
  *
  * @param config - Configuration for the node
- * @returns AgentSocietyNode instance with start() / stop() methods
+ * @returns CrosstownNode instance with start() / stop() methods
  *
  * @example
  * ```typescript
  * import { ConnectorNode } from '@agent-runtime/connector';
- * import { createAgentSocietyNode } from '@agent-society/core/compose';
- * import { encodeEvent, decodeEvent } from '@agent-society/relay';
+ * import { createCrosstownNode } from '@crosstown/core/compose';
+ * import { encodeEvent, decodeEvent } from '@crosstown/relay';
  *
  * const connector = new ConnectorNode({ ... });
  *
- * const node = createAgentSocietyNode({
+ * const node = createCrosstownNode({
  *   connector,
  *   handlePacket: async (req) => { ... },
  *   secretKey: new Uint8Array(32),
@@ -273,9 +279,9 @@ export interface AgentSocietyNode {
  * await node.stop();
  * ```
  */
-export function createAgentSocietyNode(
-  config: AgentSocietyNodeConfig,
-): AgentSocietyNode {
+export function createCrosstownNode(
+  config: CrosstownNodeConfig,
+): CrosstownNode {
   // Create direct clients for zero-latency embedded mode
   const directRuntimeClient = createDirectRuntimeClient(config.connector, {
     toonDecoder: config.toonDecoder,
@@ -326,20 +332,6 @@ export function createAgentSocietyNode(
   relayMonitor.setAgentRuntimeClient(directRuntimeClient);
   relayMonitor.setConnectorAdmin(directAdminClient);
 
-  // Auto-peer: when a peer is discovered, automatically initiate peering.
-  // This preserves backward-compatible behavior for createAgentSocietyNode() users.
-  // Direct RelayMonitor users get the new opt-in model via peerWith().
-  relayMonitor.on((event) => {
-    if (event.type === 'bootstrap:peer-discovered') {
-      relayMonitor.peerWith(event.peerPubkey).catch((error) => {
-        console.warn(
-          `[AgentSocietyNode] Auto-peer failed for ${event.peerPubkey.slice(0, 16)}...:`,
-          error instanceof Error ? error.message : 'Unknown error'
-        );
-      });
-    }
-  });
-
   // Track lifecycle state
   let started = false;
   let relayMonitorSubscription: Subscription | null = null;
@@ -349,10 +341,14 @@ export function createAgentSocietyNode(
     relayMonitor,
     channelClient,
 
-    async start(): Promise<AgentSocietyNodeStartResult> {
+    peerWith(pubkey: string): Promise<void> {
+      return relayMonitor.peerWith(pubkey);
+    },
+
+    async start(): Promise<CrosstownNodeStartResult> {
       // Guard against double-start
       if (started) {
-        throw new BootstrapError('AgentSocietyNode already started');
+        throw new BootstrapError('CrosstownNode already started');
       }
 
       try {
@@ -381,7 +377,7 @@ export function createAgentSocietyNode(
         };
       } catch (error) {
         throw new BootstrapError(
-          `Failed to start AgentSocietyNode: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to start CrosstownNode: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     },
