@@ -1,11 +1,11 @@
-# @agent-society/core
+# @crosstown/core
 
 Core library for Nostr-based ILP peer discovery and SPSP.
 
 ## Install
 
 ```bash
-npm install @agent-society/core
+npm install @crosstown/core
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ import {
   NostrSpspServer,
   SocialTrustManager,
   BootstrapService,
-} from '@agent-society/core';
+} from '@crosstown/core';
 ```
 
 ## License

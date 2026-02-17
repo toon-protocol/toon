@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
-import { encodeEventToToon, decodeEventFromToon } from '@agent-society/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
 import { buildSpspRequestEvent, buildSpspResponseEvent } from '../events/builders.js';
 import { parseSpspRequest, parseSpspResponse } from '../events/parsers.js';
 

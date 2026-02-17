@@ -12,7 +12,7 @@ import type {
   SpspResponse,
 } from './index.js';
 
-describe('@agent-society/core', () => {
+describe('@crosstown/core', () => {
   it('should export VERSION', () => {
     expect(VERSION).toBe('0.1.0');
   });

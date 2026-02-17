@@ -28,7 +28,7 @@ function makeGraphQlResponse(
           node: {
             id: txId,
             tags: [
-              { name: 'App-Name', value: 'agent-society' },
+              { name: 'App-Name', value: 'crosstown' },
               { name: 'type', value: 'ilp-peer-info' },
               { name: 'pubkey', value: pubkey },
               { name: 'version', value: '1' },
@@ -96,7 +96,7 @@ describe('ArDrivePeerRegistry', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('agent-society'),
+          body: expect.stringContaining('crosstown'),
         }),
       );
 
@@ -292,7 +292,7 @@ describe('ArDrivePeerRegistry', () => {
         fileSizeFactory: expect.any(Function),
         dataItemOpts: {
           tags: [
-            { name: 'App-Name', value: 'agent-society' },
+            { name: 'App-Name', value: 'crosstown' },
             { name: 'type', value: 'ilp-peer-info' },
             { name: 'pubkey', value: VALID_PUBKEY },
             { name: 'version', value: '1' },

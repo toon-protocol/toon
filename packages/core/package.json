@@ -1,5 +1,5 @@
 {
-  "name": "@agent-society/core",
+  "name": "@crosstown/core",
   "version": "1.1.0",
   "description": "Core library for Nostr-based ILP peer discovery and SPSP",
   "type": "module",
@@ -28,7 +28,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ALLiDoizCode/agent-society.git",
+    "url": "https://github.com/ALLiDoizCode/crosstown.git",
     "directory": "packages/core"
   },
   "author": "ALLiDoizCode",
@@ -42,15 +42,15 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@agent-society/connector": ">=1.2.0"
+    "@crosstown/connector": ">=1.2.0"
   },
   "peerDependenciesMeta": {
-    "@agent-society/connector": {
+    "@crosstown/connector": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@agent-society/relay": "^1.0.0",
+    "@crosstown/relay": "workspace:*",
     "@types/ws": "^8.5.10"
   }
 }

@@ -127,7 +127,7 @@ describe('SocialPeerDiscovery', () => {
 
       expect(mockPool.subscribeMany).toHaveBeenCalledWith(
         ['wss://relay.test'],
-        [{ kinds: [3], authors: [TEST_PUBKEY] }],
+        { kinds: [3], authors: [TEST_PUBKEY] },
         expect.objectContaining({ onevent: expect.any(Function) })
       );
     });

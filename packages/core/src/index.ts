@@ -1,5 +1,5 @@
 /**
- * @agent-society/core
+ * @crosstown/core
  *
  * Core library for Nostr-based ILP peer discovery and SPSP.
  */
@@ -34,7 +34,7 @@ export type {
 
 // Error classes
 export {
-  AgentSocietyError,
+  CrosstownError,
   InvalidEventError,
   PeerDiscoveryError,
   SpspError,
@@ -119,10 +119,10 @@ export {
 
 // Compose - embedded connector orchestration
 export {
-  createAgentSocietyNode,
-  type AgentSocietyNodeConfig,
-  type AgentSocietyNode,
-  type AgentSocietyNodeStartResult,
+  createCrosstownNode,
+  type CrosstownNodeConfig,
+  type CrosstownNode,
+  type CrosstownNodeStartResult,
   type EmbeddableConnectorLike,
   type PacketHandler,
   type HandlePacketRequest,

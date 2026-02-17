@@ -14,15 +14,15 @@ import {
   BusinessLogicServer,
   encodeEventToToon,
   decodeEventFromToon,
-} from '@agent-society/relay';
+} from '@crosstown/relay';
 import { SPSP_REQUEST_KIND } from '../constants.js';
 import {
-  createAgentSocietyNode,
+  createCrosstownNode,
   type EmbeddableConnectorLike,
   type HandlePacketRequest,
   type HandlePacketResponse,
 } from '../compose.js';
-import type { AgentSocietyNode } from '../compose.js';
+import type { CrosstownNode } from '../compose.js';
 import type { SendPacketParams, SendPacketResult } from '../bootstrap/direct-runtime-client.js';
 import type { RegisterPeerParams } from '../bootstrap/direct-connector-admin.js';
 import { createDirectChannelClient } from '../bootstrap/direct-channel-client.js';
@@ -52,7 +52,7 @@ interface PeerFixture {
   relayUrl: string;
   btpEndpoint: string;
   connector: MockConnectorWithRouter;
-  node?: AgentSocietyNode;
+  node?: CrosstownNode;
   events: BootstrapEvent[];
 }
 
@@ -426,7 +426,7 @@ describe('Five-Peer Bootstrap Integration', () => {
       tokenNetworks: { [CHAIN_ID]: TOKEN_NETWORK },
     });
 
-    // Create AgentSocietyNode instances
+    // Create CrosstownNode instances
     for (let i = 0; i < PEER_COUNT; i++) {
       const peer = peers[i];
       const settlementInfo = makeSettlementInfo(peer);
@@ -481,7 +481,7 @@ describe('Five-Peer Bootstrap Integration', () => {
               },
             ];
 
-      const node = createAgentSocietyNode({
+      const node = createCrosstownNode({
         connector: peer.connector,
         handlePacket,
         secretKey: peer.secretKey,
@@ -663,9 +663,9 @@ describe('Five-Peer Bootstrap Integration', () => {
     }
   });
 
-  it('AgentSocietyNode exposes channelClient when connector has channel methods', () => {
+  it('CrosstownNode exposes channelClient when connector has channel methods', () => {
     // MockConnectorWithRouter implements openChannel() and getChannelState(),
-    // so createAgentSocietyNode() should detect them and create a channelClient.
+    // so createCrosstownNode() should detect them and create a channelClient.
     for (let i = 0; i < PEER_COUNT; i++) {
       expect(peers[i].node!.channelClient).not.toBeNull();
       expect(peers[i].node!.channelClient!.openChannel).toBeInstanceOf(Function);

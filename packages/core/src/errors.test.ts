@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  AgentSocietyError,
+  CrosstownError,
   InvalidEventError,
   PeerDiscoveryError,
   SpspError,
@@ -19,9 +19,9 @@ describe('SpspTimeoutError', () => {
     expect(error.recipientPubkey).toBe(pubkey);
   });
 
-  it('should extend AgentSocietyError', () => {
+  it('should extend CrosstownError', () => {
     const error = new SpspTimeoutError('timeout', 'abc123');
-    expect(error).toBeInstanceOf(AgentSocietyError);
+    expect(error).toBeInstanceOf(CrosstownError);
   });
 
   it('should have correct name', () => {
@@ -47,16 +47,16 @@ describe('SpspTimeoutError', () => {
   });
 });
 
-describe('AgentSocietyError', () => {
+describe('CrosstownError', () => {
   it('should have correct name and code', () => {
-    const error = new AgentSocietyError('test', 'TEST_CODE');
-    expect(error.name).toBe('AgentSocietyError');
+    const error = new CrosstownError('test', 'TEST_CODE');
+    expect(error.name).toBe('CrosstownError');
     expect(error.code).toBe('TEST_CODE');
   });
 
   it('should accept optional cause', () => {
     const cause = new Error('cause');
-    const error = new AgentSocietyError('test', 'TEST_CODE', cause);
+    const error = new CrosstownError('test', 'TEST_CODE', cause);
     expect(error.cause).toBe(cause);
   });
 });
@@ -68,9 +68,9 @@ describe('InvalidEventError', () => {
     expect(error.name).toBe('InvalidEventError');
   });
 
-  it('should extend AgentSocietyError', () => {
+  it('should extend CrosstownError', () => {
     const error = new InvalidEventError('invalid event');
-    expect(error).toBeInstanceOf(AgentSocietyError);
+    expect(error).toBeInstanceOf(CrosstownError);
   });
 });
 
@@ -81,9 +81,9 @@ describe('PeerDiscoveryError', () => {
     expect(error.name).toBe('PeerDiscoveryError');
   });
 
-  it('should extend AgentSocietyError', () => {
+  it('should extend CrosstownError', () => {
     const error = new PeerDiscoveryError('discovery failed');
-    expect(error).toBeInstanceOf(AgentSocietyError);
+    expect(error).toBeInstanceOf(CrosstownError);
   });
 });
 
@@ -94,8 +94,8 @@ describe('SpspError', () => {
     expect(error.name).toBe('SpspError');
   });
 
-  it('should extend AgentSocietyError', () => {
+  it('should extend CrosstownError', () => {
     const error = new SpspError('spsp failed');
-    expect(error).toBeInstanceOf(AgentSocietyError);
+    expect(error).toBeInstanceOf(CrosstownError);
   });
 });

@@ -41,7 +41,7 @@ export type SendPacketResult =
  * Structural interface matching ConnectorNode's sendPacket() method.
  *
  * Consumers pass an `@agent-runtime/connector` ConnectorNode instance without
- * agent-society needing to import `@agent-runtime/connector` as a dependency.
+ * crosstown needing to import `@agent-runtime/connector` as a dependency.
  * TypeScript's structural type system handles compatibility automatically.
  */
 export interface ConnectorNodeLike {

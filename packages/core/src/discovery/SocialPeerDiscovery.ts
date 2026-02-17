@@ -101,7 +101,7 @@ export class SocialPeerDiscovery {
 
     const subCloser = this.pool.subscribeMany(
       this.config.relayUrls,
-      [{ kinds: [3], authors: [this.pubkey] }],
+      { kinds: [3], authors: [this.pubkey] },
       {
         onevent: (event) => {
           const followedPubkeys = event.tags
