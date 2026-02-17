@@ -8,4 +8,6 @@ export { ArDrivePeerRegistry } from './ArDrivePeerRegistry.js';
 export {
   SocialPeerDiscovery,
   type SocialPeerDiscoveryConfig,
+  type SocialDiscoveryEvent,
+  type SocialDiscoveryEventListener,
 } from './SocialPeerDiscovery.js';

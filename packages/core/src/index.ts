@@ -58,6 +58,8 @@ export {
   ArDrivePeerRegistry,
   SocialPeerDiscovery,
   type SocialPeerDiscoveryConfig,
+  type SocialDiscoveryEvent,
+  type SocialDiscoveryEventListener,
 } from './discovery/index.js';
 
 // SPSP client and server
