@@ -61,14 +61,3 @@ export class SpspTimeoutError extends CrosstownError {
     this.recipientPubkey = recipientPubkey;
   }
 }
-
-/**
- * Error thrown when trust calculation fails.
- * Used for invalid pubkeys or failures during social graph traversal.
- */
-export class TrustCalculationError extends CrosstownError {
-  constructor(message: string, cause?: Error) {
-    super(message, 'TRUST_CALCULATION_FAILED', cause);
-    this.name = 'TrustCalculationError';
-  }
-}

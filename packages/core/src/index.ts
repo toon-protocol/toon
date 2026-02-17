@@ -20,10 +20,6 @@ export type {
   SpspRequest,
   SpspResponse,
   Subscription,
-  TrustConfig,
-  TrustBreakdown,
-  TrustScore,
-  CreditLimitConfig,
   OpenChannelParams,
   OpenChannelResult,
   ChannelState,
@@ -39,7 +35,6 @@ export {
   PeerDiscoveryError,
   SpspError,
   SpspTimeoutError,
-  TrustCalculationError,
 } from './errors.js';
 
 // Event parsers and builders
@@ -77,14 +72,6 @@ export {
   negotiateAndOpenChannel,
   type NegotiateAndOpenChannelParams,
 } from './spsp/index.js';
-
-// Trust calculation
-export {
-  SocialTrustManager,
-  DEFAULT_TRUST_CONFIG,
-  calculateCreditLimit,
-  DEFAULT_CREDIT_LIMIT_CONFIG,
-} from './trust/index.js';
 
 // Bootstrap service
 export {
