@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./nip34": {
+      "types": "./dist/nip34/index.d.ts",
+      "import": "./src/nip34/index.js"
     }
   },
   "files": [
@@ -39,6 +43,7 @@
     "@ardrive/turbo-sdk": "^1.21.0",
     "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
+    "simple-git": "^3.31.1",
     "ws": "^8.18.0"
   },
   "peerDependencies": {
