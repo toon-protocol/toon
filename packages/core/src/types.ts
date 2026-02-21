@@ -11,6 +11,8 @@ export interface IlpPeerInfo {
   ilpAddress: string;
   /** BTP WebSocket endpoint URL for packet exchange */
   btpEndpoint: string;
+  /** Optional BLS HTTP endpoint for direct packet delivery (bootstrap only) */
+  blsHttpEndpoint?: string;
   /** @deprecated Use supportedChains instead. Kept for backward compatibility. */
   settlementEngine?: string;
   /** Asset code for the peering relationship (e.g., "USD", "XRP") */

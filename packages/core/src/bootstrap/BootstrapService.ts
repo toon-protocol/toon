@@ -53,12 +53,13 @@ export class BootstrapError extends CrosstownError {
  * Phase 3: (ILP-first) Announce own kind:10032 as paid ILP PREPARE.
  */
 export class BootstrapService {
-  private readonly config: Required<BootstrapConfig>;
+  private readonly config: Required<BootstrapConfig> & { btpSecret?: string };
   private readonly secretKey: Uint8Array;
   private readonly pubkey: string;
   private readonly ownIlpInfo: IlpPeerInfo;
   private readonly pool: SimplePool;
   private connectorAdmin?: ConnectorAdminClient;
+  private channelClient?: import('../types.js').ConnectorChannelClient;
 
   // ILP-first flow additions
   private readonly agentRuntimeClient?: AgentRuntimeClient;
@@ -119,6 +120,13 @@ export class BootstrapService {
    */
   setConnectorAdmin(admin: ConnectorAdminClient): void {
     this.connectorAdmin = admin;
+  }
+
+  /**
+   * Set the channel client for opening payment channels.
+   */
+  setChannelClient(client: import('../types.js').ConnectorChannelClient): void {
+    this.channelClient = client;
   }
 
   /**
@@ -399,7 +407,7 @@ export class BootstrapService {
     const toonBytes = this.toonEncoder(spspRequestEvent);
     const base64Toon = Buffer.from(toonBytes).toString('base64');
 
-    // Send 0-amount ILP packet
+    // Send SPSP via ILP (through connector routing)
     const ilpResult = await this.agentRuntimeClient.sendIlpPacket({
       destination: result.peerInfo.ilpAddress,
       amount: '0',
@@ -435,8 +443,30 @@ export class BootstrapService {
           result.settlementAddress = spspResponse.settlementAddress;
         }
 
+        // If no channel was opened by the responder, try to open one from our side
+        if (!spspResponse.channelId && this.channelClient && spspResponse.negotiatedChain && spspResponse.settlementAddress) {
+          try {
+            const channelResult = await this.channelClient.openChannel({
+              peerId: result.registeredPeerId,
+              chain: spspResponse.negotiatedChain,
+              token: spspResponse.tokenAddress, // Token EVM address from SPSP response
+              tokenNetwork: spspResponse.tokenNetworkAddress,
+              peerAddress: spspResponse.settlementAddress,
+              initialDeposit: '100000', // Default initial deposit
+              settlementTimeout: 86400,
+            });
+            result.channelId = channelResult.channelId;
+            console.log(`[Bootstrap] Opened channel ${channelResult.channelId} with ${result.registeredPeerId}`);
+          } catch (error) {
+            console.warn(
+              `[Bootstrap] Failed to open channel with ${result.registeredPeerId}:`,
+              error instanceof Error ? error.message : 'Unknown error'
+            );
+          }
+        }
+
         // Update peer registration with settlement config if we have channel info
-        if (spspResponse.channelId && this.connectorAdmin) {
+        if (result.channelId && this.connectorAdmin) {
           await this.connectorAdmin.addPeer({
             id: result.registeredPeerId,
             url: result.peerInfo.btpEndpoint,
@@ -495,7 +525,7 @@ export class BootstrapService {
     // Calculate amount: base price per byte * TOON byte length
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
-    // Send as paid ILP PREPARE
+    // Send announce via ILP (through connector routing)
     const ilpResult = await this.agentRuntimeClient.sendIlpPacket({
       destination: result.peerInfo.ilpAddress,
       amount,
@@ -711,10 +741,12 @@ export class BootstrapService {
 
     const peerId = `nostr-${knownPeer.pubkey.slice(0, 16)}`;
 
+    // HTTP Connector Admin requires full BTP URL (btp+ws:// or btp+wss://)
+    // Use empty string for authToken - BTP doesn't require authentication
     await this.connectorAdmin.addPeer({
       id: peerId,
       url: peerInfo.btpEndpoint,
-      authToken: '',
+      authToken: '',  // BTP doesn't need auth
       routes: [{ prefix: peerInfo.ilpAddress }],
     });
   }

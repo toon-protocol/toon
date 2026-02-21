@@ -104,6 +104,9 @@ export {
   createDirectChannelClient,
   type ConnectorChannelLike,
   type DiscoveredPeer,
+  createHttpConnectorAdmin,
+  createHttpRuntimeClientV2,
+  createHttpChannelClient,
 } from './bootstrap/index.js';
 
 // Compose - embedded connector orchestration

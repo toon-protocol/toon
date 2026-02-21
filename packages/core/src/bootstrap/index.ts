@@ -46,3 +46,11 @@ export { createDirectChannelClient } from './direct-channel-client.js';
 export type {
   ConnectorChannelLike,
 } from './direct-channel-client.js';
+
+// HTTP-based connector clients (for deployed connectors)
+export { createHttpConnectorAdmin } from './http-connector-admin.js';
+export { createHttpRuntimeClient as createHttpRuntimeClientV2 } from './http-runtime-client.js';
+export { createHttpChannelClient } from './http-channel-client.js';
+
+// Direct BLS client (for bootstrap only - bypasses connector routing)
+export { createDirectBlsClient, type DirectBlsClientConfig } from './direct-bls-client.js';

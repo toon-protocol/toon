@@ -169,6 +169,8 @@ export interface BootstrapServiceConfig extends BootstrapConfig {
   toonEncoder?: (event: NostrEvent) => Uint8Array;
   /** DI callback for TOON decoding (avoids circular dep) */
   toonDecoder?: (bytes: Uint8Array) => NostrEvent;
+  /** Static BTP secret for initial peer registration (before SPSP negotiation) */
+  btpSecret?: string;
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
 }
