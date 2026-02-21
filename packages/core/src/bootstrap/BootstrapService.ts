@@ -567,8 +567,45 @@ export class BootstrapService {
         console.log(`[Bootstrap] Received message type: ${msg[0]}`);
 
         if (msg[0] === 'EVENT' && msg[1] === subId) {
-          console.log(`[Bootstrap] Received event: ${msg[2].id.slice(0, 16)}...`);
-          events.push(msg[2]);
+          let event = msg[2];
+
+          // Handle TOON format events (string) by parsing them
+          if (typeof event === 'string') {
+            try {
+              // Simple TOON parser for bootstrap events
+              const lines = event.trim().split('\n');
+              const parsed: any = {};
+              for (const line of lines) {
+                const colonIndex = line.indexOf(':');
+                if (colonIndex > 0) {
+                  const key = line.substring(0, colonIndex).trim();
+                  const value = line.substring(colonIndex + 1).trim();
+                  if (key.startsWith('tags[')) {
+                    // Skip tags for now
+                    continue;
+                  }
+                  if (value.startsWith('"') && value.endsWith('"')) {
+                    parsed[key] = JSON.parse(value);
+                  } else if (!isNaN(Number(value))) {
+                    parsed[key] = Number(value);
+                  } else {
+                    parsed[key] = value;
+                  }
+                }
+              }
+              event = parsed;
+            } catch (error) {
+              console.warn(`[Bootstrap] Failed to parse TOON event:`, error);
+              return;
+            }
+          }
+
+          if (event && event.id) {
+            console.log(`[Bootstrap] Received event: ${event.id.slice(0, 16)}...`);
+            events.push(event);
+          } else {
+            console.warn(`[Bootstrap] Received EVENT message with invalid event data:`, msg);
+          }
         } else if (msg[0] === 'EOSE' && msg[1] === subId) {
           console.log(`[Bootstrap] EOSE received, found ${events.length} events`);
           cleanup();
