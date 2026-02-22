@@ -109,8 +109,9 @@ export interface EmbeddableConnectorLike {
   /**
    * Register the incoming packet handler callback.
    * The connector invokes this handler for each incoming ILP packet.
+   * Optional in HTTP mode where packets are delivered via local delivery HTTP endpoint.
    */
-  setPacketHandler(
+  setPacketHandler?(
     handler: (request: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>,
   ): void;
   /**
@@ -352,8 +353,11 @@ export function createCrosstownNode(
       }
 
       try {
-        // Wire the handlePacket callback to the connector
-        config.connector.setPacketHandler(config.handlePacket);
+        // Wire the handlePacket callback to the connector (if supported)
+        // HTTP mode uses local delivery instead of callback
+        if (config.connector.setPacketHandler) {
+          config.connector.setPacketHandler(config.handlePacket);
+        }
 
         // Run bootstrap to discover and register peers
         const results = await bootstrapService.bootstrap(

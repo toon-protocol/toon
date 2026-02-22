@@ -58,7 +58,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     throw new InvalidEventError('Event content must be a JSON object');
   }
 
-  const { ilpAddress, btpEndpoint, settlementEngine, assetCode, assetScale } =
+  const { ilpAddress, btpEndpoint, blsHttpEndpoint, settlementEngine, assetCode, assetScale } =
     parsed;
 
   if (typeof ilpAddress !== 'string' || ilpAddress.length === 0) {
@@ -143,6 +143,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   return {
     ilpAddress,
     btpEndpoint,
+    ...(blsHttpEndpoint !== undefined && typeof blsHttpEndpoint === 'string' && { blsHttpEndpoint }),
     assetCode,
     assetScale,
     ...(settlementEngine !== undefined && { settlementEngine }),

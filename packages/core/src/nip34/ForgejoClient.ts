@@ -242,7 +242,9 @@ export class ForgejoClient {
       body['sha'] = options.sha;
     }
 
-    return this.request<ForgejoFileResponse>('POST', path, body);
+    // Use PUT for updates (when SHA provided), POST for creates
+    const method = options.sha ? 'PUT' : 'POST';
+    return this.request<ForgejoFileResponse>(method, path, body);
   }
 
   /**
@@ -254,16 +256,11 @@ export class ForgejoClient {
     branchName: string,
     fromBranch: string = 'main'
   ): Promise<void> {
-    // Get the SHA of the source branch
-    const refData = await this.request<{ object: { sha: string } }>(
-      'GET',
-      `/repos/${owner}/${repo}/git/refs/heads/${fromBranch}`
-    );
-
-    // Create the new branch
-    await this.request('POST', `/repos/${owner}/${repo}/git/refs`, {
-      ref: `refs/heads/${branchName}`,
-      sha: refData.object.sha,
+    // Create the new branch from the source branch
+    // Forgejo API: POST /repos/{owner}/{repo}/branches
+    await this.request('POST', `/repos/${owner}/${repo}/branches`, {
+      new_branch_name: branchName,
+      old_branch_name: fromBranch,
     });
   }
 

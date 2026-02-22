@@ -13,7 +13,7 @@
     },
     "./nip34": {
       "types": "./dist/nip34/index.d.ts",
-      "import": "./src/nip34/index.js"
+      "import": "./dist/nip34/index.js"
     }
   },
   "files": [

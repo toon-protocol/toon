@@ -185,7 +185,10 @@ export class NIP34Handler {
 
     const repoRef = parseRepositoryReference(aTag);
     const owner = this.defaultOwner;
-    const repoName = repoRef.repoId;
+    // Extract just the repository name (remove owner prefix if present)
+    const repoName = repoRef.repoId.includes('/')
+      ? repoRef.repoId.split('/').pop()!
+      : repoRef.repoId;
 
     // Check if repository exists
     const exists = await this.forgejo.repositoryExists(owner, repoName);
@@ -219,6 +222,15 @@ export class NIP34Handler {
       // Apply each file change via API
       for (const file of patchInfo.files) {
         const content = Buffer.from(file.content).toString('base64');
+
+        // Check if file exists on the branch to get its SHA for updates
+        const existingFile = await this.forgejo.getFileContent(
+          owner,
+          repoName,
+          file.path,
+          patchBranch
+        );
+
         await this.forgejo.createOrUpdateFile({
           owner,
           repo: repoName,
@@ -226,6 +238,7 @@ export class NIP34Handler {
           content,
           message: commitMessage,
           branch: patchBranch,
+          sha: existingFile?.sha, // Include SHA if file exists (for update)
         });
       }
 
