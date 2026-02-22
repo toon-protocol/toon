@@ -32,7 +32,7 @@ export function createHttpRuntimeClient(baseUrl: string): AgentRuntimeClient {
     }): Promise<IlpSendResult> {
       let response: Response;
       try {
-        response = await fetch(`${normalizedUrl}/ilp/send`, {
+        response = await fetch(`${normalizedUrl}/admin/ilp/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
