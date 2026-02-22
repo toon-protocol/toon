@@ -65,6 +65,27 @@ export interface ForgejoIssue {
   state: 'open' | 'closed';
 }
 
+export interface CreateOrUpdateFileOptions {
+  owner: string;
+  repo: string;
+  filepath: string;
+  content: string; // base64 encoded
+  message: string;
+  branch?: string;
+  sha?: string; // required for updates
+}
+
+export interface ForgejoFileResponse {
+  content: {
+    name: string;
+    path: string;
+    sha: string;
+  };
+  commit: {
+    sha: string;
+  };
+}
+
 /**
  * Forgejo API Client
  */
@@ -200,5 +221,70 @@ export class ForgejoClient {
    */
   getExternalCloneUrl(repo: ForgejoRepository): string {
     return repo.clone_url;
+  }
+
+  /**
+   * Create or update a file in a repository
+   */
+  async createOrUpdateFile(
+    options: CreateOrUpdateFileOptions
+  ): Promise<ForgejoFileResponse> {
+    const path = `/repos/${options.owner}/${options.repo}/contents/${options.filepath}`;
+    const body: Record<string, unknown> = {
+      content: options.content,
+      message: options.message,
+    };
+
+    if (options.branch) {
+      body['branch'] = options.branch;
+    }
+    if (options.sha) {
+      body['sha'] = options.sha;
+    }
+
+    return this.request<ForgejoFileResponse>('POST', path, body);
+  }
+
+  /**
+   * Create a new branch
+   */
+  async createBranch(
+    owner: string,
+    repo: string,
+    branchName: string,
+    fromBranch: string = 'main'
+  ): Promise<void> {
+    // Get the SHA of the source branch
+    const refData = await this.request<{ object: { sha: string } }>(
+      'GET',
+      `/repos/${owner}/${repo}/git/refs/heads/${fromBranch}`
+    );
+
+    // Create the new branch
+    await this.request('POST', `/repos/${owner}/${repo}/git/refs`, {
+      ref: `refs/heads/${branchName}`,
+      sha: refData.object.sha,
+    });
+  }
+
+  /**
+   * Get file content from repository
+   */
+  async getFileContent(
+    owner: string,
+    repo: string,
+    filepath: string,
+    branch?: string
+  ): Promise<{ content: string; sha: string } | null> {
+    try {
+      const path = `/repos/${owner}/${repo}/contents/${filepath}${branch ? `?ref=${branch}` : ''}`;
+      const response = await this.request<{
+        content: string;
+        sha: string;
+      }>('GET', path);
+      return response;
+    } catch {
+      return null;
+    }
   }
 }
