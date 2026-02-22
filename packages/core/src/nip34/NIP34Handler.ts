@@ -284,7 +284,10 @@ export class NIP34Handler {
 
     const repoRef = parseRepositoryReference(aTag);
     const owner = this.defaultOwner;
-    const repoName = repoRef.repoId;
+    // Extract just the repository name (remove owner prefix if present)
+    const repoName = repoRef.repoId.includes('/')
+      ? repoRef.repoId.split('/').pop()!
+      : repoRef.repoId;
 
     this.log(`Creating PR issue for ${owner}/${repoName} from ${cloneUrl}`);
 
@@ -349,7 +352,10 @@ ${event.content}
 
     const repoRef = parseRepositoryReference(aTag);
     const owner = this.forgejo['defaultOwner']!;
-    const repoName = repoRef.repoId;
+    // Extract just the repository name (remove owner prefix if present)
+    const repoName = repoRef.repoId.includes('/')
+      ? repoRef.repoId.split('/').pop()!
+      : repoRef.repoId;
 
     this.log(`Creating issue in ${owner}/${repoName}`);
 
