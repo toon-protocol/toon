@@ -407,10 +407,13 @@ export class BootstrapService {
     const toonBytes = this.toonEncoder(spspRequestEvent);
     const base64Toon = Buffer.from(toonBytes).toString('base64');
 
+    // Calculate payment for SPSP request (base price per byte * TOON byte length)
+    const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
+
     // Send SPSP via ILP (through connector routing)
     const ilpResult = await this.agentRuntimeClient.sendIlpPacket({
       destination: result.peerInfo.ilpAddress,
-      amount: '0',
+      amount,
       data: base64Toon,
       timeout: this.config.queryTimeout,
     });
