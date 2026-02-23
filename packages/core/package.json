@@ -21,7 +21,10 @@
   ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest"
   },
   "keywords": [
     "nostr",
@@ -56,6 +59,11 @@
   },
   "devDependencies": {
     "@crosstown/relay": "workspace:*",
-    "@types/ws": "^8.5.10"
+    "@toon-format/toon": "^1.1.0",
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
   }
 }
