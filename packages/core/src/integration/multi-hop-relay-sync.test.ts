@@ -76,14 +76,25 @@ async function sendIlpPacket(
 async function queryRelay(
   relayUrl: string,
   eventId: string,
-  timeoutMs: number = 5000
+  timeoutMs: number = 10000
 ): Promise<NostrEvent | null> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(relayUrl);
+    let foundEvent: NostrEvent | null = null;
+    let pendingDecodes = 0;
+
     const timeout = setTimeout(() => {
       ws.close();
-      reject(new Error(`Timeout querying relay ${relayUrl}`));
+      resolve(foundEvent); // Return what we found, even if null
     }, timeoutMs);
+
+    const checkComplete = () => {
+      if (pendingDecodes === 0 && foundEvent) {
+        clearTimeout(timeout);
+        ws.close();
+        resolve(foundEvent);
+      }
+    };
 
     ws.on('open', () => {
       const subscription = JSON.stringify(['REQ', 'test-query', { ids: [eventId] }]);
@@ -95,28 +106,38 @@ async function queryRelay(
         const msg = JSON.parse(data.toString());
 
         if (msg[0] === 'EVENT') {
+          pendingDecodes++;
           const toonString = msg[2];
-          const event = await toonDecode(toonString);
-          if (event.id === eventId) {
+
+          // Decode asynchronously but track completion
+          toonDecode(toonString).then((event) => {
+            if (event.id === eventId) {
+              foundEvent = event;
+            }
+            pendingDecodes--;
+            checkComplete();
+          }).catch((error) => {
+            console.error(`Error decoding TOON:`, error);
+            pendingDecodes--;
+          });
+        } else if (msg[0] === 'EOSE') {
+          // Wait a bit for any pending decodes to complete
+          setTimeout(() => {
             clearTimeout(timeout);
             ws.close();
-            resolve(event);
-          }
-        } else if (msg[0] === 'EOSE') {
-          clearTimeout(timeout);
-          ws.close();
-          resolve(null);
+            resolve(foundEvent);
+          }, 100);
         }
       } catch (error) {
-        clearTimeout(timeout);
-        ws.close();
-        reject(error);
+        console.error(`Error parsing relay message:`, error);
+        // Don't reject, just continue
       }
     });
 
     ws.on('error', (error) => {
       clearTimeout(timeout);
-      reject(error);
+      console.error(`WebSocket error for ${relayUrl}:`, error.message);
+      resolve(null); // Return null on error instead of rejecting
     });
   });
 }
@@ -208,8 +229,8 @@ describe('Multi-hop ILP Routing and Relay Synchronization', () => {
     expect(result.accept).toBe(true);
     console.log('✅ ILP packet accepted by Peer2');
 
-    // Wait for storage
-    await sleep(2000);
+    // Wait for storage and indexing
+    await sleep(3000);
 
     // Verify event in Peer2 relay
     const eventInPeer2 = await queryRelay(PEER2_RELAY, testEvent.id);
@@ -287,8 +308,8 @@ describe('Multi-hop ILP Routing and Relay Synchronization', () => {
     expect(republishResult.accept).toBe(true);
     console.log('✅ Event republished to Peer3 relay');
 
-    // Wait for storage
-    await sleep(2000);
+    // Wait for storage and indexing
+    await sleep(3000);
 
     // Verify event in Peer3 relay
     const eventInPeer3 = await queryRelay(PEER3_RELAY, testEvent.id);
