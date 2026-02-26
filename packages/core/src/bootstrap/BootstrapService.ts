@@ -60,6 +60,7 @@ export class BootstrapService {
   private readonly pool: SimplePool;
   private connectorAdmin?: ConnectorAdminClient;
   private channelClient?: import('../types.js').ConnectorChannelClient;
+  private claimSigner?: (channelId: string, amount: bigint) => Promise<any>;
 
   // ILP-first flow additions
   private readonly agentRuntimeClient?: AgentRuntimeClient;
@@ -127,6 +128,14 @@ export class BootstrapService {
    */
   setChannelClient(client: import('../types.js').ConnectorChannelClient): void {
     this.channelClient = client;
+  }
+
+  /**
+   * Set the claim signer for creating signed balance proofs.
+   * Used by clients to sign payment channel claims for ILP packets.
+   */
+  setClaimSigner(signer: (channelId: string, amount: bigint) => Promise<any>): void {
+    this.claimSigner = signer;
   }
 
   /**
@@ -390,33 +399,107 @@ export class BootstrapService {
 
   /**
    * Perform SPSP handshake via ILP for a bootstrapped peer (Phase 2).
+   * Creates payment channel BEFORE sending SPSP request so the request can include a signed claim.
    */
   private async performSpspHandshake(result: BootstrapResult): Promise<void> {
     if (!this.agentRuntimeClient || !this.toonEncoder || !this.toonDecoder) {
       return;
     }
 
-    // Build kind:23194 SPSP request event
+    // Step 1: Create payment channel FIRST (before SPSP) if we have channel client and peer settlement info
+    let channelId: string | undefined;
+    if (this.channelClient && result.peerInfo.settlementAddresses && result.peerInfo.supportedChains?.length) {
+      // Use the first supported chain and corresponding settlement address
+      const chain = result.peerInfo.supportedChains[0]!;
+      const peerAddress = result.peerInfo.settlementAddresses[chain];
+      const tokenAddress = result.peerInfo.preferredTokens?.[chain];
+      const tokenNetwork = result.peerInfo.tokenNetworks?.[chain];
+
+      if (peerAddress) {
+        try {
+          console.log(`[Bootstrap] Creating payment channel on ${chain} with ${result.registeredPeerId}...`);
+          const channelResult = await this.channelClient.openChannel({
+            peerId: result.registeredPeerId,
+            chain,
+            token: tokenAddress,
+            tokenNetwork,
+            peerAddress,
+            initialDeposit: '100000', // Default initial deposit
+            settlementTimeout: 86400,
+          });
+          channelId = channelResult.channelId;
+          result.channelId = channelId;
+          result.negotiatedChain = chain;
+          result.settlementAddress = peerAddress;
+          console.log(`[Bootstrap] Opened channel ${channelId} with ${result.registeredPeerId}`);
+
+          this.emit({
+            type: 'bootstrap:channel-opened',
+            peerId: result.registeredPeerId,
+            channelId,
+            negotiatedChain: chain,
+          });
+        } catch (error) {
+          console.warn(
+            `[Bootstrap] Failed to open channel with ${result.registeredPeerId}:`,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
+          // Continue without channel - SPSP will be sent without claim
+        }
+      }
+    }
+
+    // Step 2: Build kind:23194 SPSP request event
     const { event: spspRequestEvent } = buildSpspRequestEvent(
       result.knownPeer.pubkey,
       this.secretKey,
       this.settlementInfo
     );
 
-    // TOON-encode the event
+    // Step 3: TOON-encode the event
     const toonBytes = this.toonEncoder(spspRequestEvent);
     const base64Toon = Buffer.from(toonBytes).toString('base64');
 
-    // Calculate payment for SPSP request (base price per byte * TOON byte length)
+    // Step 4: Calculate payment for SPSP request (base price per byte * TOON byte length)
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
-    // Send SPSP via ILP (through connector routing)
-    const ilpResult = await this.agentRuntimeClient.sendIlpPacket({
-      destination: result.peerInfo.ilpAddress,
-      amount,
-      data: base64Toon,
-      timeout: this.config.queryTimeout,
-    });
+    // Step 5: Get signed claim if we have channel and claim signer
+    let claim: any;
+    if (channelId && this.claimSigner) {
+      try {
+        claim = await this.claimSigner(channelId, BigInt(amount));
+        console.log(`[Bootstrap] Created signed claim for channel ${channelId}`);
+      } catch (error) {
+        console.warn(
+          `[Bootstrap] Failed to create signed claim:`,
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+        // Continue without claim
+      }
+    }
+
+    // Step 6: Send SPSP via ILP (with claim if available)
+    let ilpResult;
+    if (claim && this.agentRuntimeClient.sendIlpPacketWithClaim) {
+      console.log(`[Bootstrap] Sending SPSP with signed claim...`);
+      ilpResult = await this.agentRuntimeClient.sendIlpPacketWithClaim(
+        {
+          destination: result.peerInfo.ilpAddress,
+          amount,
+          data: base64Toon,
+          timeout: this.config.queryTimeout,
+        },
+        claim
+      );
+    } else {
+      console.log(`[Bootstrap] Sending SPSP without claim (channel or signer not available)...`);
+      ilpResult = await this.agentRuntimeClient.sendIlpPacket({
+        destination: result.peerInfo.ilpAddress,
+        amount,
+        data: base64Toon,
+        timeout: this.config.queryTimeout,
+      });
+    }
 
     if (!ilpResult.accepted) {
       throw new BootstrapError(
@@ -424,7 +507,7 @@ export class BootstrapService {
       );
     }
 
-    // Decode response data (base64 -> TOON -> Nostr event -> parseSpspResponse)
+    // Step 7: Decode response data (base64 -> TOON -> Nostr event -> parseSpspResponse)
     if (ilpResult.data) {
       try {
         const responseBytes = Uint8Array.from(Buffer.from(ilpResult.data, 'base64'));
@@ -435,37 +518,16 @@ export class BootstrapService {
           result.knownPeer.pubkey
         );
 
-        // Update result with settlement info
-        if (spspResponse.channelId) {
+        // Update result with settlement info from response (if not already set from peer info)
+        // The responder might provide a different channel or settlement address
+        if (spspResponse.channelId && !result.channelId) {
           result.channelId = spspResponse.channelId;
         }
-        if (spspResponse.negotiatedChain) {
+        if (spspResponse.negotiatedChain && !result.negotiatedChain) {
           result.negotiatedChain = spspResponse.negotiatedChain;
         }
-        if (spspResponse.settlementAddress) {
+        if (spspResponse.settlementAddress && !result.settlementAddress) {
           result.settlementAddress = spspResponse.settlementAddress;
-        }
-
-        // If no channel was opened by the responder, try to open one from our side
-        if (!spspResponse.channelId && this.channelClient && spspResponse.negotiatedChain && spspResponse.settlementAddress) {
-          try {
-            const channelResult = await this.channelClient.openChannel({
-              peerId: result.registeredPeerId,
-              chain: spspResponse.negotiatedChain,
-              token: spspResponse.tokenAddress, // Token EVM address from SPSP response
-              tokenNetwork: spspResponse.tokenNetworkAddress,
-              peerAddress: spspResponse.settlementAddress,
-              initialDeposit: '100000', // Default initial deposit
-              settlementTimeout: 86400,
-            });
-            result.channelId = channelResult.channelId;
-            console.log(`[Bootstrap] Opened channel ${channelResult.channelId} with ${result.registeredPeerId}`);
-          } catch (error) {
-            console.warn(
-              `[Bootstrap] Failed to open channel with ${result.registeredPeerId}:`,
-              error instanceof Error ? error.message : 'Unknown error'
-            );
-          }
         }
 
         // Update peer registration with settlement config if we have channel info
@@ -476,9 +538,9 @@ export class BootstrapService {
             authToken: '',
             routes: [{ prefix: result.peerInfo.ilpAddress }],
             settlement: {
-              preference: spspResponse.negotiatedChain || 'evm',
-              ...(spspResponse.settlementAddress && {
-                evmAddress: spspResponse.settlementAddress,
+              preference: result.negotiatedChain || spspResponse.negotiatedChain || 'evm',
+              ...(result.settlementAddress && {
+                evmAddress: result.settlementAddress,
               }),
               ...(spspResponse.tokenAddress && {
                 tokenAddress: spspResponse.tokenAddress,
@@ -486,19 +548,10 @@ export class BootstrapService {
               ...(spspResponse.tokenNetworkAddress && {
                 tokenNetworkAddress: spspResponse.tokenNetworkAddress,
               }),
-              ...(spspResponse.channelId && {
-                channelId: spspResponse.channelId,
+              ...(result.channelId && {
+                channelId: result.channelId,
               }),
             },
-          });
-        }
-
-        if (spspResponse.channelId) {
-          this.emit({
-            type: 'bootstrap:channel-opened',
-            peerId: result.registeredPeerId,
-            channelId: spspResponse.channelId,
-            negotiatedChain: spspResponse.negotiatedChain || 'unknown',
           });
         }
       } catch (error) {

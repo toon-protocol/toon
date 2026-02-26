@@ -139,6 +139,20 @@ export interface AgentRuntimeClient {
     data: string; // base64-encoded TOON
     timeout?: number;
   }): Promise<IlpSendResult>;
+
+  /**
+   * Optional: Send ILP packet with signed balance proof claim (BTP only).
+   * Falls back to sendIlpPacket if not implemented.
+   */
+  sendIlpPacketWithClaim?(
+    params: {
+      destination: string;
+      amount: string;
+      data: string;
+      timeout?: number;
+    },
+    claim: any // EVMClaimMessage type from client package
+  ): Promise<IlpSendResult>;
 }
 
 /**
