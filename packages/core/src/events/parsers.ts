@@ -7,6 +7,7 @@ import { nip44 } from 'nostr-tools';
 import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
 import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
+import { parseWithBigInt } from '../utils/json.js';
 
 /**
  * Validates a chain identifier string.
@@ -189,7 +190,7 @@ export function parseSpspResponse(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decrypted);
+    parsed = parseWithBigInt(decrypted);
   } catch (err) {
     throw new InvalidEventError(
       'Failed to parse decrypted content as JSON',
@@ -294,7 +295,7 @@ export function parseSpspRequest(
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decrypted);
+    parsed = parseWithBigInt(decrypted);
   } catch (err) {
     throw new InvalidEventError(
       'Failed to parse decrypted content as JSON',
