@@ -13,10 +13,9 @@ export default defineConfig({
       //   handler-registry.test.ts  -> Story 1.2 (done)
       //   handler-context.test.ts   -> Story 1.3 (done)
       //   verification-pipeline.test.ts -> Story 1.4 (done)
-      //   pricing-validator.test.ts -> Story 1.5
+      //   pricing-validator.test.ts -> Story 1.5 (done)
       //   payment-handler-bridge.test.ts -> Story 1.6
       //   dev-mode.test.ts          -> Story 1.10
-      'src/pricing-validator.test.ts',
       'src/payment-handler-bridge.test.ts',
       'src/dev-mode.test.ts',
     ],
