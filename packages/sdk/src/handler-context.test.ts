@@ -3,7 +3,7 @@ import { createHandlerContext } from './handler-context.js';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { ToonRoutingMeta } from '@crosstown/core/toon';
 
-// ATDD Red Phase - tests will fail until implementation exists
+// Story 1.3: HandlerContext with TOON Passthrough and Lazy Decode
 
 /**
  * Factory for creating a mock ToonRoutingMeta from shallow parse.
@@ -47,7 +47,7 @@ describe('HandlerContext', () => {
     vi.clearAllMocks();
   });
 
-  it.skip('[P0] ctx.toon returns the raw TOON string without triggering decode', () => {
+  it('[P0] ctx.toon returns the raw TOON string without triggering decode', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
@@ -65,7 +65,7 @@ describe('HandlerContext', () => {
     expect(mockDecoder).not.toHaveBeenCalled();
   });
 
-  it.skip('[P0] ctx.kind and ctx.pubkey come from shallow parse metadata', () => {
+  it('[P0] ctx.kind and ctx.pubkey come from shallow parse metadata', () => {
     // Arrange
     const meta = createMockMeta({ kind: 30617, pubkey: 'de'.repeat(32) });
     const ctx = createHandlerContext({
@@ -81,7 +81,25 @@ describe('HandlerContext', () => {
     expect(ctx.pubkey).toBe('de'.repeat(32));
   });
 
-  it.skip('[P0] ctx.amount is exposed as bigint', () => {
+  it('[P0] ctx.kind and ctx.pubkey do not trigger full decode (AC #2, #3)', () => {
+    // Arrange
+    const ctx = createHandlerContext({
+      toon: rawToon,
+      meta: mockMeta,
+      amount: 5000n,
+      destination: 'g.test.receiver',
+      toonDecoder: mockDecoder,
+    });
+
+    // Act - access kind and pubkey
+    void ctx.kind;
+    void ctx.pubkey;
+
+    // Assert - decoder should NOT have been called
+    expect(mockDecoder).not.toHaveBeenCalled();
+  });
+
+  it('[P0] ctx.amount is exposed as bigint', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
@@ -96,7 +114,21 @@ describe('HandlerContext', () => {
     expect(typeof ctx.amount).toBe('bigint');
   });
 
-  it.skip('[P0] ctx.decode() performs lazy decode and caches the result', () => {
+  it('[P0] ctx.destination contains the ILP destination address', () => {
+    // Arrange
+    const ctx = createHandlerContext({
+      toon: rawToon,
+      meta: mockMeta,
+      amount: 5000n,
+      destination: 'g.test.receiver',
+      toonDecoder: mockDecoder,
+    });
+
+    // Act & Assert
+    expect(ctx.destination).toBe('g.test.receiver');
+  });
+
+  it('[P0] ctx.decode() performs lazy decode and caches the result', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
@@ -112,11 +144,12 @@ describe('HandlerContext', () => {
 
     // Assert
     expect(mockDecoder).toHaveBeenCalledTimes(1);
+    expect(mockDecoder).toHaveBeenCalledWith(rawToon);
     expect(first).toBe(second); // Same reference (cached)
     expect(first).toEqual(mockDecodedEvent);
   });
 
-  it.skip('[P0] ctx.accept() produces a HandlePacketAcceptResponse', () => {
+  it('[P0] ctx.accept() produces a HandlePacketAcceptResponse', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
@@ -137,7 +170,7 @@ describe('HandlerContext', () => {
     );
   });
 
-  it.skip('[P1] ctx.accept(data) includes optional response data', () => {
+  it('[P0] ctx.accept() without data does not include metadata property (AC #8)', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
@@ -148,14 +181,34 @@ describe('HandlerContext', () => {
     });
 
     // Act
-    const response = ctx.accept({ eventId: 'a'.repeat(64), storedAt: 12345 });
+    const response = ctx.accept();
+
+    // Assert - metadata should not be present when no data is passed
+    expect(response.metadata).toBeUndefined();
+    expect('metadata' in response).toBe(false);
+  });
+
+  it('[P1] ctx.accept(data) includes optional response data', () => {
+    // Arrange
+    const ctx = createHandlerContext({
+      toon: rawToon,
+      meta: mockMeta,
+      amount: 5000n,
+      destination: 'g.test.receiver',
+      toonDecoder: mockDecoder,
+    });
+
+    // Act
+    const data = { eventId: 'a'.repeat(64), storedAt: 12345 };
+    const response = ctx.accept(data);
 
     // Assert
     expect(response.accept).toBe(true);
     expect(response.metadata).toBeDefined();
+    expect(response.metadata).toEqual(data);
   });
 
-  it.skip('[P0] ctx.reject(code, msg) produces a HandlePacketRejectResponse', () => {
+  it('[P0] ctx.reject(code, msg) produces a HandlePacketRejectResponse', () => {
     // Arrange
     const ctx = createHandlerContext({
       toon: rawToon,
