@@ -12,11 +12,10 @@ export default defineConfig({
       // Re-include each file as its corresponding story is implemented:
       //   handler-registry.test.ts  -> Story 1.2 (done)
       //   handler-context.test.ts   -> Story 1.3 (done)
-      //   verification-pipeline.test.ts -> Story 1.4
+      //   verification-pipeline.test.ts -> Story 1.4 (done)
       //   pricing-validator.test.ts -> Story 1.5
       //   payment-handler-bridge.test.ts -> Story 1.6
       //   dev-mode.test.ts          -> Story 1.10
-      'src/verification-pipeline.test.ts',
       'src/pricing-validator.test.ts',
       'src/payment-handler-bridge.test.ts',
       'src/dev-mode.test.ts',

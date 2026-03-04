@@ -7,7 +7,7 @@ import {
 } from 'nostr-tools/pure';
 import { encodeEventToToon, shallowParseToon } from '@crosstown/core/toon';
 
-// ATDD Red Phase - tests will fail until implementation exists
+// ATDD tests for Story 1.4 -- verification pipeline
 
 /**
  * Helper to create a properly signed Nostr event and encode to TOON.
@@ -47,7 +47,7 @@ function createTamperedToonPayload() {
 }
 
 describe('Verification Pipeline', () => {
-  it.skip('[P0] valid Schnorr signature allows event dispatch to handler', async () => {
+  it('[P0] valid Schnorr signature allows event dispatch to handler', async () => {
     // Arrange
     const { meta, toonBase64 } = createSignedToonPayload();
     const pipeline = createVerificationPipeline({ devMode: false });
@@ -59,7 +59,7 @@ describe('Verification Pipeline', () => {
     expect(result.verified).toBe(true);
   });
 
-  it.skip('[P0] invalid signature produces F06 rejection and handler is never called', async () => {
+  it('[P0] invalid signature produces F06 rejection and handler is never called', async () => {
     // Arrange
     const { meta } = createTamperedToonPayload();
     const pipeline = createVerificationPipeline({ devMode: false });
@@ -74,7 +74,7 @@ describe('Verification Pipeline', () => {
     expect(result.rejection!.accept).toBe(false);
   });
 
-  it.skip('[P0] devMode: true skips verification for invalid signature', async () => {
+  it('[P0] devMode: true skips verification for invalid signature', async () => {
     // Arrange
     const { meta } = createTamperedToonPayload();
     const pipeline = createVerificationPipeline({ devMode: true });
@@ -86,7 +86,7 @@ describe('Verification Pipeline', () => {
     expect(result.verified).toBe(true);
   });
 
-  it.skip('[P1] verification uses only shallow-parsed fields (no full decode)', async () => {
+  it('[P0] verification uses only shallow-parsed fields (no full decode)', async () => {
     // Arrange
     const { meta } = createSignedToonPayload();
     const pipeline = createVerificationPipeline({ devMode: false });
@@ -98,5 +98,39 @@ describe('Verification Pipeline', () => {
     // If verification succeeds, it only needed id, pubkey, sig from meta
     // (no ctx.decode() was needed)
     expect(result.verified).toBe(true);
+  });
+
+  it('[P0] tampered event content causes signature mismatch and F06 rejection', async () => {
+    // Arrange
+    const { meta, toonBase64 } = createSignedToonPayload();
+    // Tamper the id (simulates content change that invalidates signature)
+    const tamperedMeta = {
+      ...meta,
+      id: 'aa'.repeat(32), // Different event id = different message hash
+    };
+    const pipeline = createVerificationPipeline({ devMode: false });
+
+    // Act
+    const result = await pipeline.verify(tamperedMeta, toonBase64);
+
+    // Assert
+    expect(result.verified).toBe(false);
+    expect(result.rejection).toBeDefined();
+    expect(result.rejection!.code).toBe('F06');
+  });
+
+  it('[P0] devMode explicitly false -- invalid signature produces F06 (no bypass leak)', async () => {
+    // Arrange
+    const { meta } = createTamperedToonPayload();
+    const pipeline = createVerificationPipeline({ devMode: false });
+
+    // Act
+    const result = await pipeline.verify(meta, 'irrelevant');
+
+    // Assert
+    expect(result.verified).toBe(false);
+    expect(result.rejection).toBeDefined();
+    expect(result.rejection!.code).toBe('F06');
+    expect(result.rejection!.message).toBeDefined();
   });
 });
