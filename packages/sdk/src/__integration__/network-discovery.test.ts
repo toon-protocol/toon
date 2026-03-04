@@ -1,3 +1,4 @@
+// @ts-nocheck — ATDD Red Phase: imports reference exports that don't exist yet
 /**
  * Integration Tests: Network Discovery and Bootstrap (Story 1.9)
  *

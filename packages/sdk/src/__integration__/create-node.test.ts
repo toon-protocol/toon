@@ -1,3 +1,4 @@
+// @ts-nocheck — ATDD Red Phase: imports reference exports that don't exist yet
 /**
  * Integration Tests: createNode() Composition with Lifecycle (Story 1.7)
  *

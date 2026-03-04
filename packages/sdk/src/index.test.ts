@@ -1,3 +1,4 @@
+// @ts-nocheck — ATDD Red Phase: imports reference exports that don't exist yet
 import { describe, it, expect } from 'vitest';
 import * as sdk from './index.js';
 

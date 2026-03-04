@@ -1,7 +1,7 @@
 {
-  "name": "@crosstown/core",
-  "version": "1.1.1",
-  "description": "Core library for Nostr-based ILP peer discovery and SPSP",
+  "name": "@crosstown/sdk",
+  "version": "0.1.0",
+  "description": "Crosstown SDK for building ILP-gated Nostr services",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -10,14 +10,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./nip34": {
-      "types": "./dist/nip34/index.d.ts",
-      "import": "./dist/nip34/index.js"
-    },
-    "./toon": {
-      "types": "./dist/toon/index.d.ts",
-      "import": "./dist/toon/index.js"
     }
   },
   "files": [
@@ -27,32 +19,32 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest"
   },
   "keywords": [
+    "crosstown",
     "nostr",
-    "interledger",
     "ilp",
-    "spsp"
+    "interledger",
+    "sdk"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/ALLiDoizCode/crosstown.git",
-    "directory": "packages/core"
+    "directory": "packages/sdk"
   },
   "author": "ALLiDoizCode",
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@ardrive/turbo-sdk": "^1.21.0",
-    "@toon-format/toon": "^1.1.0",
-    "arweave": "^1.15.5",
-    "nostr-tools": "^2.20.0",
-    "simple-git": "^3.31.1",
-    "ws": "^8.18.0"
+    "@crosstown/core": "workspace:*",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
+    "@scure/bip32": "^2.0.0",
+    "@scure/bip39": "^2.0.0",
+    "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
     "@crosstown/connector": ">=1.2.0"
@@ -63,9 +55,7 @@
     }
   },
   "devDependencies": {
-    "@crosstown/relay": "workspace:*",
     "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.10",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"

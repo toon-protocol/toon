@@ -9,15 +9,14 @@ import { nip44 } from 'nostr-tools';
 import { IlpSpspClient } from './IlpSpspClient.js';
 import { SpspError, SpspTimeoutError } from '../errors.js';
 import { SPSP_RESPONSE_KIND } from '../constants.js';
-import type { AgentRuntimeClient, IlpSendResult } from '../bootstrap/types.js';
+import type { IlpSendResult } from '../bootstrap/types.js';
 import type { SpspResponse } from '../types.js';
 
 /**
  * Helper: create a mock AgentRuntimeClient.
  */
-function createMockAgentRuntimeClient(): AgentRuntimeClient & {
-  sendIlpPacket: ReturnType<typeof vi.fn>;
-} {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createMockAgentRuntimeClient(): any {
   return {
     sendIlpPacket: vi.fn(),
   };
@@ -55,13 +54,16 @@ function createResponseEvent(
 }
 
 describe('IlpSpspClient', () => {
-  let mockClient: ReturnType<typeof createMockAgentRuntimeClient>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockClient: any;
   let senderSecretKey: Uint8Array;
   let senderPubkey: string;
   let recipientSecretKey: Uint8Array;
   let recipientPubkey: string;
-  let mockToonEncoder: ReturnType<typeof vi.fn>;
-  let mockToonDecoder: ReturnType<typeof vi.fn>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockToonEncoder: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockToonDecoder: any;
 
   beforeEach(() => {
     vi.clearAllMocks();

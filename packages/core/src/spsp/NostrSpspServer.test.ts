@@ -260,7 +260,7 @@ describe('NostrSpspServer', () => {
 
         // Get the published response event
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
 
         // Verify sender can decrypt the response
         const parsed = parseSpspResponse(
@@ -300,7 +300,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         expect(responseEvent.kind).toBe(SPSP_RESPONSE_KIND);
       });
 
@@ -330,7 +330,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -366,7 +366,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         expect(responseEvent.tags).toContainEqual(['p', senderPubkey]);
       });
     });
@@ -400,7 +400,7 @@ describe('NostrSpspServer', () => {
 
         // The response requestId should match, proving decryption worked
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -436,7 +436,7 @@ describe('NostrSpspServer', () => {
 
         // Sender should be able to decrypt
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -517,7 +517,7 @@ describe('NostrSpspServer', () => {
 
         // Client receives and decrypts response
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const response = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -842,7 +842,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -956,7 +956,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -996,7 +996,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1034,7 +1034,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1076,7 +1076,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1140,7 +1140,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1192,7 +1192,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1244,7 +1244,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1308,7 +1308,7 @@ describe('NostrSpspServer', () => {
         );
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1390,7 +1390,7 @@ describe('NostrSpspServer', () => {
 
         // Verify response includes settlement fields (channel eventually opened)
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1441,7 +1441,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         const parsed = parseSpspResponse(
           responseEvent,
           senderSecretKey,
@@ -1514,7 +1514,7 @@ describe('NostrSpspServer', () => {
 
         // Second response should have settlement fields
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent2 = publishCalls[1][1] as NostrEvent;
+        const responseEvent2 = publishCalls[1]![1] as NostrEvent;
         const parsed2 = parseSpspResponse(
           responseEvent2,
           senderSecretKey,

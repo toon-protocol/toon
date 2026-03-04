@@ -102,7 +102,7 @@ describe('ArDrivePeerRegistry', () => {
       );
 
       const body = JSON.parse(
-        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1].body
       );
       expect(body.query).toContain('App-Name');
       expect(body.query).toContain('ilp-peer-info');

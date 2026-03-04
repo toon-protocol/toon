@@ -38,6 +38,11 @@ export interface NIP34Config {
   forgejoToken: string;
   /** Default owner/org for repositories */
   defaultOwner: string;
+  /** Git commit identity configuration */
+  gitConfig?: {
+    userName: string;
+    userEmail: string;
+  };
   /** Enable verbose logging */
   verbose?: boolean;
 }

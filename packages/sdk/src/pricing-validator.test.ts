@@ -39,8 +39,8 @@ describe('Pricing Validator', () => {
     expect(result.rejection!.code).toBe('F04');
     expect(result.rejection!.accept).toBe(false);
     expect(result.rejection!.metadata).toBeDefined();
-    expect(result.rejection!.metadata!.required).toBe('1000');
-    expect(result.rejection!.metadata!.received).toBe('500');
+    expect(result.rejection!.metadata!['required']).toBe('1000');
+    expect(result.rejection!.metadata!['received']).toBe('500');
   });
 
   it.skip('[P0] kindPricing override changes price for specific kind', () => {
