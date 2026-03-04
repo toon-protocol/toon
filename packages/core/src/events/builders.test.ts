@@ -1,9 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { generateSecretKey, getPublicKey, verifyEvent } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
-import { buildIlpPeerInfoEvent, buildSpspRequestEvent, buildSpspResponseEvent } from './builders.js';
-import { parseIlpPeerInfo, parseSpspRequest, parseSpspResponse } from './parsers.js';
-import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import {
+  buildIlpPeerInfoEvent,
+  buildSpspRequestEvent,
+  buildSpspResponseEvent,
+} from './builders.js';
+import {
+  parseIlpPeerInfo,
+  parseSpspRequest,
+  parseSpspResponse,
+} from './parsers.js';
+import {
+  ILP_PEER_INFO_KIND,
+  SPSP_REQUEST_KIND,
+  SPSP_RESPONSE_KIND,
+} from '../constants.js';
 import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 
 // Test fixtures
@@ -172,8 +184,12 @@ describe('buildIlpPeerInfoEvent - settlement fields', () => {
       'evm:base:8453': '0x1234567890abcdef1234567890abcdef12345678',
       'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
     });
-    expect(content.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
-    expect(content.tokenNetworks).toEqual({ 'evm:base:8453': '0xTOKEN_NETWORK' });
+    expect(content.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
+    expect(content.tokenNetworks).toEqual({
+      'evm:base:8453': '0xTOKEN_NETWORK',
+    });
   });
 
   it('serializes with only supportedChains and settlementAddresses', () => {
@@ -206,8 +222,12 @@ describe('buildIlpPeerInfoEvent - settlement fields', () => {
     const content = JSON.parse(event.content);
 
     // Assert
-    expect(content.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
-    expect(content.tokenNetworks).toEqual({ 'evm:base:8453': '0xTOKEN_NETWORK' });
+    expect(content.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
+    expect(content.tokenNetworks).toEqual({
+      'evm:base:8453': '0xTOKEN_NETWORK',
+    });
   });
 
   it('signature verification passes with new fields present', () => {
@@ -281,7 +301,9 @@ describe('round-trip tests - settlement fields', () => {
       assetCode: 'XRP',
       assetScale: 9,
       supportedChains: ['xrp:mainnet'],
-      settlementAddresses: { 'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit' },
+      settlementAddresses: {
+        'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
+      },
     };
 
     // Act
@@ -291,7 +313,9 @@ describe('round-trip tests - settlement fields', () => {
     // Assert
     expect(parsed.settlementEngine).toBe('xrp-paychan');
     expect(parsed.supportedChains).toEqual(['xrp:mainnet']);
-    expect(parsed.settlementAddresses).toEqual({ 'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit' });
+    expect(parsed.settlementAddresses).toEqual({
+      'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
+    });
   });
 });
 
@@ -364,10 +388,16 @@ describe('buildSpspRequestEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey
+    );
 
     // Decrypt as recipient
-    const conversationKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      recipientSecretKey,
+      senderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspRequest = JSON.parse(decrypted);
 
@@ -401,7 +431,10 @@ describe('buildSpspRequestEvent', () => {
     const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey);
 
     // Decrypt and check timestamp
-    const conversationKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      recipientSecretKey,
+      senderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspRequest = JSON.parse(decrypted);
 
@@ -424,7 +457,11 @@ describe('buildSpspResponseEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Assert
     expect(event.kind).toBe(SPSP_RESPONSE_KIND);
@@ -440,7 +477,11 @@ describe('buildSpspResponseEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Assert
     expect(event.tags).toContainEqual(['p', senderPubkey]);
@@ -474,7 +515,11 @@ describe('buildSpspResponseEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Assert
     expect(event.tags).toHaveLength(1);
@@ -488,7 +533,11 @@ describe('buildSpspResponseEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Assert - content should not be valid JSON (it's encrypted)
     expect(() => JSON.parse(event.content)).toThrow();
@@ -504,10 +553,17 @@ describe('buildSpspResponseEvent', () => {
     const responderPubkey = getPublicKey(responderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Decrypt as sender
-    const conversationKey = nip44.getConversationKey(senderSecretKey, responderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      responderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspResponse = JSON.parse(decrypted);
 
@@ -524,7 +580,11 @@ describe('buildSpspResponseEvent', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
     const isValid = verifyEvent(event);
 
     // Assert
@@ -539,7 +599,11 @@ describe('buildSpspResponseEvent', () => {
     const responderPubkey = getPublicKey(responderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponse,
+      senderPubkey,
+      responderSecretKey
+    );
     const parsed = parseSpspResponse(event, senderSecretKey, responderPubkey);
 
     // Assert
@@ -566,10 +630,17 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, settlementInfo);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      settlementInfo
+    );
 
     // Decrypt as recipient
-    const conversationKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      recipientSecretKey,
+      senderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspRequest = JSON.parse(decrypted);
 
@@ -577,8 +648,12 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     expect(payload.requestId).toBe(requestId);
     expect(payload.ilpAddress).toBe('g.example.sender');
     expect(payload.supportedChains).toEqual(['evm:base:8453', 'xrp:mainnet']);
-    expect(payload.settlementAddresses).toEqual(settlementInfo.settlementAddresses);
-    expect(payload.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
+    expect(payload.settlementAddresses).toEqual(
+      settlementInfo.settlementAddresses
+    );
+    expect(payload.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
   });
 
   it('with only supportedChains and settlementAddresses serializes correctly', () => {
@@ -594,10 +669,17 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     };
 
     // Act
-    const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, partialInfo);
+    const { event } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      partialInfo
+    );
 
     // Decrypt as recipient
-    const conversationKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      recipientSecretKey,
+      senderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspRequest = JSON.parse(decrypted);
 
@@ -619,7 +701,10 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey);
 
     // Decrypt as recipient
-    const conversationKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      recipientSecretKey,
+      senderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload = JSON.parse(decrypted);
 
@@ -633,7 +718,11 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     const recipientPubkey = getPublicKey(generateSecretKey());
 
     // Act
-    const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, settlementInfo);
+    const { event } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      settlementInfo
+    );
 
     // Assert - content is encrypted, not plaintext JSON
     expect(() => JSON.parse(event.content)).toThrow();
@@ -647,7 +736,11 @@ describe('buildSpspRequestEvent - settlement fields', () => {
     const recipientPubkey = getPublicKey(generateSecretKey());
 
     // Act
-    const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, settlementInfo);
+    const { event } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      settlementInfo
+    );
     const isValid = verifyEvent(event);
 
     // Assert
@@ -676,16 +769,25 @@ describe('buildSpspResponseEvent - settlement fields', () => {
     const responderPubkey = getPublicKey(responderSecretKey);
 
     // Act
-    const event = buildSpspResponseEvent(testResponseWithSettlement, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponseWithSettlement,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Decrypt as sender
-    const conversationKey = nip44.getConversationKey(senderSecretKey, responderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      responderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspResponse = JSON.parse(decrypted);
 
     // Assert
     expect(payload.negotiatedChain).toBe('evm:base:8453');
-    expect(payload.settlementAddress).toBe('0x1234567890abcdef1234567890abcdef12345678');
+    expect(payload.settlementAddress).toBe(
+      '0x1234567890abcdef1234567890abcdef12345678'
+    );
     expect(payload.tokenAddress).toBe('0xAGENT_TOKEN');
     expect(payload.tokenNetworkAddress).toBe('0xTOKEN_NETWORK');
     expect(payload.channelId).toBe('channel-abc-123');
@@ -708,16 +810,25 @@ describe('buildSpspResponseEvent - settlement fields', () => {
     };
 
     // Act
-    const event = buildSpspResponseEvent(partialResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      partialResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Decrypt as sender
-    const conversationKey = nip44.getConversationKey(senderSecretKey, responderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      responderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload: SpspResponse = JSON.parse(decrypted);
 
     // Assert
     expect(payload.negotiatedChain).toBe('xrp:mainnet');
-    expect(payload.settlementAddress).toBe('rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit');
+    expect(payload.settlementAddress).toBe(
+      'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit'
+    );
     expect(payload.tokenAddress).toBeUndefined();
     expect(payload.tokenNetworkAddress).toBeUndefined();
     expect(payload.channelId).toBeUndefined();
@@ -738,15 +849,26 @@ describe('buildSpspResponseEvent - settlement fields', () => {
     };
 
     // Act
-    const event = buildSpspResponseEvent(basicResponse, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      basicResponse,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Decrypt as sender
-    const conversationKey = nip44.getConversationKey(senderSecretKey, responderPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      responderPubkey
+    );
     const decrypted = nip44.decrypt(event.content, conversationKey);
     const payload = JSON.parse(decrypted);
 
     // Assert - only base fields
-    expect(Object.keys(payload)).toEqual(['requestId', 'destinationAccount', 'sharedSecret']);
+    expect(Object.keys(payload)).toEqual([
+      'requestId',
+      'destinationAccount',
+      'sharedSecret',
+    ]);
   });
 
   it('settlement fields are NIP-44 encrypted', () => {
@@ -755,7 +877,11 @@ describe('buildSpspResponseEvent - settlement fields', () => {
     const senderPubkey = getPublicKey(generateSecretKey());
 
     // Act
-    const event = buildSpspResponseEvent(testResponseWithSettlement, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponseWithSettlement,
+      senderPubkey,
+      responderSecretKey
+    );
 
     // Assert - content is encrypted, not plaintext JSON
     expect(() => JSON.parse(event.content)).toThrow();
@@ -769,7 +895,11 @@ describe('buildSpspResponseEvent - settlement fields', () => {
     const senderPubkey = getPublicKey(generateSecretKey());
 
     // Act
-    const event = buildSpspResponseEvent(testResponseWithSettlement, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      testResponseWithSettlement,
+      senderPubkey,
+      responderSecretKey
+    );
     const isValid = verifyEvent(event);
 
     // Assert
@@ -796,15 +926,23 @@ describe('round-trip encryption tests - SPSP settlement', () => {
     };
 
     // Act
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, settlementInfo);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      settlementInfo
+    );
     const parsed = parseSpspRequest(event, recipientSecretKey, senderPubkey);
 
     // Assert
     expect(parsed.requestId).toBe(requestId);
     expect(parsed.ilpAddress).toBe('g.example.sender');
     expect(parsed.supportedChains).toEqual(['evm:base:8453', 'xrp:mainnet']);
-    expect(parsed.settlementAddresses).toEqual(settlementInfo.settlementAddresses);
-    expect(parsed.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
+    expect(parsed.settlementAddresses).toEqual(
+      settlementInfo.settlementAddresses
+    );
+    expect(parsed.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
   });
 
   it('SPSP response build → parse round-trip preserves settlement fields through NIP-44', () => {
@@ -827,7 +965,11 @@ describe('round-trip encryption tests - SPSP settlement', () => {
     };
 
     // Act
-    const event = buildSpspResponseEvent(responseWithSettlement, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      responseWithSettlement,
+      senderPubkey,
+      responderSecretKey
+    );
     const parsed = parseSpspResponse(event, senderSecretKey, responderPubkey);
 
     // Assert
@@ -842,7 +984,10 @@ describe('round-trip encryption tests - SPSP settlement', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Act
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey
+    );
     const parsed = parseSpspRequest(event, recipientSecretKey, senderPubkey);
 
     // Assert

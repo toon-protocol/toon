@@ -101,15 +101,43 @@ export type BootstrapPhase =
  * Bootstrap events emitted during the bootstrap lifecycle.
  */
 export type BootstrapEvent =
-  | { type: 'bootstrap:phase'; phase: BootstrapPhase; previousPhase?: BootstrapPhase }
-  | { type: 'bootstrap:peer-registered'; peerId: string; peerPubkey: string; ilpAddress: string }
-  | { type: 'bootstrap:channel-opened'; peerId: string; channelId: string; negotiatedChain: string }
+  | {
+      type: 'bootstrap:phase';
+      phase: BootstrapPhase;
+      previousPhase?: BootstrapPhase;
+    }
+  | {
+      type: 'bootstrap:peer-registered';
+      peerId: string;
+      peerPubkey: string;
+      ilpAddress: string;
+    }
+  | {
+      type: 'bootstrap:channel-opened';
+      peerId: string;
+      channelId: string;
+      negotiatedChain: string;
+    }
   | { type: 'bootstrap:handshake-failed'; peerId: string; reason: string }
-  | { type: 'bootstrap:announced'; peerId: string; eventId: string; amount: string }
+  | {
+      type: 'bootstrap:announced';
+      peerId: string;
+      eventId: string;
+      amount: string;
+    }
   | { type: 'bootstrap:announce-failed'; peerId: string; reason: string }
   | { type: 'bootstrap:ready'; peerCount: number; channelCount: number }
-  | { type: 'bootstrap:peer-discovered'; peerPubkey: string; ilpAddress: string }
-  | { type: 'bootstrap:peer-deregistered'; peerId: string; peerPubkey: string; reason: string };
+  | {
+      type: 'bootstrap:peer-discovered';
+      peerPubkey: string;
+      ilpAddress: string;
+    }
+  | {
+      type: 'bootstrap:peer-deregistered';
+      peerId: string;
+      peerPubkey: string;
+      reason: string;
+    };
 
 /**
  * Listener callback for bootstrap events.
@@ -151,7 +179,7 @@ export interface AgentRuntimeClient {
       data: string;
       timeout?: number;
     },
-    claim: any // EVMClaimMessage type from client package
+    claim: unknown // EVMClaimMessage type from client package
   ): Promise<IlpSendResult>;
 }
 

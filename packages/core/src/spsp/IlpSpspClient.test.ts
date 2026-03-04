@@ -34,8 +34,14 @@ function createResponseEvent(
   requesterPubkey: string
 ): NostrEvent {
   const responderPubkey = getPublicKey(responderSecretKey);
-  const conversationKey = nip44.getConversationKey(responderSecretKey, requesterPubkey);
-  const encryptedContent = nip44.encrypt(JSON.stringify(response), conversationKey);
+  const conversationKey = nip44.getConversationKey(
+    responderSecretKey,
+    requesterPubkey
+  );
+  const encryptedContent = nip44.encrypt(
+    JSON.stringify(response),
+    conversationKey
+  );
 
   return {
     id: 'response-event-id',
@@ -67,8 +73,9 @@ describe('IlpSpspClient', () => {
     mockToonEncoder = vi.fn((event: NostrEvent) =>
       new TextEncoder().encode(JSON.stringify(event))
     );
-    mockToonDecoder = vi.fn((bytes: Uint8Array) =>
-      JSON.parse(new TextDecoder().decode(bytes)) as NostrEvent
+    mockToonDecoder = vi.fn(
+      (bytes: Uint8Array) =>
+        JSON.parse(new TextDecoder().decode(bytes)) as NostrEvent
     );
   });
 
@@ -80,8 +87,14 @@ describe('IlpSpspClient', () => {
     responderSecretKey: Uint8Array,
     requesterPubkey: string
   ): void {
-    const responseEvent = createResponseEvent(response, responderSecretKey, requesterPubkey);
-    const responseBytes = new TextEncoder().encode(JSON.stringify(responseEvent));
+    const responseEvent = createResponseEvent(
+      response,
+      responderSecretKey,
+      requesterPubkey
+    );
+    const responseBytes = new TextEncoder().encode(
+      JSON.stringify(responseEvent)
+    );
     const responseBase64 = Buffer.from(responseBytes).toString('base64');
 
     mockClient.sendIlpPacket.mockResolvedValue({
@@ -105,14 +118,18 @@ describe('IlpSpspClient', () => {
       expect(
         () =>
           new IlpSpspClient(mockClient, senderSecretKey, {
-            toonEncoder: undefined as unknown as (event: NostrEvent) => Uint8Array,
+            toonEncoder: undefined as unknown as (
+              event: NostrEvent
+            ) => Uint8Array,
             toonDecoder: mockToonDecoder,
           })
       ).toThrow(SpspError);
       expect(
         () =>
           new IlpSpspClient(mockClient, senderSecretKey, {
-            toonEncoder: undefined as unknown as (event: NostrEvent) => Uint8Array,
+            toonEncoder: undefined as unknown as (
+              event: NostrEvent
+            ) => Uint8Array,
             toonDecoder: mockToonDecoder,
           })
       ).toThrow('toonEncoder is required');
@@ -123,14 +140,18 @@ describe('IlpSpspClient', () => {
         () =>
           new IlpSpspClient(mockClient, senderSecretKey, {
             toonEncoder: mockToonEncoder,
-            toonDecoder: undefined as unknown as (bytes: Uint8Array) => NostrEvent,
+            toonDecoder: undefined as unknown as (
+              bytes: Uint8Array
+            ) => NostrEvent,
           })
       ).toThrow(SpspError);
       expect(
         () =>
           new IlpSpspClient(mockClient, senderSecretKey, {
             toonEncoder: mockToonEncoder,
-            toonDecoder: undefined as unknown as (bytes: Uint8Array) => NostrEvent,
+            toonDecoder: undefined as unknown as (
+              bytes: Uint8Array
+            ) => NostrEvent,
           })
       ).toThrow('toonDecoder is required');
     });
@@ -235,7 +256,9 @@ describe('IlpSpspClient', () => {
 
       await client.requestSpspInfo(recipientPubkey, 'g.peer1');
 
-      expect(mockClient.sendIlpPacket.mock.calls[0][0].destination).toBe('g.peer1');
+      expect(mockClient.sendIlpPacket.mock.calls[0][0].destination).toBe(
+        'g.peer1'
+      );
     });
 
     it('amount defaults to "0" when not specified', async () => {
@@ -269,7 +292,9 @@ describe('IlpSpspClient', () => {
         toonDecoder: mockToonDecoder,
       });
 
-      await client.requestSpspInfo(recipientPubkey, 'g.peer1', { amount: '1000' });
+      await client.requestSpspInfo(recipientPubkey, 'g.peer1', {
+        amount: '1000',
+      });
 
       expect(mockClient.sendIlpPacket.mock.calls[0][0].amount).toBe('1000');
     });
@@ -287,7 +312,9 @@ describe('IlpSpspClient', () => {
         toonDecoder: mockToonDecoder,
       });
 
-      await client.requestSpspInfo(recipientPubkey, 'g.peer1', { timeout: 60000 });
+      await client.requestSpspInfo(recipientPubkey, 'g.peer1', {
+        timeout: 60000,
+      });
 
       expect(mockClient.sendIlpPacket.mock.calls[0][0].timeout).toBe(60000);
     });
@@ -484,13 +511,17 @@ describe('IlpSpspClient', () => {
         toonDecoder: mockToonDecoder,
       });
 
-      await client.requestSpspInfo(recipientPubkey, 'g.peer1', { timeout: 5000 });
+      await client.requestSpspInfo(recipientPubkey, 'g.peer1', {
+        timeout: 5000,
+      });
 
       expect(mockClient.sendIlpPacket.mock.calls[0][0].timeout).toBe(5000);
     });
 
     it('retries once on network/timeout error', async () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const warnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
 
       // First call: network error. Second call: success.
       const response: SpspResponse = {
@@ -498,8 +529,14 @@ describe('IlpSpspClient', () => {
         destinationAccount: 'g.test.receiver',
         sharedSecret: 'c2VjcmV0',
       };
-      const responseEvent = createResponseEvent(response, recipientSecretKey, senderPubkey);
-      const responseBytes = new TextEncoder().encode(JSON.stringify(responseEvent));
+      const responseEvent = createResponseEvent(
+        response,
+        recipientSecretKey,
+        senderPubkey
+      );
+      const responseBytes = new TextEncoder().encode(
+        JSON.stringify(responseEvent)
+      );
       const responseBase64 = Buffer.from(responseBytes).toString('base64');
 
       mockClient.sendIlpPacket
@@ -599,16 +636,23 @@ describe('IlpSpspClient', () => {
         settlementAddresses: { 'evm:base:8453': '0xMY_ADDR' },
       };
 
-      await client.requestSpspInfo(recipientPubkey, 'g.peer1', { settlementInfo });
+      await client.requestSpspInfo(recipientPubkey, 'g.peer1', {
+        settlementInfo,
+      });
 
       // Verify the TOON-encoded event contains settlement info by decrypting
       const encodedEvent = mockToonEncoder.mock.calls[0][0] as NostrEvent;
-      const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
+      const convKey = nip44.getConversationKey(
+        recipientSecretKey,
+        senderPubkey
+      );
       const decrypted = nip44.decrypt(encodedEvent.content, convKey);
       const request = JSON.parse(decrypted);
 
       expect(request.supportedChains).toEqual(['evm:base:8453']);
-      expect(request.settlementAddresses).toEqual({ 'evm:base:8453': '0xMY_ADDR' });
+      expect(request.settlementAddresses).toEqual({
+        'evm:base:8453': '0xMY_ADDR',
+      });
     });
   });
 });

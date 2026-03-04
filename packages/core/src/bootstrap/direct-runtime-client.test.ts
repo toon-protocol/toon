@@ -5,13 +5,17 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi } from 'vitest';
 import { createDirectRuntimeClient } from './direct-runtime-client.js';
-import type { ConnectorNodeLike, SendPacketParams, SendPacketResult } from './direct-runtime-client.js';
+import type {
+  ConnectorNodeLike,
+  SendPacketParams,
+  SendPacketResult,
+} from './direct-runtime-client.js';
 import { BootstrapError } from './BootstrapService.js';
 
 /** Helper: build a mock ConnectorNodeLike */
 function mockConnector(
   result?: SendPacketResult,
-  error?: Error,
+  error?: Error
 ): ConnectorNodeLike {
   const sendPacket = error
     ? vi.fn().mockRejectedValue(error)
@@ -45,7 +49,7 @@ describe('createDirectRuntimeClient', () => {
       });
 
       expect(connector.sendPacket).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 50000n }),
+        expect.objectContaining({ amount: 50000n })
       );
     });
 
@@ -65,7 +69,8 @@ describe('createDirectRuntimeClient', () => {
         data: base64Data,
       });
 
-      const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock.calls[0]![0] as SendPacketParams;
+      const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+        .calls[0]![0] as SendPacketParams;
       expect(Buffer.from(callArgs.data).toString()).toBe('hello world');
     });
 
@@ -83,7 +88,7 @@ describe('createDirectRuntimeClient', () => {
       });
 
       expect(connector.sendPacket).toHaveBeenCalledWith(
-        expect.objectContaining({ destination: 'g.hub.alice' }),
+        expect.objectContaining({ destination: 'g.hub.alice' })
       );
     });
 
@@ -103,7 +108,7 @@ describe('createDirectRuntimeClient', () => {
 
       expect(result.accepted).toBe(true);
       expect(result.fulfillment).toBe(
-        Buffer.from(fulfillmentBytes).toString('base64'),
+        Buffer.from(fulfillmentBytes).toString('base64')
       );
     });
 
@@ -201,7 +206,7 @@ describe('createDirectRuntimeClient', () => {
     it('should wrap sendPacket errors in BootstrapError', async () => {
       const connector = mockConnector(
         undefined,
-        new Error('Connector crashed'),
+        new Error('Connector crashed')
       );
 
       const client = createDirectRuntimeClient(connector);
@@ -211,7 +216,7 @@ describe('createDirectRuntimeClient', () => {
           destination: 'g.peer1',
           amount: '100',
           data: Buffer.from('test').toString('base64'),
-        }),
+        })
       ).rejects.toThrow(BootstrapError);
 
       await expect(
@@ -219,7 +224,7 @@ describe('createDirectRuntimeClient', () => {
           destination: 'g.peer1',
           amount: '100',
           data: Buffer.from('test').toString('base64'),
-        }),
+        })
       ).rejects.toThrow(/Direct ILP packet send failed.*Connector crashed/);
     });
 
@@ -236,13 +241,14 @@ describe('createDirectRuntimeClient', () => {
           destination: 'g.peer1',
           amount: 'abc',
           data: Buffer.from('test').toString('base64'),
-        }),
+        })
       ).rejects.toThrow(BootstrapError);
     });
 
     describe('executionCondition with toonDecoder', () => {
       it('should compute executionCondition = SHA256(SHA256(eventId)) when toonDecoder is provided', async () => {
-        const eventId = 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
+        const eventId =
+          'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
 
         const toonDecoder = vi.fn().mockReturnValue({ id: eventId });
 
@@ -264,9 +270,10 @@ describe('createDirectRuntimeClient', () => {
           .update(fulfillment)
           .digest();
 
-        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock.calls[0]![0] as SendPacketParams;
+        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+          .calls[0]![0] as SendPacketParams;
         expect(Buffer.from(callArgs.executionCondition!)).toEqual(
-          Buffer.from(expectedCondition),
+          Buffer.from(expectedCondition)
         );
       });
 
@@ -283,7 +290,8 @@ describe('createDirectRuntimeClient', () => {
           data: Buffer.from('test').toString('base64'),
         });
 
-        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock.calls[0]![0] as SendPacketParams;
+        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+          .calls[0]![0] as SendPacketParams;
         expect(callArgs.executionCondition).toBeUndefined();
       });
 
@@ -304,7 +312,7 @@ describe('createDirectRuntimeClient', () => {
             destination: 'g.peer1',
             amount: '100',
             data: Buffer.from('bad-data').toString('base64'),
-          }),
+          })
         ).rejects.toThrow(BootstrapError);
 
         await expect(
@@ -312,7 +320,7 @@ describe('createDirectRuntimeClient', () => {
             destination: 'g.peer1',
             amount: '100',
             data: Buffer.from('bad-data').toString('base64'),
-          }),
+          })
         ).rejects.toThrow(/Direct ILP packet send failed.*Invalid TOON format/);
       });
     });

@@ -77,5 +77,5 @@ export const NIP34_EVENT_KINDS = [
  * Check if an event kind is a NIP-34 event
  */
 export function isNIP34Event(kind: number): boolean {
-  return NIP34_EVENT_KINDS.includes(kind as any);
+  return (NIP34_EVENT_KINDS as readonly number[]).includes(kind);
 }

@@ -33,7 +33,7 @@ import type { ConnectorAdminClient } from './types.js';
  */
 export function createHttpConnectorAdmin(
   adminUrl: string,
-  btpSecret: string,
+  btpSecret: string
 ): ConnectorAdminClient {
   const baseUrl = adminUrl.replace(/\/$/, ''); // Remove trailing slash
 
@@ -43,10 +43,12 @@ export function createHttpConnectorAdmin(
         const payload = {
           id: config.id,
           url: config.url,
-          authToken: config.authToken || JSON.stringify({
-            peerId: config.id,
-            secret: btpSecret,
-          }),
+          authToken:
+            config.authToken ||
+            JSON.stringify({
+              peerId: config.id,
+              secret: btpSecret,
+            }),
           routes: config.routes,
           settlement: config.settlement,
         };

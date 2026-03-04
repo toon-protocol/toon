@@ -1,16 +1,29 @@
 import { describe, it, expect, vi } from 'vitest';
 import { negotiateAndOpenChannel } from './negotiateAndOpenChannel.js';
-import type { ConnectorChannelClient, SettlementNegotiationConfig } from '../types.js';
+import type {
+  ConnectorChannelClient,
+  SettlementNegotiationConfig,
+} from '../types.js';
 
-function createMockChannelClient(overrides?: Partial<ConnectorChannelClient>): ConnectorChannelClient {
+function createMockChannelClient(
+  overrides?: Partial<ConnectorChannelClient>
+): ConnectorChannelClient {
   return {
-    openChannel: vi.fn().mockResolvedValue({ channelId: '0xCHANNEL1', status: 'opening' }),
-    getChannelState: vi.fn().mockResolvedValue({ channelId: '0xCHANNEL1', status: 'open', chain: 'evm:base:8453' }),
+    openChannel: vi
+      .fn()
+      .mockResolvedValue({ channelId: '0xCHANNEL1', status: 'opening' }),
+    getChannelState: vi.fn().mockResolvedValue({
+      channelId: '0xCHANNEL1',
+      status: 'open',
+      chain: 'evm:base:8453',
+    }),
     ...overrides,
   };
 }
 
-function createSettlementConfig(overrides?: Partial<SettlementNegotiationConfig>): SettlementNegotiationConfig {
+function createSettlementConfig(
+  overrides?: Partial<SettlementNegotiationConfig>
+): SettlementNegotiationConfig {
   return {
     ownSupportedChains: ['evm:base:8453'],
     ownSettlementAddresses: { 'evm:base:8453': '0xOWN_ADDRESS' },
@@ -66,7 +79,9 @@ describe('negotiateAndOpenChannel', () => {
 
   it('returns null when no chain intersection', async () => {
     const channelClient = createMockChannelClient();
-    const config = createSettlementConfig({ ownSupportedChains: ['xrp:mainnet'] });
+    const config = createSettlementConfig({
+      ownSupportedChains: ['xrp:mainnet'],
+    });
 
     const result = await negotiateAndOpenChannel({
       request: {
@@ -107,7 +122,9 @@ describe('negotiateAndOpenChannel', () => {
 
   it('throws when channelClient.openChannel() fails', async () => {
     const channelClient = createMockChannelClient({
-      openChannel: vi.fn().mockRejectedValue(new Error('Failed to open channel: 500')),
+      openChannel: vi
+        .fn()
+        .mockRejectedValue(new Error('Failed to open channel: 500')),
     });
     const config = createSettlementConfig();
 
@@ -128,7 +145,11 @@ describe('negotiateAndOpenChannel', () => {
 
   it('throws when channel open times out', async () => {
     const channelClient = createMockChannelClient({
-      getChannelState: vi.fn().mockResolvedValue({ channelId: '0xCH', status: 'opening', chain: 'evm:base:8453' }),
+      getChannelState: vi.fn().mockResolvedValue({
+        channelId: '0xCH',
+        status: 'opening',
+        chain: 'evm:base:8453',
+      }),
     });
     const config = createSettlementConfig({
       channelOpenTimeout: 50,
@@ -151,10 +172,23 @@ describe('negotiateAndOpenChannel', () => {
   });
 
   it('polls getChannelState() until status is "open"', async () => {
-    const getChannelState = vi.fn()
-      .mockResolvedValueOnce({ channelId: '0xCH', status: 'opening', chain: 'evm:base:8453' })
-      .mockResolvedValueOnce({ channelId: '0xCH', status: 'opening', chain: 'evm:base:8453' })
-      .mockResolvedValueOnce({ channelId: '0xCH', status: 'open', chain: 'evm:base:8453' });
+    const getChannelState = vi
+      .fn()
+      .mockResolvedValueOnce({
+        channelId: '0xCH',
+        status: 'opening',
+        chain: 'evm:base:8453',
+      })
+      .mockResolvedValueOnce({
+        channelId: '0xCH',
+        status: 'opening',
+        chain: 'evm:base:8453',
+      })
+      .mockResolvedValueOnce({
+        channelId: '0xCH',
+        status: 'open',
+        chain: 'evm:base:8453',
+      });
 
     const channelClient = createMockChannelClient({ getChannelState });
     const config = createSettlementConfig({ pollInterval: 10 });
@@ -172,7 +206,9 @@ describe('negotiateAndOpenChannel', () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result).toEqual(expect.objectContaining({ channelId: '0xCHANNEL1' }));
+    expect(result).toEqual(
+      expect.objectContaining({ channelId: '0xCHANNEL1' })
+    );
     expect(getChannelState).toHaveBeenCalledTimes(3);
   });
 

@@ -18,13 +18,15 @@ function mockConnectorChannel(
     status: 'opening' | 'open' | 'closed' | 'settled';
     chain: string;
   },
-  getChannelStateError?: Error,
+  getChannelStateError?: Error
 ): ConnectorChannelLike {
   const openChannel = openChannelError
     ? vi.fn().mockRejectedValue(openChannelError)
-    : vi.fn().mockResolvedValue(
-        openChannelResult ?? { channelId: 'ch-001', status: 'opening' },
-      );
+    : vi
+        .fn()
+        .mockResolvedValue(
+          openChannelResult ?? { channelId: 'ch-001', status: 'opening' }
+        );
 
   const getChannelState = getChannelStateError
     ? vi.fn().mockRejectedValue(getChannelStateError)
@@ -33,7 +35,7 @@ function mockConnectorChannel(
           channelId: 'ch-001',
           status: 'open' as const,
           chain: 'evm:base:84532',
-        },
+        }
       );
 
   return { openChannel, getChannelState };
@@ -104,7 +106,7 @@ describe('createDirectChannelClient', () => {
     it('should wrap openChannel errors in BootstrapError', async () => {
       const connector = mockConnectorChannel(
         undefined,
-        new Error('Channel manager not initialized'),
+        new Error('Channel manager not initialized')
       );
       const client = createDirectChannelClient(connector);
 
@@ -113,7 +115,7 @@ describe('createDirectChannelClient', () => {
           peerId: 'peer1',
           chain: 'evm:base:84532',
           peerAddress: '0xabc',
-        }),
+        })
       ).rejects.toThrow(BootstrapError);
 
       await expect(
@@ -121,7 +123,7 @@ describe('createDirectChannelClient', () => {
           peerId: 'peer1',
           chain: 'evm:base:84532',
           peerAddress: '0xabc',
-        }),
+        })
       ).rejects.toThrow(/Failed to open channel for peer peer1/);
     });
 
@@ -144,7 +146,7 @@ describe('createDirectChannelClient', () => {
       expect(caughtError).toBe(originalError);
       expect(caughtError).toBeInstanceOf(BootstrapError);
       expect((caughtError as BootstrapError).message).toBe(
-        'Already a BootstrapError',
+        'Already a BootstrapError'
       );
     });
   });
@@ -184,16 +186,16 @@ describe('createDirectChannelClient', () => {
         undefined,
         undefined,
         undefined,
-        new Error('Channel not found'),
+        new Error('Channel not found')
       );
       const client = createDirectChannelClient(connector);
 
       await expect(client.getChannelState('ch-unknown')).rejects.toThrow(
-        BootstrapError,
+        BootstrapError
       );
 
       await expect(client.getChannelState('ch-unknown')).rejects.toThrow(
-        /Failed to get channel state for ch-unknown/,
+        /Failed to get channel state for ch-unknown/
       );
     });
 
@@ -203,7 +205,7 @@ describe('createDirectChannelClient', () => {
         undefined,
         undefined,
         undefined,
-        originalError,
+        originalError
       );
       const client = createDirectChannelClient(connector);
 
@@ -217,7 +219,7 @@ describe('createDirectChannelClient', () => {
       expect(caughtError).toBe(originalError);
       expect(caughtError).toBeInstanceOf(BootstrapError);
       expect((caughtError as BootstrapError).message).toBe(
-        'Already a BootstrapError',
+        'Already a BootstrapError'
       );
     });
   });

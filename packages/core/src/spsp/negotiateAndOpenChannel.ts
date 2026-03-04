@@ -9,7 +9,10 @@ import type {
   SettlementNegotiationConfig,
   SettlementNegotiationResult,
 } from '../types.js';
-import { negotiateSettlementChain, resolveTokenForChain } from './settlement.js';
+import {
+  negotiateSettlementChain,
+  resolveTokenForChain,
+} from './settlement.js';
 
 /**
  * Parameters for the shared negotiation function.
@@ -108,5 +111,7 @@ export async function negotiateAndOpenChannel(
   }
 
   // Timeout — throw so caller can decide how to handle
-  throw new Error(`Channel ${channelId} did not reach open status within ${timeout}ms`);
+  throw new Error(
+    `Channel ${channelId} did not reach open status within ${timeout}ms`
+  );
 }

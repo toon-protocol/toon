@@ -18,23 +18,15 @@
  * existing E2E pattern from packages/client/tests/e2e/.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { generateSecretKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
 
 // --- Imports from @crosstown/sdk (DOES NOT EXIST YET) ---
-import {
-  createNode,
-  type ServiceNode,
-  type NodeConfig,
-  type StartResult,
-} from '../index.js';
+import { createNode, type NodeConfig, type StartResult } from '../index.js';
 
 // --- Imports from @crosstown/core (exists) ---
-import type {
-  BootstrapEvent,
-  EmbeddableConnectorLike,
-} from '@crosstown/core';
+import type { BootstrapEvent, EmbeddableConnectorLike } from '@crosstown/core';
 import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
 import type { RegisterPeerParams } from '@crosstown/core';
 
@@ -49,10 +41,12 @@ const RELAY_URL = 'ws://localhost:7100';
 const CONNECTOR_URL = 'http://localhost:8080';
 const BLS_URL = 'http://localhost:3100';
 const ANVIL_RPC = 'http://localhost:8545';
-const GENESIS_PUBKEY = 'aa1857d0ff1fcb1aeb1907b3b98290f3ecb5545473c0b9296fb0b44481deb572';
+const GENESIS_PUBKEY =
+  'aa1857d0ff1fcb1aeb1907b3b98290f3ecb5545473c0b9296fb0b44481deb572';
 
 // Anvil Account #2 (for testing - has 10k ETH pre-funded)
-const TEST_ACCOUNT_PRIVATE_KEY = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';
+const TEST_ACCOUNT_PRIVATE_KEY =
+  '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';
 const TEST_ACCOUNT_ADDRESS = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
 
 // Deployed contract addresses (deterministic on Anvil)
@@ -70,7 +64,7 @@ class MockEmbeddedConnector implements EmbeddableConnectorLike {
     | ((req: { amount: string; destination: string; data: string }) => unknown)
     | null = null;
 
-  async sendPacket(params: SendPacketParams): Promise<SendPacketResult> {
+  async sendPacket(_params: SendPacketParams): Promise<SendPacketResult> {
     return { type: 'reject', code: 'F02', message: 'No route (mock)' };
   }
 
@@ -167,7 +161,8 @@ async function checkInfrastructure(): Promise<{
     // not available
   }
 
-  results.all = results.relay && results.connector && results.bls && results.anvil;
+  results.all =
+    results.relay && results.connector && results.bls && results.anvil;
   return results;
 }
 
@@ -190,7 +185,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
       console.warn(
         '[Network Discovery Tests] Skipping: Genesis node not fully available.',
         `relay=${infraAvailable.relay} connector=${infraAvailable.connector} ` +
-          `bls=${infraAvailable.bls} anvil=${infraAvailable.anvil}`,
+          `bls=${infraAvailable.bls} anvil=${infraAvailable.anvil}`
       );
       console.warn('Run: ./deploy-genesis-node.sh');
     }
@@ -432,7 +427,9 @@ describe('Network Discovery and Bootstrap Integration', () => {
 
     // Should have received peer-registered event
     const registeredEvent = peerEvents.find(
-      (e) => e.type === 'bootstrap:peer-registered' && e.peerPubkey === GENESIS_PUBKEY,
+      (e) =>
+        e.type === 'bootstrap:peer-registered' &&
+        e.peerPubkey === GENESIS_PUBKEY
     );
     expect(registeredEvent).toBeDefined();
 

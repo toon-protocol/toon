@@ -44,8 +44,10 @@ vi.mock('ws', () => ({
       close: vi.fn(),
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         if (event === 'open') capturedWs!.onOpen = handler as () => void;
-        if (event === 'message') capturedWs!.onMessage = handler as (data: Buffer) => void;
-        if (event === 'error') capturedWs!.onError = handler as (err: Error) => void;
+        if (event === 'message')
+          capturedWs!.onMessage = handler as (data: Buffer) => void;
+        if (event === 'error')
+          capturedWs!.onError = handler as (err: Error) => void;
         if (event === 'close') capturedWs!.onClose = handler as () => void;
       }),
     };
@@ -98,7 +100,7 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
 }
 
 function createMockAgentRuntime(
-  result: Partial<IlpSendResult> = {},
+  result: Partial<IlpSendResult> = {}
 ): AgentRuntimeClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
   return {
     sendIlpPacket: vi.fn().mockResolvedValue({
@@ -114,9 +116,14 @@ function createMockAgentRuntime(
  * Simulate the relay responding with a kind:10032 event for the peer.
  * Must be called after a WebSocket connection is established.
  */
-function simulateRelayResponse(peerInfo: IlpPeerInfo, pubkey = VALID_PEER_PUBKEY): void {
+function simulateRelayResponse(
+  peerInfo: IlpPeerInfo,
+  pubkey = VALID_PEER_PUBKEY
+): void {
   if (!capturedWs?.onOpen || !capturedWs?.onMessage) {
-    throw new Error('WebSocket handlers not captured — call after BootstrapService triggers connection');
+    throw new Error(
+      'WebSocket handlers not captured — call after BootstrapService triggers connection'
+    );
   }
 
   // Trigger WS open → service sends REQ
@@ -124,7 +131,7 @@ function simulateRelayResponse(peerInfo: IlpPeerInfo, pubkey = VALID_PEER_PUBKEY
 
   // Build a fake kind:10032 event with peer info in content
   const subId = JSON.parse(
-    (capturedWs.send.mock.calls[0]?.[0] as string) ?? '["REQ","unknown",{}]',
+    (capturedWs.send.mock.calls[0]?.[0] as string) ?? '["REQ","unknown",{}]'
   )[1] as string;
 
   const event = {
@@ -179,7 +186,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     expect(service.getPubkey()).toBe(pubkey);
@@ -190,7 +197,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     expect(service.getPhase()).toBe('discovering');
@@ -204,11 +211,11 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     await expect(
-      service.bootstrapWithPeer(createKnownPeer({ pubkey: 'AA'.repeat(32) })),
+      service.bootstrapWithPeer(createKnownPeer({ pubkey: 'AA'.repeat(32) }))
     ).rejects.toThrow(BootstrapError);
   });
 
@@ -216,11 +223,11 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     await expect(
-      service.bootstrapWithPeer(createKnownPeer({ pubkey: 'aa'.repeat(16) })),
+      service.bootstrapWithPeer(createKnownPeer({ pubkey: 'aa'.repeat(16) }))
     ).rejects.toThrow(BootstrapError);
   });
 
@@ -233,7 +240,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
 
@@ -247,7 +254,9 @@ describe('BootstrapService', () => {
     const result = await bootstrapPromise;
 
     // Verify result shape
-    expect(result.registeredPeerId).toBe(`nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`);
+    expect(result.registeredPeerId).toBe(
+      `nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`
+    );
     expect(result.peerInfo.ilpAddress).toBe('g.test.peer');
     expect(result.peerInfo.btpEndpoint).toBe('ws://peer:3000');
     expect(result.knownPeer).toBe(knownPeer);
@@ -259,7 +268,7 @@ describe('BootstrapService', () => {
         url: 'ws://peer:3000',
         authToken: '',
         routes: [{ prefix: 'g.test.peer' }],
-      }),
+      })
     );
   });
 
@@ -270,7 +279,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
 
@@ -291,7 +300,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     const results = await service.bootstrap();
@@ -308,7 +317,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [createKnownPeer()], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     service.on((event) => events.push(event));
@@ -319,7 +328,9 @@ describe('BootstrapService', () => {
 
     await bootstrapPromise;
 
-    const registered = events.find((e) => e.type === 'bootstrap:peer-registered');
+    const registered = events.find(
+      (e) => e.type === 'bootstrap:peer-registered'
+    );
     expect(registered).toEqual({
       type: 'bootstrap:peer-registered',
       peerId: `nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`,
@@ -333,7 +344,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [createKnownPeer()], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(createMockConnectorAdmin());
     service.on((event) => events.push(event));
@@ -359,7 +370,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [createKnownPeer()], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(createMockConnectorAdmin());
     service.on((event) => events.push(event));
@@ -385,7 +396,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
 
     service.on(listener);
@@ -406,7 +417,9 @@ describe('BootstrapService', () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockAgentRuntime();
 
-    const toonEncoder = vi.fn((_event: NostrEvent) => new Uint8Array([1, 2, 3]));
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
     const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
 
     const service = new BootstrapService(
@@ -418,7 +431,7 @@ describe('BootstrapService', () => {
         basePricePerByte: 10n,
       },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     service.setAgentRuntimeClient(runtime);
@@ -433,11 +446,13 @@ describe('BootstrapService', () => {
     expect(runtime.sendIlpPacket).toHaveBeenCalled();
 
     // Verify the SPSP call used the peer's ILP address as destination
-    const spspCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as {
-      destination: string;
-      amount: string;
-      data: string;
-    } | undefined;
+    const spspCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as
+      | {
+          destination: string;
+          amount: string;
+          data: string;
+        }
+      | undefined;
     expect(spspCall?.destination).toBe('g.test.peer');
 
     // Amount should be toonBytes.length * basePricePerByte
@@ -452,7 +467,7 @@ describe('BootstrapService', () => {
     const service = new BootstrapService(
       { knownPeers: [createKnownPeer()], ardriveEnabled: false },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     // No agentRuntimeClient set
@@ -475,7 +490,9 @@ describe('BootstrapService', () => {
       message: 'Insufficient amount',
     });
 
-    const toonEncoder = vi.fn((_event: NostrEvent) => new Uint8Array([1, 2, 3]));
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
     const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
 
     const events: BootstrapEvent[] = [];
@@ -487,7 +504,7 @@ describe('BootstrapService', () => {
         toonDecoder,
       },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     service.setAgentRuntimeClient(runtime);
@@ -501,7 +518,9 @@ describe('BootstrapService', () => {
 
     // Bootstrap still returns the result (handshake failure is non-fatal)
     expect(results).toHaveLength(1);
-    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(true);
+    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(
+      true
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -512,7 +531,9 @@ describe('BootstrapService', () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockAgentRuntime();
 
-    const toonEncoder = vi.fn((_event: NostrEvent) => new Uint8Array([1, 2, 3]));
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
     const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
 
     const events: BootstrapEvent[] = [];
@@ -525,7 +546,7 @@ describe('BootstrapService', () => {
         basePricePerByte: 10n,
       },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     service.setAgentRuntimeClient(runtime);
@@ -557,7 +578,9 @@ describe('BootstrapService', () => {
       .mockResolvedValueOnce({ accepted: true, fulfillment: 'f1' })
       .mockResolvedValueOnce({ accepted: false, code: 'F06', message: 'bad' });
 
-    const toonEncoder = vi.fn((_event: NostrEvent) => new Uint8Array([1, 2, 3]));
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
     const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
 
     const events: BootstrapEvent[] = [];
@@ -569,7 +592,7 @@ describe('BootstrapService', () => {
         toonDecoder,
       },
       secretKey,
-      ownIlpInfo,
+      ownIlpInfo
     );
     service.setConnectorAdmin(admin);
     service.setAgentRuntimeClient(runtime);
@@ -581,7 +604,9 @@ describe('BootstrapService', () => {
 
     await bootstrapPromise;
 
-    expect(events.some((e) => e.type === 'bootstrap:announce-failed')).toBe(true);
+    expect(events.some((e) => e.type === 'bootstrap:announce-failed')).toBe(
+      true
+    );
   });
 
   // ---------------------------------------------------------------------------

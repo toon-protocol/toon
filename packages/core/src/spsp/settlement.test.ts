@@ -3,7 +3,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { negotiateSettlementChain, resolveTokenForChain } from './settlement.js';
+import {
+  negotiateSettlementChain,
+  resolveTokenForChain,
+} from './settlement.js';
 
 describe('negotiateSettlementChain', () => {
   it('returns first matching chain when both peers support multiple chains', () => {
@@ -15,10 +18,7 @@ describe('negotiateSettlementChain', () => {
   });
 
   it('returns null when no chain intersection', () => {
-    const result = negotiateSettlementChain(
-      ['evm:base:8453'],
-      ['xrp:mainnet']
-    );
+    const result = negotiateSettlementChain(['evm:base:8453'], ['xrp:mainnet']);
     expect(result).toBeNull();
   });
 
@@ -86,11 +86,9 @@ describe('resolveTokenForChain', () => {
   });
 
   it("returns responder's preferred token when requester has none", () => {
-    const result = resolveTokenForChain(
-      'evm:base:8453',
-      undefined,
-      { 'evm:base:8453': '0xRESPONDER_TOKEN' }
-    );
+    const result = resolveTokenForChain('evm:base:8453', undefined, {
+      'evm:base:8453': '0xRESPONDER_TOKEN',
+    });
     expect(result).toBe('0xRESPONDER_TOKEN');
   });
 

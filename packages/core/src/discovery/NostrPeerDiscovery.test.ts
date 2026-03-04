@@ -254,7 +254,9 @@ describe('NostrPeerDiscovery', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(PeerDiscoveryError);
         expect((error as PeerDiscoveryError).cause).toBe(originalError);
-        expect((error as PeerDiscoveryError).code).toBe('PEER_DISCOVERY_FAILED');
+        expect((error as PeerDiscoveryError).code).toBe(
+          'PEER_DISCOVERY_FAILED'
+        );
       }
     });
 
@@ -269,7 +271,9 @@ describe('NostrPeerDiscovery', () => {
         expect.fail('Expected error to be thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(PeerDiscoveryError);
-        expect((error as PeerDiscoveryError).code).toBe('PEER_DISCOVERY_FAILED');
+        expect((error as PeerDiscoveryError).code).toBe(
+          'PEER_DISCOVERY_FAILED'
+        );
       }
     });
   });
@@ -321,11 +325,14 @@ describe('NostrPeerDiscovery', () => {
         await discovery.discoverPeers(userPubkey);
 
         // First call should be getFollows query with user's pubkey
-        expect(mockPool.querySync).toHaveBeenCalledWith(['wss://relay.example'], {
-          kinds: [3],
-          authors: [userPubkey],
-          limit: 1,
-        });
+        expect(mockPool.querySync).toHaveBeenCalledWith(
+          ['wss://relay.example'],
+          {
+            kinds: [3],
+            authors: [userPubkey],
+            limit: 1,
+          }
+        );
       });
 
       it('queries kind:10032 for all followed pubkeys', async () => {
@@ -602,7 +609,9 @@ describe('NostrPeerDiscovery', () => {
 
         const subscription = await discovery.subscribeToPeerUpdates(
           userPubkey,
-          () => { /* noop */ }
+          () => {
+            /* noop */
+          }
         );
 
         expect(subscription).toBeDefined();
@@ -618,10 +627,10 @@ describe('NostrPeerDiscovery', () => {
           createKind3Event([['p', 'b'.repeat(64)]]),
         ]);
 
-        const subscription: Subscription = await discovery.subscribeToPeerUpdates(
-          'a'.repeat(64),
-          () => { /* noop */ }
-        );
+        const subscription: Subscription =
+          await discovery.subscribeToPeerUpdates('a'.repeat(64), () => {
+            /* noop */
+          });
 
         expect(subscription.unsubscribe).toBeInstanceOf(Function);
       });
@@ -633,10 +642,14 @@ describe('NostrPeerDiscovery', () => {
         );
 
         await expect(
-          discovery.subscribeToPeerUpdates('invalid', () => { /* noop */ })
+          discovery.subscribeToPeerUpdates('invalid', () => {
+            /* noop */
+          })
         ).rejects.toThrow(PeerDiscoveryError);
         await expect(
-          discovery.subscribeToPeerUpdates('invalid', () => { /* noop */ })
+          discovery.subscribeToPeerUpdates('invalid', () => {
+            /* noop */
+          })
         ).rejects.toThrow('Invalid pubkey format');
       });
 
@@ -649,7 +662,9 @@ describe('NostrPeerDiscovery', () => {
 
         const subscription = await discovery.subscribeToPeerUpdates(
           'a'.repeat(64),
-          () => { /* noop */ }
+          () => {
+            /* noop */
+          }
         );
 
         expect(subscription).toBeDefined();
@@ -796,12 +811,24 @@ describe('NostrPeerDiscovery', () => {
 
         await discovery.subscribeToPeerUpdates('a'.repeat(64), callback);
 
-        capturedOnevent?.(createIlpPeerInfoEvent(peer1, { ilpAddress: 'g.peer1' }));
-        capturedOnevent?.(createIlpPeerInfoEvent(peer2, { ilpAddress: 'g.peer2' }));
+        capturedOnevent?.(
+          createIlpPeerInfoEvent(peer1, { ilpAddress: 'g.peer1' })
+        );
+        capturedOnevent?.(
+          createIlpPeerInfoEvent(peer2, { ilpAddress: 'g.peer2' })
+        );
 
         expect(callback).toHaveBeenCalledTimes(2);
-        expect(callback).toHaveBeenNthCalledWith(1, peer1, expect.objectContaining({ ilpAddress: 'g.peer1' }));
-        expect(callback).toHaveBeenNthCalledWith(2, peer2, expect.objectContaining({ ilpAddress: 'g.peer2' }));
+        expect(callback).toHaveBeenNthCalledWith(
+          1,
+          peer1,
+          expect.objectContaining({ ilpAddress: 'g.peer1' })
+        );
+        expect(callback).toHaveBeenNthCalledWith(
+          2,
+          peer2,
+          expect.objectContaining({ ilpAddress: 'g.peer2' })
+        );
       });
 
       it('empty follow list subscription never invokes callback', async () => {
@@ -871,7 +898,9 @@ describe('NostrPeerDiscovery', () => {
 
         const subscription = await discovery.subscribeToPeerUpdates(
           'a'.repeat(64),
-          () => { /* noop */ }
+          () => {
+            /* noop */
+          }
         );
 
         subscription.unsubscribe();
@@ -890,7 +919,9 @@ describe('NostrPeerDiscovery', () => {
 
         const subscription = await discovery.subscribeToPeerUpdates(
           'a'.repeat(64),
-          () => { /* noop */ }
+          () => {
+            /* noop */
+          }
         );
 
         subscription.unsubscribe();
@@ -909,7 +940,9 @@ describe('NostrPeerDiscovery', () => {
 
         const subscription = await discovery.subscribeToPeerUpdates(
           'a'.repeat(64),
-          () => { /* noop */ }
+          () => {
+            /* noop */
+          }
         );
 
         // Should not throw

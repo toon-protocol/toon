@@ -11,7 +11,10 @@ export function getTag(event: NostrEvent, tagName: string): string | undefined {
  * Helper to get all tag values by name
  */
 export function getTags(event: NostrEvent, tagName: string): string[] {
-  return event.tags.filter((t) => t[0] === tagName).map((t) => t[1]).filter((v): v is string => v !== undefined);
+  return event.tags
+    .filter((t) => t[0] === tagName)
+    .map((t) => t[1])
+    .filter((v): v is string => v !== undefined);
 }
 
 /**
@@ -19,7 +22,7 @@ export function getTags(event: NostrEvent, tagName: string): string[] {
  */
 export interface RepositoryAnnouncement extends NostrEvent {
   kind: 30617;
-  tags: Array<
+  tags: (
     | ['d', string] // repository identifier
     | ['name', string] // human-readable name
     | ['description', string] // repository description
@@ -27,8 +30,8 @@ export interface RepositoryAnnouncement extends NostrEvent {
     | ['clone', string] // clone URL
     | ['relays', ...string[]] // preferred relays
     | ['r', string, 'euc'] // earliest unique commit
-    | ['maintainers', ...string[]] // maintainer pubkeys
-  >;
+    | ['maintainers', ...string[]]
+  )[];
 }
 
 /**
@@ -37,7 +40,7 @@ export interface RepositoryAnnouncement extends NostrEvent {
 export interface PatchEvent extends NostrEvent {
   kind: 1617;
   content: string; // git format-patch output
-  tags: Array<
+  tags: (
     | ['a', string] // repository reference (30617:pubkey:repo-id)
     | ['r', string] // earliest unique commit
     | ['p', string] // repository owner pubkey
@@ -45,8 +48,8 @@ export interface PatchEvent extends NostrEvent {
     | ['parent-commit', string] // parent commit SHA
     | ['commit-pgp-sig', string] // optional PGP signature
     | ['committer', string] // optional committer info
-    | ['t', 'root' | 'reply'] // thread type
-  >;
+    | ['t', 'root' | 'reply']
+  )[];
 }
 
 /**
@@ -54,7 +57,7 @@ export interface PatchEvent extends NostrEvent {
  */
 export interface PullRequestEvent extends NostrEvent {
   kind: 1618;
-  tags: Array<
+  tags: (
     | ['a', string] // repository reference (30617:pubkey:repo-id)
     | ['r', string] // earliest unique commit
     | ['p', string] // repository owner pubkey
@@ -62,8 +65,8 @@ export interface PullRequestEvent extends NostrEvent {
     | ['c', string] // commit tip SHA
     | ['merge-base', string] // merge base commit
     | ['subject', string] // PR title
-    | ['t', 'root' | 'reply'] // thread type
-  >;
+    | ['t', 'root' | 'reply']
+  )[];
 }
 
 /**
@@ -72,12 +75,12 @@ export interface PullRequestEvent extends NostrEvent {
 export interface IssueEvent extends NostrEvent {
   kind: 1621;
   content: string; // Markdown issue body
-  tags: Array<
+  tags: (
     | ['a', string] // repository reference (30617:pubkey:repo-id)
     | ['p', string] // repository owner pubkey
     | ['subject', string] // issue title
-    | ['t', string] // labels
-  >;
+    | ['t', string]
+  )[];
 }
 
 /**
@@ -85,10 +88,10 @@ export interface IssueEvent extends NostrEvent {
  */
 export interface StatusEvent extends NostrEvent {
   kind: 1630 | 1631 | 1632 | 1633; // open, applied, closed, draft
-  tags: Array<
+  tags: (
     | ['e', string] // event being updated (patch, PR, issue)
-    | ['p', string] // pubkey
-  >;
+    | ['p', string]
+  )[];
 }
 
 /**

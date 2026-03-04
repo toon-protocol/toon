@@ -5,7 +5,11 @@
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
-import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import {
+  ILP_PEER_INFO_KIND,
+  SPSP_REQUEST_KIND,
+  SPSP_RESPONSE_KIND,
+} from '../constants.js';
 import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 import { stringifyWithBigInt } from '../utils/json.js';
 
@@ -81,7 +85,10 @@ export function buildSpspRequestEvent(
 
   // Encrypt payload using NIP-44 (use stringifyWithBigInt to handle BigInt in claims)
   const conversationKey = nip44.getConversationKey(secretKey, recipientPubkey);
-  const encryptedContent = nip44.encrypt(stringifyWithBigInt(payload), conversationKey);
+  const encryptedContent = nip44.encrypt(
+    stringifyWithBigInt(payload),
+    conversationKey
+  );
 
   const event = finalizeEvent(
     {
@@ -113,7 +120,10 @@ export function buildSpspResponseEvent(
 ): NostrEvent {
   // Encrypt payload using NIP-44 for the original sender (use stringifyWithBigInt to handle BigInt)
   const conversationKey = nip44.getConversationKey(secretKey, senderPubkey);
-  const encryptedContent = nip44.encrypt(stringifyWithBigInt(response), conversationKey);
+  const encryptedContent = nip44.encrypt(
+    stringifyWithBigInt(response),
+    conversationKey
+  );
 
   const tags: string[][] = [['p', senderPubkey]];
   if (requestEventId) {

@@ -7,7 +7,9 @@ import type { HandlerContext } from './handler-context.js';
 /**
  * Factory for creating a minimal mock HandlerContext.
  */
-function createMockContext(overrides: Partial<HandlerContext> = {}): HandlerContext {
+function createMockContext(
+  overrides: Partial<HandlerContext> = {}
+): HandlerContext {
   return {
     toon: 'mock-toon-string',
     kind: 1,
@@ -24,7 +26,9 @@ function createMockContext(overrides: Partial<HandlerContext> = {}): HandlerCont
       sig: 'c'.repeat(128),
     }),
     accept: vi.fn().mockReturnValue({ accept: true, fulfillment: 'mock' }),
-    reject: vi.fn().mockReturnValue({ accept: false, code: 'F00', message: 'rejected' }),
+    reject: vi
+      .fn()
+      .mockReturnValue({ accept: false, code: 'F00', message: 'rejected' }),
     ...overrides,
   } as HandlerContext;
 }
@@ -38,7 +42,9 @@ describe('HandlerRegistry', () => {
 
   it.skip('[P0] .on(kind, handler) dispatches to the correct handler for that kind', async () => {
     // Arrange
-    const handler = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'f' });
+    const handler = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'f' });
     registry.on(30617, handler);
     const ctx = createMockContext({ kind: 30617 });
 
@@ -52,8 +58,12 @@ describe('HandlerRegistry', () => {
 
   it.skip('[P0] multiple kind registrations each dispatch to their own handler', async () => {
     // Arrange
-    const handler1 = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'f1' });
-    const handler2 = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'f2' });
+    const handler1 = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'f1' });
+    const handler2 = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'f2' });
     registry.on(1, handler1);
     registry.on(30617, handler2);
     const ctx1 = createMockContext({ kind: 1 });
@@ -72,7 +82,9 @@ describe('HandlerRegistry', () => {
 
   it.skip('[P0] .onDefault() fallback is invoked for an unknown kind', async () => {
     // Arrange
-    const defaultHandler = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'df' });
+    const defaultHandler = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'df' });
     registry.onDefault(defaultHandler);
     const ctx = createMockContext({ kind: 99999 });
 
@@ -102,8 +114,12 @@ describe('HandlerRegistry', () => {
 
   it.skip('[P1] duplicate .on() for the same kind replaces the previous handler', async () => {
     // Arrange
-    const originalHandler = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'old' });
-    const replacementHandler = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'new' });
+    const originalHandler = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'old' });
+    const replacementHandler = vi
+      .fn()
+      .mockResolvedValue({ accept: true, fulfillment: 'new' });
     registry.on(1, originalHandler);
     registry.on(1, replacementHandler);
     const ctx = createMockContext({ kind: 1 });

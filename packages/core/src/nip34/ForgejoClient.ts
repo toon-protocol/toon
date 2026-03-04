@@ -122,9 +122,7 @@ export class ForgejoClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Forgejo API error (${response.status}): ${errorText}`
-      );
+      throw new Error(`Forgejo API error (${response.status}): ${errorText}`);
     }
 
     return response.json() as Promise<T>;
@@ -186,14 +184,8 @@ export class ForgejoClient {
   /**
    * Get repository information
    */
-  async getRepository(
-    owner: string,
-    repo: string
-  ): Promise<ForgejoRepository> {
-    return this.request<ForgejoRepository>(
-      'GET',
-      `/repos/${owner}/${repo}`
-    );
+  async getRepository(owner: string, repo: string): Promise<ForgejoRepository> {
+    return this.request<ForgejoRepository>('GET', `/repos/${owner}/${repo}`);
   }
 
   /**
@@ -254,7 +246,7 @@ export class ForgejoClient {
     owner: string,
     repo: string,
     branchName: string,
-    fromBranch: string = 'main'
+    fromBranch = 'main'
   ): Promise<void> {
     // Create the new branch from the source branch
     // Forgejo API: POST /repos/{owner}/{repo}/branches

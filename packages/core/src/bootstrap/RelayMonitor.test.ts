@@ -23,11 +23,17 @@ let capturedOnevent: ((event: NostrEvent) => void) | null = null;
 // Mock SimplePool
 vi.mock('nostr-tools/pool', () => ({
   SimplePool: vi.fn(() => ({
-    subscribeMany: vi.fn((_relays: string[], _filters: unknown[], opts: { onevent: (event: NostrEvent) => void }) => {
-      capturedOnevent = opts.onevent;
-      const closer = { close: vi.fn() };
-      return closer;
-    }),
+    subscribeMany: vi.fn(
+      (
+        _relays: string[],
+        _filters: unknown[],
+        opts: { onevent: (event: NostrEvent) => void }
+      ) => {
+        capturedOnevent = opts.onevent;
+        const closer = { close: vi.fn() };
+        return closer;
+      }
+    ),
   })),
 }));
 
@@ -71,15 +77,13 @@ describe('RelayMonitor', () => {
   let mockSpspRequestSpspInfo: Mock;
 
   function createMonitor(basePricePerByte?: bigint): RelayMonitor {
-    return new RelayMonitor(
-      {
-        relayUrl: 'ws://localhost:7100',
-        secretKey,
-        toonEncoder: mockToonEncoder,
-        toonDecoder: mockToonDecoder,
-        basePricePerByte,
-      }
-    );
+    return new RelayMonitor({
+      relayUrl: 'ws://localhost:7100',
+      secretKey,
+      toonEncoder: mockToonEncoder,
+      toonDecoder: mockToonDecoder,
+      basePricePerByte,
+    });
   }
 
   /** Create a monitor with admin + runtime wired up (ready for peerWith). */
@@ -131,7 +135,9 @@ describe('RelayMonitor', () => {
     mockToonEncoder = vi.fn<[NostrEvent], Uint8Array>((_event) =>
       new TextEncoder().encode('encoded-toon-data')
     );
-    mockToonDecoder = vi.fn<[Uint8Array], NostrEvent>((_bytes) => ({}) as NostrEvent);
+    mockToonDecoder = vi.fn<[Uint8Array], NostrEvent>(
+      (_bytes) => ({}) as NostrEvent
+    );
 
     // Reset mock IlpSpspClient so requestSpspInfo is fresh
     mockSpspRequestSpspInfo = vi.fn().mockResolvedValue({
@@ -237,8 +243,12 @@ describe('RelayMonitor', () => {
     const monitor = createWiredMonitor();
     monitor.start();
 
-    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow(BootstrapError);
-    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow('not discovered yet');
+    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow(
+      BootstrapError
+    );
+    await expect(monitor.peerWith('c'.repeat(64))).rejects.toThrow(
+      'not discovered yet'
+    );
   });
 
   it('peerWith() throws if connectorAdmin not set', async () => {
@@ -249,7 +259,9 @@ describe('RelayMonitor', () => {
     fireEvent(makeValidEvent());
 
     await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(BootstrapError);
-    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow('connectorAdmin must be set');
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(
+      'connectorAdmin must be set'
+    );
   });
 
   it('peerWith() throws if agentRuntimeClient not set', async () => {
@@ -260,7 +272,9 @@ describe('RelayMonitor', () => {
     fireEvent(makeValidEvent());
 
     await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(BootstrapError);
-    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow('agentRuntimeClient must be set');
+    await expect(monitor.peerWith(peerPubkey)).rejects.toThrow(
+      'agentRuntimeClient must be set'
+    );
   });
 
   // --- peerWith() idempotency ---
@@ -361,7 +375,9 @@ describe('RelayMonitor', () => {
     fireEvent(makeValidEvent());
     await monitor.peerWith(peerPubkey);
 
-    const registered = events.find((e) => e.type === 'bootstrap:peer-registered');
+    const registered = events.find(
+      (e) => e.type === 'bootstrap:peer-registered'
+    );
     expect(registered).toEqual({
       type: 'bootstrap:peer-registered',
       peerId: `nostr-${peerPubkey.slice(0, 16)}`,
@@ -415,12 +431,18 @@ describe('RelayMonitor', () => {
 
     // Wait for async removePeer
     await vi.waitFor(() => {
-      expect(events.some((e) => e.type === 'bootstrap:peer-deregistered')).toBe(true);
+      expect(events.some((e) => e.type === 'bootstrap:peer-deregistered')).toBe(
+        true
+      );
     });
 
-    expect(mockAdmin.removePeer).toHaveBeenCalledWith(`nostr-${peerPubkey.slice(0, 16)}`);
+    expect(mockAdmin.removePeer).toHaveBeenCalledWith(
+      `nostr-${peerPubkey.slice(0, 16)}`
+    );
 
-    const deregistered = events.find((e) => e.type === 'bootstrap:peer-deregistered');
+    const deregistered = events.find(
+      (e) => e.type === 'bootstrap:peer-deregistered'
+    );
     expect(deregistered).toEqual({
       type: 'bootstrap:peer-deregistered',
       peerId: `nostr-${peerPubkey.slice(0, 16)}`,
@@ -441,11 +463,15 @@ describe('RelayMonitor', () => {
     // Send empty content
     fireEvent(makeEvent(peerPubkey, '', 1001));
 
-    const deregistered = events.filter((e) => e.type === 'bootstrap:peer-deregistered');
+    const deregistered = events.filter(
+      (e) => e.type === 'bootstrap:peer-deregistered'
+    );
     expect(deregistered).toHaveLength(0);
 
     // Peer should be removed from discoveredPeers
-    expect(monitor.getDiscoveredPeers().find((p) => p.pubkey === peerPubkey)).toBeUndefined();
+    expect(
+      monitor.getDiscoveredPeers().find((p) => p.pubkey === peerPubkey)
+    ).toBeUndefined();
   });
 
   // --- Stale events ---
@@ -463,7 +489,9 @@ describe('RelayMonitor', () => {
     fireEvent(makeValidEvent(peerPubkey, 1000));
 
     // Only one discovery event
-    const discoveries = events.filter((e) => e.type === 'bootstrap:peer-discovered');
+    const discoveries = events.filter(
+      (e) => e.type === 'bootstrap:peer-discovered'
+    );
     expect(discoveries).toHaveLength(1);
   });
 
@@ -481,15 +509,21 @@ describe('RelayMonitor', () => {
     await monitor.peerWith(peerPubkey);
 
     // Peer was still registered
-    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(true);
+    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      true
+    );
     // Handshake failure emitted
-    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(true);
+    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(
+      true
+    );
 
     // Can still peer with a different peer (monitoring continues)
     fireEvent(makeValidEvent(peerPubkey2, 1000));
     await monitor.peerWith(peerPubkey2);
 
-    const registered = events.filter((e) => e.type === 'bootstrap:peer-registered');
+    const registered = events.filter(
+      (e) => e.type === 'bootstrap:peer-registered'
+    );
     expect(registered).toHaveLength(2);
   });
 

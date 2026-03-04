@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { SocialPeerDiscovery, type SocialDiscoveryEvent } from './SocialPeerDiscovery.js';
+import {
+  SocialPeerDiscovery,
+  type SocialDiscoveryEvent,
+} from './SocialPeerDiscovery.js';
 import { PeerDiscoveryError } from '../errors.js';
 import type { SimplePool } from 'nostr-tools/pool';
 import type { VerifiedEvent } from 'nostr-tools/pure';
@@ -14,7 +17,10 @@ const PEER1_PUBKEY = 'b'.repeat(64);
 const PEER2_PUBKEY = 'c'.repeat(64);
 const PEER3_PUBKEY = 'd'.repeat(64);
 
-function createKind3Event(tags: string[][], created_at = 1234567890): VerifiedEvent {
+function createKind3Event(
+  tags: string[][],
+  created_at = 1234567890
+): VerifiedEvent {
   return {
     id: `kind3-${Date.now()}`,
     pubkey: TEST_PUBKEY,
@@ -40,7 +46,9 @@ describe('SocialPeerDiscovery', () => {
       }),
     } as unknown as SimplePool;
     capturedOnevent = undefined;
-    vi.spyOn(console, 'warn').mockImplementation(() => { /* noop */ });
+    vi.spyOn(console, 'warn').mockImplementation(() => {
+      /* noop */
+    });
   });
 
   afterEach(() => {
@@ -114,10 +122,12 @@ describe('SocialPeerDiscovery', () => {
       discovery.on((e) => events.push(e));
       discovery.start();
 
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-        ['p', PEER2_PUBKEY],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['p', PEER1_PUBKEY],
+          ['p', PEER2_PUBKEY],
+        ])
+      );
 
       expect(events).toEqual([
         { type: 'social:follow-discovered', pubkey: PEER1_PUBKEY },
@@ -136,15 +146,15 @@ describe('SocialPeerDiscovery', () => {
       discovery.start();
 
       // First update: follow PEER1 and PEER2
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-        ['p', PEER2_PUBKEY],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['p', PEER1_PUBKEY],
+          ['p', PEER2_PUBKEY],
+        ])
+      );
 
       // Second update: only PEER1 remains
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-      ]));
+      capturedOnevent?.(createKind3Event([['p', PEER1_PUBKEY]]));
 
       expect(events).toEqual([
         { type: 'social:follow-discovered', pubkey: PEER1_PUBKEY },
@@ -209,16 +219,20 @@ describe('SocialPeerDiscovery', () => {
       discovery.start();
 
       // Follow PEER1 and PEER2
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-        ['p', PEER2_PUBKEY],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['p', PEER1_PUBKEY],
+          ['p', PEER2_PUBKEY],
+        ])
+      );
 
       // Replace PEER2 with PEER3
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-        ['p', PEER3_PUBKEY],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['p', PEER1_PUBKEY],
+          ['p', PEER3_PUBKEY],
+        ])
+      );
 
       expect(events).toEqual([
         { type: 'social:follow-discovered', pubkey: PEER1_PUBKEY },
@@ -238,11 +252,13 @@ describe('SocialPeerDiscovery', () => {
       discovery.on((e) => events.push(e));
       discovery.start();
 
-      capturedOnevent?.(createKind3Event([
-        ['e', 'some-event-id'],
-        ['p', PEER1_PUBKEY],
-        ['t', 'some-tag'],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['e', 'some-event-id'],
+          ['p', PEER1_PUBKEY],
+          ['t', 'some-tag'],
+        ])
+      );
 
       expect(events).toEqual([
         { type: 'social:follow-discovered', pubkey: PEER1_PUBKEY },
@@ -285,10 +301,12 @@ describe('SocialPeerDiscovery', () => {
 
       discovery.off(listener);
 
-      capturedOnevent?.(createKind3Event([
-        ['p', PEER1_PUBKEY],
-        ['p', PEER2_PUBKEY],
-      ]));
+      capturedOnevent?.(
+        createKind3Event([
+          ['p', PEER1_PUBKEY],
+          ['p', PEER2_PUBKEY],
+        ])
+      );
 
       // No new events after off()
       expect(events).toHaveLength(1);
@@ -315,7 +333,9 @@ describe('SocialPeerDiscovery', () => {
       );
       const events: SocialDiscoveryEvent[] = [];
 
-      discovery.on(() => { throw new Error('bad listener'); });
+      discovery.on(() => {
+        throw new Error('bad listener');
+      });
       discovery.on((e) => events.push(e));
       discovery.start();
 

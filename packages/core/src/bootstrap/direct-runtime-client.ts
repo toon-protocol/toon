@@ -79,7 +79,7 @@ export interface DirectRuntimeClientConfig {
  */
 export function createDirectRuntimeClient(
   connector: ConnectorNodeLike,
-  config?: DirectRuntimeClientConfig,
+  config?: DirectRuntimeClientConfig
 ): AgentRuntimeClient {
   return {
     async sendIlpPacket(params: {
@@ -99,9 +99,7 @@ export function createDirectRuntimeClient(
         let executionCondition: Uint8Array | undefined;
         if (config?.toonDecoder) {
           const decoded = config.toonDecoder(data);
-          const fulfillment = createHash('sha256')
-            .update(decoded.id)
-            .digest();
+          const fulfillment = createHash('sha256').update(decoded.id).digest();
           executionCondition = createHash('sha256')
             .update(fulfillment)
             .digest();
@@ -141,7 +139,7 @@ export function createDirectRuntimeClient(
         }
         throw new BootstrapError(
           `Direct ILP packet send failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          error instanceof Error ? error : undefined,
+          error instanceof Error ? error : undefined
         );
       }
     },

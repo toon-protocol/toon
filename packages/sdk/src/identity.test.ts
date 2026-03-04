@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  generateMnemonic,
-  fromMnemonic,
-  fromSecretKey,
-} from './identity.js';
+import { generateMnemonic, fromMnemonic, fromSecretKey } from './identity.js';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { getPublicKey } from 'nostr-tools/pure';
@@ -55,7 +51,7 @@ describe('Identity', () => {
   });
 
   describe('fromMnemonic()', () => {
-    it.skip('[P0] should derive secretKey at NIP-06 path m/44\'/1237\'/0\'/0/0 matching known test vector', () => {
+    it.skip("[P0] should derive secretKey at NIP-06 path m/44'/1237'/0'/0/0 matching known test vector", () => {
       // Arrange
       const mnemonic = TEST_MNEMONIC;
 

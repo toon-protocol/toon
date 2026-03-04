@@ -25,7 +25,10 @@ export { BootstrapService, BootstrapError } from './BootstrapService.js';
 export { RelayMonitor } from './RelayMonitor.js';
 
 // Agent-runtime client factories
-export { createHttpRuntimeClient, createAgentRuntimeClient } from './agent-runtime-client.js';
+export {
+  createHttpRuntimeClient,
+  createAgentRuntimeClient,
+} from './agent-runtime-client.js';
 export { createDirectRuntimeClient } from './direct-runtime-client.js';
 export type {
   ConnectorNodeLike,
@@ -43,9 +46,7 @@ export type {
 
 // Connector channel client factories
 export { createDirectChannelClient } from './direct-channel-client.js';
-export type {
-  ConnectorChannelLike,
-} from './direct-channel-client.js';
+export type { ConnectorChannelLike } from './direct-channel-client.js';
 
 // HTTP-based connector clients (for deployed connectors)
 export { createHttpConnectorAdmin } from './http-connector-admin.js';
@@ -53,4 +54,7 @@ export { createHttpRuntimeClient as createHttpRuntimeClientV2 } from './http-run
 export { createHttpChannelClient } from './http-channel-client.js';
 
 // Direct BLS client (for bootstrap only - bypasses connector routing)
-export { createDirectBlsClient, type DirectBlsClientConfig } from './direct-bls-client.js';
+export {
+  createDirectBlsClient,
+  type DirectBlsClientConfig,
+} from './direct-bls-client.js';

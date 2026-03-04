@@ -185,4 +185,3 @@ export interface SettlementNegotiationResult {
   /** Challenge period in seconds */
   settlementTimeout?: number;
 }
-

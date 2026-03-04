@@ -98,6 +98,7 @@ const bls = new BusinessLogicServer(
 ### Repository Announcement (kind 30617)
 
 **Nostr Event:**
+
 ```json
 {
   "kind": 30617,
@@ -110,11 +111,13 @@ const bls = new BusinessLogicServer(
 ```
 
 **Git Operation:**
+
 - Creates repository: `http://forgejo:3003/crosstown/my-repo`
 
 ### Patch Submission (kind 1617)
 
 **Nostr Event:**
+
 ```json
 {
   "kind": 1617,
@@ -128,6 +131,7 @@ const bls = new BusinessLogicServer(
 ```
 
 **Git Operation:**
+
 1. Clone repository
 2. Apply patch via `git am`
 3. Push to new branch `nostr-patch-<event-id>`
@@ -136,6 +140,7 @@ const bls = new BusinessLogicServer(
 ### Pull Request (kind 1618)
 
 **Nostr Event:**
+
 ```json
 {
   "kind": 1618,
@@ -149,6 +154,7 @@ const bls = new BusinessLogicServer(
 ```
 
 **Git Operation:**
+
 1. Clone main repository
 2. Add contributor's repository as remote
 3. Fetch contributor's commit
@@ -157,6 +163,7 @@ const bls = new BusinessLogicServer(
 ### Issue Creation (kind 1621)
 
 **Nostr Event:**
+
 ```json
 {
   "kind": 1621,
@@ -169,6 +176,7 @@ const bls = new BusinessLogicServer(
 ```
 
 **Git Operation:**
+
 - Creates issue in Forgejo with markdown body
 
 ## API Reference
@@ -185,11 +193,12 @@ class NIP34Handler {
 ```
 
 **Config:**
+
 ```typescript
 interface NIP34Config {
-  forgejoUrl: string;        // e.g., "http://forgejo:3000"
-  forgejoToken: string;       // API token
-  defaultOwner: string;       // Default org/user
+  forgejoUrl: string; // e.g., "http://forgejo:3000"
+  forgejoToken: string; // API token
+  defaultOwner: string; // Default org/user
   gitConfig?: {
     userName?: string;
     userEmail?: string;
@@ -200,6 +209,7 @@ interface NIP34Config {
 ```
 
 **Result:**
+
 ```typescript
 interface HandleEventResult {
   success: boolean;
@@ -220,8 +230,12 @@ Low-level Forgejo API client.
 
 ```typescript
 class ForgejoClient {
-  async createRepository(options: CreateRepositoryOptions): Promise<ForgejoRepository>;
-  async createPullRequest(options: CreatePullRequestOptions): Promise<ForgejoPullRequest>;
+  async createRepository(
+    options: CreateRepositoryOptions
+  ): Promise<ForgejoRepository>;
+  async createPullRequest(
+    options: CreatePullRequestOptions
+  ): Promise<ForgejoPullRequest>;
   async createIssue(options: CreateIssueOptions): Promise<ForgejoIssue>;
   async repositoryExists(owner: string, repo: string): Promise<boolean>;
 }
@@ -258,6 +272,7 @@ This is necessary because Forgejo (like Gitea) doesn't expose a Git Database API
 ## Event Flow Example
 
 1. **User creates repository:**
+
    ```bash
    # User publishes NIP-34 event (kind 30617) with ILP payment
    # Crosstown validates payment and stores event
@@ -265,6 +280,7 @@ This is necessary because Forgejo (like Gitea) doesn't expose a Git Database API
    ```
 
 2. **User submits patch:**
+
    ```bash
    git format-patch HEAD~1 > patch.diff
    # User publishes NIP-34 event (kind 1617) with patch content

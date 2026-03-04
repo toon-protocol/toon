@@ -6,14 +6,20 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createHttpRuntimeClient, createAgentRuntimeClient } from './agent-runtime-client.js';
+import {
+  createHttpRuntimeClient,
+  createAgentRuntimeClient,
+} from './agent-runtime-client.js';
 import { BootstrapError } from './BootstrapService.js';
 
 // ============================================================================
 // Factories
 // ============================================================================
 
-function createFetchResponse(body: Record<string, unknown>, status = 200): Response {
+function createFetchResponse(
+  body: Record<string, unknown>,
+  status = 200
+): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -51,9 +57,11 @@ describe('createHttpRuntimeClient', () => {
 
   describe('sendIlpPacket', () => {
     it('should POST to /admin/ilp/send with correct body', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        createFetchResponse({ accepted: true, fulfillment: 'abc123' }),
-      );
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValue(
+          createFetchResponse({ accepted: true, fulfillment: 'abc123' })
+        );
       vi.stubGlobal('fetch', mockFetch);
 
       const client = createHttpRuntimeClient('http://localhost:3000');
@@ -73,14 +81,21 @@ describe('createHttpRuntimeClient', () => {
             amount: '1000',
             data: 'AQID',
           }),
-        }),
+        })
       );
     });
 
     it('should return accepted result on FULFILL', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        createFetchResponse({ accepted: true, fulfillment: 'abc123', data: 'AQID' }),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          createFetchResponse({
+            accepted: true,
+            fulfillment: 'abc123',
+            data: 'AQID',
+          })
+        )
+      );
 
       const client = createHttpRuntimeClient('http://localhost:3000');
       const result = await client.sendIlpPacket({
@@ -95,9 +110,16 @@ describe('createHttpRuntimeClient', () => {
     });
 
     it('should return REJECT result with code and message', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        createFetchResponse({ accepted: false, code: 'F04', message: 'Insufficient amount' }),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          createFetchResponse({
+            accepted: false,
+            code: 'F04',
+            message: 'Insufficient amount',
+          })
+        )
+      );
 
       const client = createHttpRuntimeClient('http://localhost:3000');
       const result = await client.sendIlpPacket({
@@ -112,74 +134,98 @@ describe('createHttpRuntimeClient', () => {
     });
 
     it('should throw BootstrapError on HTTP error (500)', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-        createFetchResponse({}, 500),
-      ));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(createFetchResponse({}, 500))
+      );
 
       const client = createHttpRuntimeClient('http://localhost:3000');
       await expect(
-        client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' }),
+        client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' })
       ).rejects.toThrow(BootstrapError);
     });
 
     it('should throw BootstrapError on network error', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
+      );
 
       const client = createHttpRuntimeClient('http://localhost:3000');
       await expect(
-        client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' }),
+        client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' })
       ).rejects.toThrow(BootstrapError);
     });
 
     // Field name normalization: agent-runtime may return `fulfilled` or `accepted`
     describe('field name compatibility', () => {
       it('should normalize { fulfilled: true } to accepted === true', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-          createFetchResponse({ fulfilled: true, fulfillment: 'abc' }),
-        ));
+        vi.stubGlobal(
+          'fetch',
+          vi
+            .fn()
+            .mockResolvedValue(
+              createFetchResponse({ fulfilled: true, fulfillment: 'abc' })
+            )
+        );
 
         const client = createHttpRuntimeClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
-          destination: 'g.test', amount: '0', data: '',
+          destination: 'g.test',
+          amount: '0',
+          data: '',
         });
 
         expect(result.accepted).toBe(true);
       });
 
       it('should normalize { fulfilled: false } to accepted === false', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-          createFetchResponse({ fulfilled: false }),
-        ));
+        vi.stubGlobal(
+          'fetch',
+          vi.fn().mockResolvedValue(createFetchResponse({ fulfilled: false }))
+        );
 
         const client = createHttpRuntimeClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
-          destination: 'g.test', amount: '0', data: '',
+          destination: 'g.test',
+          amount: '0',
+          data: '',
         });
 
         expect(result.accepted).toBe(false);
       });
 
       it('should default to accepted === false when neither field present', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-          createFetchResponse({}),
-        ));
+        vi.stubGlobal(
+          'fetch',
+          vi.fn().mockResolvedValue(createFetchResponse({}))
+        );
 
         const client = createHttpRuntimeClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
-          destination: 'g.test', amount: '0', data: '',
+          destination: 'g.test',
+          amount: '0',
+          data: '',
         });
 
         expect(result.accepted).toBe(false);
       });
 
       it('should prefer accepted over fulfilled when both present', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-          createFetchResponse({ accepted: true, fulfilled: false }),
-        ));
+        vi.stubGlobal(
+          'fetch',
+          vi
+            .fn()
+            .mockResolvedValue(
+              createFetchResponse({ accepted: true, fulfilled: false })
+            )
+        );
 
         const client = createHttpRuntimeClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
-          destination: 'g.test', amount: '0', data: '',
+          destination: 'g.test',
+          amount: '0',
+          data: '',
         });
 
         expect(result.accepted).toBe(true);
@@ -187,9 +233,9 @@ describe('createHttpRuntimeClient', () => {
     });
 
     it('should include timeout in request body when provided', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        createFetchResponse({ accepted: true }),
-      );
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValue(createFetchResponse({ accepted: true }));
       vi.stubGlobal('fetch', mockFetch);
 
       const client = createHttpRuntimeClient('http://localhost:3000');
@@ -205,9 +251,9 @@ describe('createHttpRuntimeClient', () => {
     });
 
     it('should strip trailing slash from baseUrl', async () => {
-      const mockFetch = vi.fn().mockResolvedValue(
-        createFetchResponse({ accepted: true }),
-      );
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValue(createFetchResponse({ accepted: true }));
       vi.stubGlobal('fetch', mockFetch);
 
       const client = createHttpRuntimeClient('http://localhost:3000/');
@@ -219,7 +265,7 @@ describe('createHttpRuntimeClient', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/admin/ilp/send',
-        expect.any(Object),
+        expect.any(Object)
       );
     });
   });

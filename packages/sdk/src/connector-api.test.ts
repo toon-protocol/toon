@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createNode, type NodeConfig } from './index.js';
 
 // ATDD Red Phase - tests will fail until implementation exists
@@ -8,7 +8,9 @@ import { createNode, type NodeConfig } from './index.js';
  */
 function createMockConnector(overrides: Record<string, unknown> = {}) {
   return {
-    sendPacket: vi.fn().mockResolvedValue({ type: 'fulfill', fulfillment: new Uint8Array(32) }),
+    sendPacket: vi
+      .fn()
+      .mockResolvedValue({ type: 'fulfill', fulfillment: new Uint8Array(32) }),
     registerPeer: vi.fn().mockResolvedValue(undefined),
     removePeer: vi.fn().mockResolvedValue(undefined),
     setPacketHandler: vi.fn(),
@@ -19,7 +21,9 @@ function createMockConnector(overrides: Record<string, unknown> = {}) {
 /**
  * Creates a minimal NodeConfig for testing.
  */
-function createTestConfig(connectorOverrides: Record<string, unknown> = {}): NodeConfig {
+function createTestConfig(
+  connectorOverrides: Record<string, unknown> = {}
+): NodeConfig {
   const secretKey = new Uint8Array(32);
   secretKey.fill(0x42);
 
@@ -70,7 +74,9 @@ describe('Connector Direct Methods API', () => {
   it.skip('[P1] node.channelClient is available when connector has channel methods', () => {
     // Arrange
     const config = createTestConfig({
-      openChannel: vi.fn().mockResolvedValue({ channelId: 'ch-1', status: 'open' }),
+      openChannel: vi
+        .fn()
+        .mockResolvedValue({ channelId: 'ch-1', status: 'open' }),
       getChannelState: vi.fn().mockResolvedValue({
         channelId: 'ch-1',
         status: 'open',

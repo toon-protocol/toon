@@ -157,7 +157,12 @@ export class RelayMonitor {
     }
 
     // Deregistration: empty content or missing ilpAddress (AC 7)
-    if (!peerInfo || !peerInfo.ilpAddress || !event.content || event.content.trim() === '') {
+    if (
+      !peerInfo ||
+      !peerInfo.ilpAddress ||
+      !event.content ||
+      event.content.trim() === ''
+    ) {
       this.handleDeregistration(event.pubkey, peerId);
       return;
     }
@@ -222,14 +227,20 @@ export class RelayMonitor {
 
     const discovered = this.discoveredPeers.get(pubkey);
     if (!discovered) {
-      throw new BootstrapError(`Peer ${pubkey.slice(0, 16)}... not discovered yet`);
+      throw new BootstrapError(
+        `Peer ${pubkey.slice(0, 16)}... not discovered yet`
+      );
     }
 
     if (!this.connectorAdmin) {
-      throw new BootstrapError('connectorAdmin must be set before calling peerWith()');
+      throw new BootstrapError(
+        'connectorAdmin must be set before calling peerWith()'
+      );
     }
     if (!this.agentRuntimeClient) {
-      throw new BootstrapError('agentRuntimeClient must be set before calling peerWith()');
+      throw new BootstrapError(
+        'agentRuntimeClient must be set before calling peerWith()'
+      );
     }
 
     const { peerId, peerInfo } = discovered;
@@ -311,7 +322,10 @@ export class RelayMonitor {
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'Unknown error';
-      console.warn(`[RelayMonitor] SPSP handshake failed for ${peerId}:`, reason);
+      console.warn(
+        `[RelayMonitor] SPSP handshake failed for ${peerId}:`,
+        reason
+      );
       this.emit({
         type: 'bootstrap:handshake-failed',
         peerId,
@@ -344,7 +358,9 @@ export class RelayMonitor {
   private getOrCreateSpspClient(): IlpSpspClient {
     if (!this.spspClient) {
       if (!this.agentRuntimeClient) {
-        throw new BootstrapError('agentRuntimeClient must be set before SPSP handshake');
+        throw new BootstrapError(
+          'agentRuntimeClient must be set before SPSP handshake'
+        );
       }
       this.spspClient = new IlpSpspClient(
         this.agentRuntimeClient,

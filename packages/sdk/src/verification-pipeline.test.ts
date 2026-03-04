@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createVerificationPipeline } from './verification-pipeline.js';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import { encodeEventToToon, shallowParseToon } from '@crosstown/core/toon';
 
 // ATDD Red Phase - tests will fail until implementation exists
@@ -43,12 +47,6 @@ function createTamperedToonPayload() {
 }
 
 describe('Verification Pipeline', () => {
-  let mockHandler: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    mockHandler = vi.fn().mockResolvedValue({ accept: true, fulfillment: 'mock' });
-  });
-
   it.skip('[P0] valid Schnorr signature allows event dispatch to handler', async () => {
     // Arrange
     const { meta, toonBase64 } = createSignedToonPayload();

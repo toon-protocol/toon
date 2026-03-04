@@ -30,7 +30,9 @@ import type {
  * });
  * ```
  */
-export function createHttpChannelClient(adminUrl: string): ConnectorChannelClient {
+export function createHttpChannelClient(
+  adminUrl: string
+): ConnectorChannelClient {
   const baseUrl = adminUrl.replace(/\/$/, '');
 
   return {
@@ -55,10 +57,10 @@ export function createHttpChannelClient(adminUrl: string): ConnectorChannelClien
           throw new Error(`HTTP ${response.status}: ${text}`);
         }
 
-        const result: any = await response.json();
+        const result = (await response.json()) as Record<string, unknown>;
         return {
-          channelId: result.channelId,
-          status: result.status,
+          channelId: result['channelId'] as string,
+          status: result['status'] as string,
         };
       } catch (error) {
         if (error instanceof BootstrapError) {
@@ -80,11 +82,11 @@ export function createHttpChannelClient(adminUrl: string): ConnectorChannelClien
           throw new Error(`HTTP ${response.status}: ${text}`);
         }
 
-        const result: any = await response.json();
+        const result = (await response.json()) as Record<string, unknown>;
         return {
-          channelId: result.channelId,
-          status: result.status,
-          chain: result.chain,
+          channelId: result['channelId'] as string,
+          status: result['status'] as ChannelState['status'],
+          chain: result['chain'] as string,
         };
       } catch (error) {
         if (error instanceof BootstrapError) {

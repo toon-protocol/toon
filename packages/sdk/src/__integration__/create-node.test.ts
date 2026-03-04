@@ -15,8 +15,12 @@
  *   The full pipeline test creates a real TOON-encoded signed Nostr event.
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 // --- Imports from @crosstown/sdk (DOES NOT EXIST YET) ---
@@ -47,11 +51,13 @@ import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
 
 class MockEmbeddedConnector implements EmbeddableConnectorLike {
   public packetHandler:
-    | ((req: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>)
+    | ((
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>)
     | null = null;
   public readonly registeredPeers = new Map<string, RegisterPeerParams>();
 
-  async sendPacket(params: SendPacketParams): Promise<SendPacketResult> {
+  async sendPacket(_params: SendPacketParams): Promise<SendPacketResult> {
     return { type: 'reject', code: 'F02', message: 'No route' };
   }
 
@@ -64,7 +70,9 @@ class MockEmbeddedConnector implements EmbeddableConnectorLike {
   }
 
   setPacketHandler(
-    handler: (req: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>,
+    handler: (
+      req: HandlePacketRequest
+    ) => HandlePacketResponse | Promise<HandlePacketResponse>
   ): void {
     this.packetHandler = handler;
   }
@@ -73,7 +81,9 @@ class MockEmbeddedConnector implements EmbeddableConnectorLike {
    * Simulate delivering an incoming ILP packet to the registered handler.
    * Used by tests to exercise the full pipeline without a real connector.
    */
-  async deliverPacket(request: HandlePacketRequest): Promise<HandlePacketResponse> {
+  async deliverPacket(
+    request: HandlePacketRequest
+  ): Promise<HandlePacketResponse> {
     if (!this.packetHandler) {
       throw new Error('No packet handler registered');
     }
@@ -92,7 +102,7 @@ function createTestSecretKey(): Uint8Array {
 function createSignedToonEvent(
   secretKey: Uint8Array,
   kind: number,
-  content: string,
+  content: string
 ): { event: NostrEvent; toonBytes: Uint8Array; toonBase64: string } {
   const event = finalizeEvent(
     {
@@ -101,7 +111,7 @@ function createSignedToonEvent(
       tags: [],
       created_at: Math.floor(Date.now() / 1000),
     },
-    secretKey,
+    secretKey
   );
   const toonBytes = encodeEventToToon(event);
   const toonBase64 = Buffer.from(toonBytes).toString('base64');
@@ -320,7 +330,7 @@ describe('createNode() Composition with Lifecycle', () => {
     const { toonBytes, toonBase64 } = createSignedToonEvent(
       eventSecretKey,
       1,
-      'Integration test event',
+      'Integration test event'
     );
 
     // Calculate correct payment amount
@@ -415,7 +425,11 @@ describe('createNode() Composition with Lifecycle', () => {
 
     // Create a real signed event
     const eventKey = createTestSecretKey();
-    const { toonBytes, toonBase64 } = createSignedToonEvent(eventKey, 1, 'Underpaid event');
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventKey,
+      1,
+      'Underpaid event'
+    );
 
     // Pay only half the required amount
     const requiredAmount = BigInt(toonBytes.length) * basePricePerByte;
@@ -467,7 +481,11 @@ describe('createNode() Composition with Lifecycle', () => {
     await node.start();
 
     // Create a signed event from the NODE'S OWN secretKey
-    const { toonBase64 } = createSignedToonEvent(secretKey, 1, 'Self-write event');
+    const { toonBase64 } = createSignedToonEvent(
+      secretKey,
+      1,
+      'Self-write event'
+    );
 
     // Act — send with 0 amount (should be accepted due to self-write bypass)
     const response = await freshConnector.deliverPacket({
@@ -508,7 +526,11 @@ describe('createNode() Composition with Lifecycle', () => {
 
     // Create a kind:30617 event (not registered)
     const eventKey = createTestSecretKey();
-    const { toonBytes, toonBase64 } = createSignedToonEvent(eventKey, 30617, 'Unhandled kind');
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventKey,
+      30617,
+      'Unhandled kind'
+    );
     const amount = BigInt(toonBytes.length) * basePricePerByte;
 
     // Act
@@ -553,7 +575,11 @@ describe('createNode() Composition with Lifecycle', () => {
 
     // Create a kind:42 event (no specific handler)
     const eventKey = createTestSecretKey();
-    const { toonBytes, toonBase64 } = createSignedToonEvent(eventKey, 42, 'Default handler test');
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventKey,
+      42,
+      'Default handler test'
+    );
     const amount = BigInt(toonBytes.length) * basePricePerByte;
 
     // Act
@@ -596,7 +622,11 @@ describe('createNode() Composition with Lifecycle', () => {
     await node.start();
 
     const eventKey = createTestSecretKey();
-    const { toonBytes, toonBase64 } = createSignedToonEvent(eventKey, 1, 'Crash test');
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventKey,
+      1,
+      'Crash test'
+    );
     const amount = BigInt(toonBytes.length) * basePricePerByte;
 
     // Act

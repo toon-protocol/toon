@@ -9,7 +9,9 @@ let eventCount = 0;
 
 ws.on('open', () => {
   console.log('✅ Connected to:', RELAY_URL);
-  ws.send(JSON.stringify(['REQ', 'nip34', { kinds: [30617, 1617, 1621], limit: 10 }]));
+  ws.send(
+    JSON.stringify(['REQ', 'nip34', { kinds: [30617, 1617, 1621], limit: 10 }])
+  );
   setTimeout(() => ws.close(), 3000);
 });
 
@@ -18,7 +20,9 @@ ws.on('message', (data) => {
   if (type === 'EVENT') {
     const event = rest[1];
     eventCount++;
-    console.log(`📄 Event ${eventCount}: kind:${event.kind}, id:${event.id.slice(0,16)}...`);
+    console.log(
+      `📄 Event ${eventCount}: kind:${event.kind}, id:${event.id.slice(0, 16)}...`
+    );
   } else if (type === 'EOSE') {
     console.log(`\n✅ Found ${eventCount} NIP-34 events`);
   }

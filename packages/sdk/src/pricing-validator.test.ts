@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createPricingValidator, type PricingConfig } from './pricing-validator.js';
+import { describe, it, expect } from 'vitest';
+import { createPricingValidator } from './pricing-validator.js';
 import type { ToonRoutingMeta } from '@crosstown/core/toon';
 
 // ATDD Red Phase - tests will fail until implementation exists
@@ -7,7 +7,9 @@ import type { ToonRoutingMeta } from '@crosstown/core/toon';
 /**
  * Factory for creating a mock ToonRoutingMeta.
  */
-function createMockMeta(overrides: Partial<ToonRoutingMeta> = {}): ToonRoutingMeta {
+function createMockMeta(
+  overrides: Partial<ToonRoutingMeta> = {}
+): ToonRoutingMeta {
   return {
     kind: 1,
     pubkey: 'ab'.repeat(32),
@@ -65,7 +67,10 @@ describe('Pricing Validator', () => {
       basePricePerByte: 10n,
       ownPubkey,
     });
-    const meta = createMockMeta({ pubkey: ownPubkey, rawBytes: new Uint8Array(1000) });
+    const meta = createMockMeta({
+      pubkey: ownPubkey,
+      rawBytes: new Uint8Array(1000),
+    });
     const amount = 0n; // Zero payment from self
 
     // Act

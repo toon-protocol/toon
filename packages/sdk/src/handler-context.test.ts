@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  createHandlerContext,
-  type HandlerContext,
-} from './handler-context.js';
+import { createHandlerContext } from './handler-context.js';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { ToonRoutingMeta } from '@crosstown/core/toon';
 
@@ -11,7 +8,9 @@ import type { ToonRoutingMeta } from '@crosstown/core/toon';
 /**
  * Factory for creating a mock ToonRoutingMeta from shallow parse.
  */
-function createMockMeta(overrides: Partial<ToonRoutingMeta> = {}): ToonRoutingMeta {
+function createMockMeta(
+  overrides: Partial<ToonRoutingMeta> = {}
+): ToonRoutingMeta {
   return {
     kind: 1,
     pubkey: 'ab'.repeat(32),
@@ -133,7 +132,9 @@ describe('HandlerContext', () => {
     // Assert
     expect(response.accept).toBe(true);
     expect(response).toHaveProperty('fulfillment');
-    expect(typeof (response as { fulfillment: string }).fulfillment).toBe('string');
+    expect(typeof (response as { fulfillment: string }).fulfillment).toBe(
+      'string'
+    );
   });
 
   it.skip('[P1] ctx.accept(data) includes optional response data', () => {

@@ -69,7 +69,7 @@ export interface ConnectorChannelLike {
  * ```
  */
 export function createDirectChannelClient(
-  connector: ConnectorChannelLike,
+  connector: ConnectorChannelLike
 ): ConnectorChannelClient {
   return {
     async openChannel(params: OpenChannelParams): Promise<OpenChannelResult> {
@@ -81,7 +81,7 @@ export function createDirectChannelClient(
         }
         throw new BootstrapError(
           `Failed to open channel for peer ${params.peerId}`,
-          error instanceof Error ? error : undefined,
+          error instanceof Error ? error : undefined
         );
       }
     },
@@ -95,7 +95,7 @@ export function createDirectChannelClient(
         }
         throw new BootstrapError(
           `Failed to get channel state for ${channelId}`,
-          error instanceof Error ? error : undefined,
+          error instanceof Error ? error : undefined
         );
       }
     },

@@ -70,10 +70,7 @@ describe('createDirectConnectorAdmin', () => {
       const connector = mockConnectorAdmin();
       const client = createDirectConnectorAdmin(connector);
 
-      const routes = [
-        { prefix: 'g.alice' },
-        { prefix: 'g.bob', priority: 5 },
-      ];
+      const routes = [{ prefix: 'g.alice' }, { prefix: 'g.bob', priority: 5 }];
 
       await client.addPeer({
         id: 'peer1',
@@ -187,7 +184,10 @@ describe('createDirectConnectorAdmin', () => {
     });
 
     it('should wrap removePeer errors in BootstrapError', async () => {
-      const connector = mockConnectorAdmin(undefined, new Error('Peer not found'));
+      const connector = mockConnectorAdmin(
+        undefined,
+        new Error('Peer not found')
+      );
       const client = createDirectConnectorAdmin(connector);
 
       await expect(client.removePeer!('unknown-peer')).rejects.toThrow(
