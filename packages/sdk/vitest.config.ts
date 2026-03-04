@@ -10,13 +10,12 @@ export default defineConfig({
       '**/__integration__/**',
       // ATDD Red Phase: exclude test files whose source modules do not yet exist.
       // Re-include each file as its corresponding story is implemented:
-      //   handler-registry.test.ts  -> Story 1.2
+      //   handler-registry.test.ts  -> Story 1.2 (done)
       //   handler-context.test.ts   -> Story 1.3
       //   verification-pipeline.test.ts -> Story 1.4
       //   pricing-validator.test.ts -> Story 1.5
       //   payment-handler-bridge.test.ts -> Story 1.6
       //   dev-mode.test.ts          -> Story 1.10
-      'src/handler-registry.test.ts',
       'src/handler-context.test.ts',
       'src/verification-pipeline.test.ts',
       'src/pricing-validator.test.ts',

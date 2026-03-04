@@ -21,15 +21,17 @@ export class HandlerRegistry {
    * Register a handler for a specific event kind.
    * Replaces any existing handler for that kind.
    */
-  on(kind: number, handler: Handler): void {
+  on(kind: number, handler: Handler): this {
     this.handlers.set(kind, handler);
+    return this;
   }
 
   /**
    * Register a default handler for unrecognized kinds.
    */
-  onDefault(handler: Handler): void {
+  onDefault(handler: Handler): this {
     this.defaultHandler = handler;
+    return this;
   }
 
   /**
