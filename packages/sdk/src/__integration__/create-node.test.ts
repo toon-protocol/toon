@@ -771,7 +771,7 @@ describe('createNode() Composition with Lifecycle', () => {
     expect(failingHandler).toHaveBeenCalledOnce();
 
     // Assert -- error was logged via console.error
-    expect(errorSpy).toHaveBeenCalledWith('Handler error:', expect.any(Error));
+    expect(errorSpy).toHaveBeenCalledWith('Handler dispatch failed:', 'Handler crashed');
 
     // Cleanup
     errorSpy.mockRestore();

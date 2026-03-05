@@ -1,8 +1,7 @@
-// @ts-nocheck — ATDD Red Phase: imports reference exports that don't exist yet
 /**
  * Integration Tests: Network Discovery and Bootstrap (Story 1.9)
  *
- * ATDD Red Phase - tests will fail until SDK implementation exists
+ * ATDD tests for Story 1.9 -- network discovery and bootstrap integration
  *
  * Tests that the SDK integrates with BootstrapService and RelayMonitor from
  * @crosstown/core for automatic peer discovery and network join. Uses real
@@ -23,13 +22,17 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSecretKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
 
-// --- Imports from @crosstown/sdk (DOES NOT EXIST YET) ---
+// --- Imports from @crosstown/sdk ---
 import { createNode, type NodeConfig, type StartResult } from '../index.js';
 
 // --- Imports from @crosstown/core (exists) ---
 import type { BootstrapEvent, EmbeddableConnectorLike } from '@crosstown/core';
 import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
 import type { RegisterPeerParams } from '@crosstown/core';
+import type {
+  HandlePacketRequest,
+  HandlePacketResponse,
+} from '@crosstown/core';
 
 // --- Import from @crosstown/relay (exists, for TOON encoding) ---
 import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
@@ -46,8 +49,6 @@ const GENESIS_PUBKEY =
   'aa1857d0ff1fcb1aeb1907b3b98290f3ecb5545473c0b9296fb0b44481deb572';
 
 // Anvil Account #2 (for testing - has 10k ETH pre-funded)
-const TEST_ACCOUNT_PRIVATE_KEY =
-  '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';
 const TEST_ACCOUNT_ADDRESS = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
 
 // Deployed contract addresses (deterministic on Anvil)
@@ -62,7 +63,9 @@ const CHAIN_ID = 'evm:base:31337';
 class MockEmbeddedConnector implements EmbeddableConnectorLike {
   public readonly registeredPeers = new Map<string, RegisterPeerParams>();
   private packetHandler:
-    | ((req: { amount: string; destination: string; data: string }) => unknown)
+    | ((
+        request: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>)
     | null = null;
 
   async sendPacket(_params: SendPacketParams): Promise<SendPacketResult> {
@@ -77,8 +80,12 @@ class MockEmbeddedConnector implements EmbeddableConnectorLike {
     this.registeredPeers.delete(peerId);
   }
 
-  setPacketHandler(handler: (req: unknown) => unknown): void {
-    this.packetHandler = handler as typeof this.packetHandler;
+  setPacketHandler(
+    handler: (
+      request: HandlePacketRequest
+    ) => HandlePacketResponse | Promise<HandlePacketResponse>
+  ): void {
+    this.packetHandler = handler;
   }
 }
 
@@ -193,10 +200,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   }, 15000);
 
   // -------------------------------------------------------------------------
-  // [P0] BootstrapService runs layered discovery when node.start() called
+  // [P1] BootstrapService runs layered discovery when node.start() called
   // -------------------------------------------------------------------------
 
-  it.skip('[P0] node.start() runs layered bootstrap discovery with genesis peers', async () => {
+  it('[P1] node.start() runs layered bootstrap discovery with genesis peers', async () => {
     // Arrange
     if (!infraAvailable.all) {
       console.log('Skipping: Infrastructure not available');
@@ -254,10 +261,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P0] RelayMonitor detects new kind:10032 events on relay
+  // [P1] RelayMonitor detects new kind:10032 events on relay
   // -------------------------------------------------------------------------
 
-  it.skip('[P0] RelayMonitor detects existing kind:10032 events on the relay', async () => {
+  it('[P1] RelayMonitor detects existing kind:10032 events on the relay', async () => {
     // Arrange
     if (!infraAvailable.relay) {
       console.log('Skipping: Relay not available');
@@ -305,10 +312,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P0] Payment channels opened when settlement chains intersect
+  // [P1] Payment channels opened when settlement chains intersect
   // -------------------------------------------------------------------------
 
-  it.skip('[P0] payment channels opened when settlement chains intersect (uses Anvil)', async () => {
+  it('[P1] payment channels opened when settlement chains intersect (uses Anvil)', async () => {
     // Arrange
     if (!infraAvailable.all) {
       console.log('Skipping: Full infrastructure not available');
@@ -333,7 +340,6 @@ describe('Network Discovery and Bootstrap Integration', () => {
       ],
       ardriveEnabled: false,
       // EVM settlement configuration
-      evmPrivateKey: TEST_ACCOUNT_PRIVATE_KEY,
       settlementInfo: {
         supportedChains: [CHAIN_ID],
         settlementAddresses: { [CHAIN_ID]: TEST_ACCOUNT_ADDRESS },
@@ -381,10 +387,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P1] node.peerWith(pubkey) initiates manual peering
+  // [P2] node.peerWith(pubkey) initiates manual peering
   // -------------------------------------------------------------------------
 
-  it.skip('[P1] node.peerWith(pubkey) registers peer and initiates SPSP handshake', async () => {
+  it('[P2] node.peerWith(pubkey) registers peer and initiates SPSP handshake', async () => {
     // Arrange
     if (!infraAvailable.all) {
       console.log('Skipping: Full infrastructure not available');
@@ -439,10 +445,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P1] node.on('bootstrap', listener) receives lifecycle events
+  // [P2] node.on('bootstrap', listener) receives lifecycle events
   // -------------------------------------------------------------------------
 
-  it.skip('[P1] node.on("bootstrap", listener) receives bootstrap lifecycle events', async () => {
+  it('[P2] node.on("bootstrap", listener) receives bootstrap lifecycle events', async () => {
     // Arrange
     const secretKey = generateSecretKey();
     const connector = new MockEmbeddedConnector();
@@ -497,10 +503,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P1] Bootstrap with no known peers and no infra starts with 0 peers
+  // [P2] Bootstrap with no known peers and no infra starts with 0 peers
   // -------------------------------------------------------------------------
 
-  it.skip('[P1] bootstrap with no known peers completes with 0 peers', async () => {
+  it('[P2] bootstrap with no known peers completes with 0 peers', async () => {
     // Arrange
     const secretKey = generateSecretKey();
     const connector = new MockEmbeddedConnector();
@@ -545,7 +551,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
   // [P2] bootstrap:peer-discovered events include ILP address
   // -------------------------------------------------------------------------
 
-  it.skip('[P2] peer-discovered events include ILP address from kind:10032', async () => {
+  it('[P2] peer-discovered events include ILP address from kind:10032', async () => {
     // Arrange
     if (!infraAvailable.relay) {
       console.log('Skipping: Relay not available');
@@ -579,16 +585,18 @@ describe('Network Discovery and Bootstrap Integration', () => {
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     // Assert
-    if (discoveryEvents.length > 0) {
-      const firstDiscovery = discoveryEvents[0]!;
-      if (firstDiscovery.type === 'bootstrap:peer-discovered') {
-        // ILP address should be non-empty string
-        expect(firstDiscovery.ilpAddress).toBeDefined();
-        expect(typeof firstDiscovery.ilpAddress).toBe('string');
-        expect(firstDiscovery.ilpAddress.length).toBeGreaterThan(0);
-        // ILP address typically starts with 'g.'
-        expect(firstDiscovery.ilpAddress).toMatch(/^g\./);
-      }
+    // With relay available and genesis node publishing kind:10032,
+    // we should discover at least one peer
+    expect(discoveryEvents.length).toBeGreaterThan(0);
+    const firstDiscovery = discoveryEvents[0];
+    expect(firstDiscovery).toBeDefined();
+    if (firstDiscovery?.type === 'bootstrap:peer-discovered') {
+      // ILP address should be non-empty string
+      expect(firstDiscovery.ilpAddress).toBeDefined();
+      expect(typeof firstDiscovery.ilpAddress).toBe('string');
+      expect(firstDiscovery.ilpAddress.length).toBeGreaterThan(0);
+      // ILP address typically starts with 'g.'
+      expect(firstDiscovery.ilpAddress).toMatch(/^g\./);
     }
 
     // Cleanup
@@ -599,7 +607,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
   // [P2] Multiple start/stop cycles work correctly
   // -------------------------------------------------------------------------
 
-  it.skip('[P2] node supports start/stop/start lifecycle reset', async () => {
+  it('[P2] node supports start/stop/start lifecycle reset', async () => {
     // Arrange
     const secretKey = generateSecretKey();
     const connector = new MockEmbeddedConnector();

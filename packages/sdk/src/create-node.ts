@@ -15,7 +15,11 @@ import type {
   HandlePacketResponse,
   ConnectorChannelClient,
 } from '@crosstown/core';
-import type { KnownPeer, BootstrapResult } from '@crosstown/core';
+import type {
+  KnownPeer,
+  BootstrapResult,
+  BootstrapEventListener,
+} from '@crosstown/core';
 import type { SpspRequestSettlementInfo } from '@crosstown/core';
 import type { SettlementNegotiationConfig } from '@crosstown/core';
 import { createCrosstownNode } from '@crosstown/core';
@@ -106,12 +110,16 @@ export interface ServiceNode {
   readonly channelClient: ConnectorChannelClient | null;
   /** Register a handler for a specific event kind (builder pattern) */
   on(kind: number, handler: Handler): ServiceNode;
+  /** Register a lifecycle event listener */
+  on(event: 'bootstrap', listener: BootstrapEventListener): ServiceNode;
   /** Register a default handler for unrecognized kinds (builder pattern) */
   onDefault(handler: Handler): ServiceNode;
   /** Start the node: wire packet handler, run bootstrap, start relay monitor */
   start(): Promise<StartResult>;
   /** Stop the node: unsubscribe relay monitor, clean up lifecycle state */
   stop(): Promise<void>;
+  /** Initiate peering with a discovered peer (register + SPSP handshake) */
+  peerWith(pubkey: string): Promise<void>;
 }
 
 /**
@@ -142,10 +150,16 @@ export function createNode(config: NodeConfig): ServiceNode {
   // 2. Create handler registry
   const registry = new HandlerRegistry();
 
-  // 3. Register config-based handlers
+  // 3. Register config-based handlers (with kind validation matching node.on())
   if (config.handlers) {
     for (const [kind, handler] of Object.entries(config.handlers)) {
-      registry.on(Number(kind), handler);
+      const kindNum = Number(kind);
+      if (!Number.isInteger(kindNum) || kindNum < 0) {
+        throw new NodeError(
+          `Invalid event kind in handlers config: expected a non-negative integer, got '${kind}'`
+        );
+      }
+      registry.on(kindNum, handler);
     }
   }
 
@@ -252,7 +266,9 @@ export function createNode(config: NodeConfig): ServiceNode {
     try {
       return (await registry.dispatch(ctx)) as unknown as HandlePacketResponse;
     } catch (err: unknown) {
-      console.error('Handler error:', err);
+      // Log only the error message, not the full error object (which may contain payload data)
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Handler dispatch failed:', errMsg);
       return { accept: false, code: 'T00', message: 'Internal error' };
     }
   };
@@ -296,13 +312,31 @@ export function createNode(config: NodeConfig): ServiceNode {
       return crosstownNode.channelClient;
     },
 
-    on(kind: number, handler: Handler): ServiceNode {
-      if (!Number.isInteger(kind) || kind < 0) {
+    on(
+      kindOrEvent: number | string,
+      handlerOrListener: Handler | BootstrapEventListener
+    ): ServiceNode {
+      if (typeof kindOrEvent === 'number') {
+        // Handler registration (existing behavior)
+        if (!Number.isInteger(kindOrEvent) || kindOrEvent < 0) {
+          throw new NodeError(
+            `Invalid event kind: expected a non-negative integer, got ${String(kindOrEvent)}`
+          );
+        }
+        registry.on(kindOrEvent, handlerOrListener as Handler);
+      } else if (kindOrEvent === 'bootstrap') {
+        // Lifecycle event listener -- forward to bootstrapService AND relayMonitor
+        const listener = handlerOrListener as BootstrapEventListener;
+        crosstownNode.bootstrapService.on(listener);
+        crosstownNode.relayMonitor.on(listener);
+      } else {
+        // Sanitize event name to prevent log injection via control characters
+        // eslint-disable-next-line no-control-regex
+        const sanitized = String(kindOrEvent).replace(/[\x00-\x1f\x7f]/g, '');
         throw new NodeError(
-          `Invalid event kind: expected a non-negative integer, got ${String(kind)}`
+          `Unknown lifecycle event: '${sanitized}'. Supported: 'bootstrap'`
         );
       }
-      registry.on(kind, handler);
       return node;
     },
 
@@ -342,6 +376,25 @@ export function createNode(config: NodeConfig): ServiceNode {
 
       await crosstownNode.stop();
       started = false;
+    },
+
+    async peerWith(targetPubkey: string): Promise<void> {
+      if (!started) {
+        throw new NodeError(
+          'Cannot peer: node not started. Call start() first.'
+        );
+      }
+      // Defense-in-depth: validate pubkey format before delegating to core
+      if (
+        typeof targetPubkey !== 'string' ||
+        targetPubkey.length !== 64 ||
+        !/^[0-9a-f]{64}$/.test(targetPubkey)
+      ) {
+        throw new NodeError(
+          'Invalid pubkey: expected a 64-character lowercase hex string'
+        );
+      }
+      return crosstownNode.peerWith(targetPubkey);
     },
   };
 
