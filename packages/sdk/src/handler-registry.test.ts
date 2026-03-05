@@ -190,10 +190,8 @@ describe('HandlerRegistry', () => {
       })
     );
     expect(result).toHaveProperty('message');
-    expect(typeof (result as Record<string, unknown>)['message']).toBe(
-      'string'
-    );
-    expect((result as Record<string, unknown>)['message']).toMatch(/42/);
+    expect('message' in result && typeof result.message).toBe('string');
+    expect('message' in result && result.message).toMatch(/42/);
   });
 
   it('[P1] .on() returns this for chaining', () => {

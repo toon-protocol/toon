@@ -8,14 +8,18 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       '**/__integration__/**',
-      // ATDD Red Phase: exclude test files whose source modules do not yet exist.
+      // ATDD story tracker: exclude test files whose source modules do not yet exist.
       // Re-include each file as its corresponding story is implemented:
-      //   handler-registry.test.ts  -> Story 1.2 (done)
-      //   handler-context.test.ts   -> Story 1.3 (done)
-      //   verification-pipeline.test.ts -> Story 1.4 (done)
-      //   pricing-validator.test.ts -> Story 1.5 (done)
-      //   payment-handler-bridge.test.ts -> Story 1.6 (done)
-      //   dev-mode.test.ts          -> Story 1.10
+      //   handler-registry.test.ts        -> Story 1.2 (done)
+      //   handler-context.test.ts         -> Story 1.3 (done)
+      //   verification-pipeline.test.ts   -> Story 1.4 (done)
+      //   pricing-validator.test.ts       -> Story 1.5 (done)
+      //   payment-handler-bridge.test.ts  -> Story 1.6 (done)
+      //   create-node.test.ts             -> Story 1.7 (done)
+      //   index.test.ts                   -> Story 1.7 (done)
+      //   connector-api.test.ts           -> Story 1.8 (uses createNode, available after 1.7)
+      //   dev-mode.test.ts                -> Story 1.10
+      'src/connector-api.test.ts',
       'src/dev-mode.test.ts',
     ],
   },

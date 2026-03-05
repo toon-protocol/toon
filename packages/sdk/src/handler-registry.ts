@@ -4,11 +4,17 @@
  * Maps event kinds to handler functions for dispatching incoming ILP packets.
  */
 
-import type { HandlerContext } from './handler-context.js';
+import type {
+  HandlerContext,
+  HandlePacketAcceptResponse,
+  HandlePacketRejectResponse,
+} from './handler-context.js';
 
-export type Handler = (
-  ctx: HandlerContext
-) => Promise<{ accept: boolean; [key: string]: unknown }>;
+export type HandlerResponse =
+  | HandlePacketAcceptResponse
+  | HandlePacketRejectResponse;
+
+export type Handler = (ctx: HandlerContext) => Promise<HandlerResponse>;
 
 /**
  * Registry that maps Nostr event kinds to handler functions.
@@ -37,9 +43,7 @@ export class HandlerRegistry {
   /**
    * Dispatch a context to the appropriate handler based on kind.
    */
-  async dispatch(
-    ctx: HandlerContext
-  ): Promise<{ accept: boolean; [key: string]: unknown }> {
+  async dispatch(ctx: HandlerContext): Promise<HandlerResponse> {
     const handler = this.handlers.get(ctx.kind);
     if (handler) {
       return handler(ctx);

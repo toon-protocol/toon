@@ -29,7 +29,7 @@ export type {
 
 // Handler registry
 export { HandlerRegistry } from './handler-registry.js';
-export type { Handler } from './handler-registry.js';
+export type { Handler, HandlerResponse } from './handler-registry.js';
 
 // Pricing validator
 export { createPricingValidator } from './pricing-validator.js';
@@ -58,3 +58,7 @@ export { createEventStorageHandler } from './event-storage-handler.js';
 
 // SPSP handshake handler (stub)
 export { createSpspHandshakeHandler } from './spsp-handshake-handler.js';
+
+// Node composition
+export { createNode } from './create-node.js';
+export type { NodeConfig, ServiceNode, StartResult } from './create-node.js';
