@@ -70,7 +70,9 @@ export function createPaymentHandlerBridge(config: PaymentHandlerBridgeConfig) {
 
       if (request.isTransit) {
         void registry.dispatch(ctx).catch((err: unknown) => {
-          console.error('Transit handler error:', err);
+          // Log only the error message, not the full error object (which may contain payload data)
+          const errMsg = err instanceof Error ? err.message : 'Unknown error';
+          console.error('Transit handler error:', errMsg);
         });
         return { accept: true };
       }
@@ -78,7 +80,9 @@ export function createPaymentHandlerBridge(config: PaymentHandlerBridgeConfig) {
       try {
         return await registry.dispatch(ctx);
       } catch (err: unknown) {
-        console.error('Handler error:', err);
+        // Log only the error message, not the full error object (which may contain payload data)
+        const errMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error('Handler error:', errMsg);
         return {
           accept: false,
           code: 'T00',

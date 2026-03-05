@@ -209,8 +209,11 @@ describe('PaymentHandler Bridge', () => {
     // Act
     await bridge.handlePayment(request);
 
-    // Assert -- error must be logged
-    expect(errorSpy).toHaveBeenCalledWith('Handler error:', handlerError);
+    // Assert -- error message (not full object) must be logged to avoid leaking payload data
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Handler error:',
+      handlerError.message
+    );
 
     // Cleanup
     errorSpy.mockRestore();
@@ -240,10 +243,10 @@ describe('PaymentHandler Bridge', () => {
     // Wait for the fire-and-forget promise's .catch() to execute
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    // Assert -- error should be logged via .catch(), not leaked as unhandled rejection
+    // Assert -- error message (not full object) logged via .catch(), not leaked as unhandled rejection
     expect(errorSpy).toHaveBeenCalledWith(
       'Transit handler error:',
-      transitError
+      transitError.message
     );
 
     // Cleanup

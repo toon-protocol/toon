@@ -82,6 +82,9 @@ export function createHandlerContext(
       return cachedEvent;
     },
     accept(metadata?: Record<string, unknown>): HandlePacketAcceptResponse {
+      // Placeholder fulfillment for SDK handler context. In production, the BLS
+      // computes the real fulfillment as SHA-256(eventId). SDK users building
+      // custom handlers should override this with a cryptographically valid value.
       return {
         accept: true,
         fulfillment: 'default-fulfillment',

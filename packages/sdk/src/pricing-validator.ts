@@ -36,9 +36,9 @@ export function createPricingValidator(config: PricingValidatorConfig) {
         return { accepted: true };
       }
 
-      // Kind-specific pricing override
+      // Kind-specific pricing override (use Object.hasOwn for prototype-safe lookup)
       const kindOverride =
-        config.kindPricing && meta.kind in config.kindPricing
+        config.kindPricing && Object.hasOwn(config.kindPricing, meta.kind)
           ? config.kindPricing[meta.kind]
           : undefined;
       const pricePerByte = kindOverride ?? basePricePerByte;

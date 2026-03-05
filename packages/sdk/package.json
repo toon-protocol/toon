@@ -36,6 +36,9 @@
     "directory": "packages/sdk"
   },
   "author": "ALLiDoizCode",
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },
