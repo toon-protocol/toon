@@ -1,139 +1,488 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createPaymentHandlerBridge } from './payment-handler-bridge.js';
-import type { HandlerRegistry } from './handler-registry.js';
-
-// ATDD Red Phase - tests will fail until implementation exists
-
 /**
- * Creates a mock HandlerRegistry for testing dev mode behavior.
+ * ATDD tests for Story 1.10 -- dev mode verification and pricing bypass
+ *
+ * Tests that devMode=true skips signature verification, bypasses pricing,
+ * and logs packet details. Also validates that production mode (devMode unset)
+ * enforces verification and pricing normally (Risk E1-R15).
+ *
+ * Uses createNode() with a MockConnector to exercise the full pipeline,
+ * matching the integration test pattern from create-node.test.ts.
  */
-function createMockRegistry() {
-  return {
-    dispatch: vi.fn().mockResolvedValue({ accept: true, fulfillment: 'mock' }),
-    on: vi.fn(),
-    onDefault: vi.fn(),
-  } as unknown as HandlerRegistry;
+
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { generateSecretKey, finalizeEvent } from 'nostr-tools/pure';
+import type { NostrEvent } from 'nostr-tools/pure';
+
+import { createNode } from './create-node.js';
+import type { NodeConfig } from './create-node.js';
+import type { HandlerContext } from './handler-context.js';
+
+import type {
+  HandlePacketRequest,
+  HandlePacketResponse,
+  EmbeddableConnectorLike,
+} from '@crosstown/core';
+import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
+import type { RegisterPeerParams } from '@crosstown/core';
+
+import { encodeEventToToon, decodeEventFromToon } from '@crosstown/core/toon';
+
+// ---------------------------------------------------------------------------
+// Mock Embedded Connector (same pattern as create-node.test.ts)
+// ---------------------------------------------------------------------------
+
+interface MockConnector extends EmbeddableConnectorLike {
+  deliverPacket(req: HandlePacketRequest): Promise<HandlePacketResponse>;
 }
 
-/**
- * Creates a minimal PaymentRequest-like object.
- */
-function createPaymentRequest(overrides: Record<string, unknown> = {}) {
+function createMockConnector(): MockConnector {
+  let packetHandler:
+    | ((
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>)
+    | null = null;
+
   return {
-    paymentId: 'pay-dev-1',
-    destination: 'g.test.receiver',
-    amount: '0', // Zero payment to test bypass
-    data: Buffer.from('mock-toon-data').toString('base64'),
-    isTransit: false,
-    ...overrides,
+    async sendPacket(_params: SendPacketParams): Promise<SendPacketResult> {
+      return { type: 'reject', code: 'F02', message: 'No route' };
+    },
+    async registerPeer(_params: RegisterPeerParams): Promise<void> {},
+    async removePeer(_peerId: string): Promise<void> {},
+    setPacketHandler(
+      handler: (
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>
+    ): void {
+      packetHandler = handler;
+    },
+    async deliverPacket(
+      req: HandlePacketRequest
+    ): Promise<HandlePacketResponse> {
+      if (!packetHandler) {
+        throw new Error(
+          'No packet handler registered -- call node.start() first'
+        );
+      }
+      return packetHandler(req);
+    },
   };
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function createSignedToonEvent(
+  secretKey: Uint8Array,
+  kind: number,
+  content: string
+): { event: NostrEvent; toonBytes: Uint8Array; toonBase64: string } {
+  const event = finalizeEvent(
+    {
+      kind,
+      content,
+      tags: [],
+      created_at: Math.floor(Date.now() / 1000),
+    },
+    secretKey
+  );
+  const toonBytes = encodeEventToToon(event);
+  const toonBase64 = Buffer.from(toonBytes).toString('base64');
+  return { event, toonBytes, toonBase64 };
+}
+
+// ---------------------------------------------------------------------------
+// Test Suite
+// ---------------------------------------------------------------------------
+
 describe('Dev Mode', () => {
-  let mockRegistry: ReturnType<typeof createMockRegistry>;
+  let nodeSecretKey: Uint8Array;
+  let eventSecretKey: Uint8Array;
+  const basePricePerByte = 10n;
 
-  beforeEach(() => {
-    mockRegistry = createMockRegistry();
+  beforeAll(() => {
+    nodeSecretKey = generateSecretKey();
+    eventSecretKey = generateSecretKey();
   });
 
-  it.skip('[P0] devMode skips signature verification for invalid signatures', async () => {
+  // -------------------------------------------------------------------------
+  // T-1.10-01: devMode=true: invalid signature accepted
+  // -------------------------------------------------------------------------
+
+  it('[P1] devMode skips signature verification for invalid signatures', async () => {
     // Arrange
-    const bridge = createPaymentHandlerBridge({
-      registry: mockRegistry as unknown as HandlerRegistry,
+    const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
       devMode: true,
-      ownPubkey: 'ff'.repeat(32),
-      basePricePerByte: 10n,
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a valid signed event, then re-encode with a corrupted signature.
+    // This preserves the TOON structure (so shallow parse succeeds) but the
+    // Schnorr signature is invalid (so verification would fail in production).
+    const { event } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Tampered dev event'
+    );
+    const badSigEvent = {
+      ...event,
+      sig: 'ff'.repeat(32) + '00'.repeat(32), // 64-byte hex, structurally valid but wrong
+    } as NostrEvent;
+    const badSigToonBytes = encodeEventToToon(badSigEvent);
+    const badSigBase64 = Buffer.from(badSigToonBytes).toString('base64');
+
+    // Act -- deliver packet with invalid signature through pipeline
+    const response = await connector.deliverPacket({
+      amount: '0',
+      destination: 'g.test.dev',
+      data: badSigBase64,
     });
-    const request = createPaymentRequest();
 
-    // Act
-    const result = await bridge.handlePayment(request);
+    // Assert -- in dev mode, invalid signatures are accepted
+    expect(response.accept).toBe(true);
+    expect(handlerFn).toHaveBeenCalled();
 
-    // Assert
-    // In dev mode, even invalid/missing signatures are accepted
-    expect(result.accept).toBe(true);
-    expect(mockRegistry.dispatch).toHaveBeenCalled();
+    // Cleanup
+    await node.stop();
   });
 
-  it.skip('[P0] devMode logs incoming packets to console', async () => {
+  // -------------------------------------------------------------------------
+  // T-1.10-03: devMode=true: packet details logged
+  // -------------------------------------------------------------------------
+
+  it('[P2] devMode logs incoming packets to console', async () => {
     // Arrange
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const bridge = createPaymentHandlerBridge({
-      registry: mockRegistry as unknown as HandlerRegistry,
+    const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
       devMode: true,
-      ownPubkey: 'ff'.repeat(32),
-      basePricePerByte: 10n,
-    });
-    const request = createPaymentRequest();
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
 
-    // Act
-    await bridge.handlePayment(request);
+    // Create a valid signed event
+    const { toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Logging test event'
+    );
 
-    // Assert
-    expect(consoleSpy).toHaveBeenCalled();
-    const logCalls = consoleSpy.mock.calls.flat().join(' ');
-    // Should log packet details (kind, pubkey, amount, destination)
-    expect(logCalls).toContain('g.test.receiver');
+    try {
+      // Act
+      await connector.deliverPacket({
+        amount: '0',
+        destination: 'g.test.dev',
+        data: toonBase64,
+      });
 
-    consoleSpy.mockRestore();
+      // Assert -- console.log was called with [crosstown:dev] prefix and packet details
+      expect(consoleSpy).toHaveBeenCalled();
+      const logCalls = consoleSpy.mock.calls.flat().join(' ');
+      expect(logCalls).toContain('[crosstown:dev]');
+      expect(logCalls).toContain('kind=');
+      expect(logCalls).toContain('pubkey=');
+      expect(logCalls).toContain('amount=');
+      expect(logCalls).toContain('dest=g.test.dev');
+      expect(logCalls).toContain('toon=');
+    } finally {
+      // Cleanup -- restore console.log even if assertions fail
+      consoleSpy.mockRestore();
+      await node.stop();
+    }
   });
 
-  it.skip('[P0] devMode bypasses pricing validation (zero payment accepted)', async () => {
+  // -------------------------------------------------------------------------
+  // T-1.10-02: devMode=true: underpaid event accepted (pricing bypass)
+  // -------------------------------------------------------------------------
+
+  it('[P1] devMode bypasses pricing validation (zero payment accepted)', async () => {
     // Arrange
-    const bridge = createPaymentHandlerBridge({
-      registry: mockRegistry as unknown as HandlerRegistry,
+    const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
       devMode: true,
-      ownPubkey: 'ff'.repeat(32),
-      basePricePerByte: 10n,
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a valid signed event with non-trivial data
+    const { toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Zero payment dev event'
+    );
+
+    // Act -- send with zero payment (would fail pricing in production)
+    const response = await connector.deliverPacket({
+      amount: '0',
+      destination: 'g.test.dev',
+      data: toonBase64,
     });
-    // Zero payment with non-trivial data (would fail pricing in production)
-    const request = createPaymentRequest({ amount: '0' });
 
-    // Act
-    const result = await bridge.handlePayment(request);
+    // Assert -- accepted despite zero payment
+    expect(response.accept).toBe(true);
+    expect(handlerFn).toHaveBeenCalled();
 
-    // Assert
-    expect(result.accept).toBe(true);
-    expect(mockRegistry.dispatch).toHaveBeenCalled();
+    // Cleanup
+    await node.stop();
   });
 
-  it.skip('[P0] production mode rejects invalid signature with F06', async () => {
-    // Arrange
-    const bridge = createPaymentHandlerBridge({
-      registry: mockRegistry as unknown as HandlerRegistry,
-      devMode: false,
-      ownPubkey: 'ff'.repeat(32),
-      basePricePerByte: 10n,
-    });
-    // Data that will fail signature verification
-    const request = createPaymentRequest({ amount: '99999' });
+  // -------------------------------------------------------------------------
+  // T-1.10-04: devMode not set: verification and pricing active (no leak)
+  // -------------------------------------------------------------------------
+
+  it('[P0] production mode rejects invalid signature with F06', async () => {
+    // Arrange -- no devMode set (defaults to false)
+    const handlerFn = vi.fn();
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
+      // NOTE: devMode intentionally omitted to test default (false)
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a valid signed event, then re-encode with a corrupted signature.
+    // TOON structure is valid (shallow parse succeeds) but signature is wrong.
+    const { event } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Production sig test'
+    );
+    const badSigEvent = {
+      ...event,
+      sig: 'ff'.repeat(32) + '00'.repeat(32),
+    } as NostrEvent;
+    const badSigToonBytes = encodeEventToToon(badSigEvent);
+    const badSigBase64 = Buffer.from(badSigToonBytes).toString('base64');
+    const amount = BigInt(badSigToonBytes.length) * basePricePerByte;
 
     // Act
-    const result = await bridge.handlePayment(request);
+    const response = await connector.deliverPacket({
+      amount: amount.toString(),
+      destination: 'g.test.prod',
+      data: badSigBase64,
+    });
 
-    // Assert
-    // In production, invalid signatures are rejected
-    // (the mock toon data has no valid Schnorr signature)
-    expect(result.accept).toBe(false);
-    expect(mockRegistry.dispatch).not.toHaveBeenCalled();
+    // Assert -- in production, invalid signatures are rejected with F06
+    expect(response.accept).toBe(false);
+    if (!response.accept) {
+      expect(response.code).toBe('F06');
+    }
+    expect(handlerFn).not.toHaveBeenCalled();
+
+    // Cleanup
+    await node.stop();
   });
 
-  it.skip('[P1] production mode rejects underpaid event with F04', async () => {
-    // Arrange
-    // This test needs a validly-signed event but underpaid amount.
-    // The bridge should reject at pricing stage.
-    const bridge = createPaymentHandlerBridge({
-      registry: mockRegistry as unknown as HandlerRegistry,
-      devMode: false,
-      ownPubkey: 'ff'.repeat(32),
-      basePricePerByte: 10n,
+  it('[P1] devMode accepts events with invalid (non-numeric) amount string', async () => {
+    // Arrange -- dev mode with invalid amount string triggers BigInt fallback to 0n
+    const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
+      devMode: true,
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a valid signed event
+    const { toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Invalid amount dev event'
+    );
+
+    // Act -- send with a non-numeric amount (BigInt() would throw)
+    const response = await connector.deliverPacket({
+      amount: 'not-a-number',
+      destination: 'g.test.dev',
+      data: toonBase64,
     });
-    const request = createPaymentRequest({ amount: '1' }); // Way too little
+
+    // Assert -- in dev mode, invalid amount falls back to 0n and event is accepted
+    expect(response.accept).toBe(true);
+    expect(handlerFn).toHaveBeenCalled();
+
+    // Cleanup
+    await node.stop();
+  });
+
+  it('[P0] production mode rejects invalid (non-numeric) amount with T00', async () => {
+    // Arrange -- no devMode set (defaults to false)
+    const handlerFn = vi.fn();
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
+      // NOTE: devMode intentionally omitted to test default (false)
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a validly-signed event
+    const { toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Production amount test'
+    );
+
+    // Act -- send with a non-numeric amount string
+    const response = await connector.deliverPacket({
+      amount: 'garbage',
+      destination: 'g.test.prod',
+      data: toonBase64,
+    });
+
+    // Assert -- in production, invalid amount string is rejected with T00
+    expect(response.accept).toBe(false);
+    if (!response.accept) {
+      expect(response.code).toBe('T00');
+    }
+    expect(handlerFn).not.toHaveBeenCalled();
+
+    // Cleanup
+    await node.stop();
+  });
+
+  it('[P0] production mode does not log packets with [crosstown:dev] prefix', async () => {
+    // Arrange -- no devMode set (defaults to false)
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
+      // NOTE: devMode intentionally omitted to test default (false)
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a validly-signed event with correct payment
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Production no-log test'
+    );
+    const amount = BigInt(toonBytes.length) * basePricePerByte;
+
+    try {
+      // Act
+      await connector.deliverPacket({
+        amount: amount.toString(),
+        destination: 'g.test.prod',
+        data: toonBase64,
+      });
+
+      // Assert -- event was accepted (proves full pipeline ran, not just early reject)
+      expect(handlerFn).toHaveBeenCalled();
+
+      // Assert -- no [crosstown:dev] log in production mode
+      const logCalls = consoleSpy.mock.calls.flat().join(' ');
+      expect(logCalls).not.toContain('[crosstown:dev]');
+    } finally {
+      // Cleanup -- restore console.log even if assertions fail
+      consoleSpy.mockRestore();
+      await node.stop();
+    }
+  });
+
+  it('[P0] production mode rejects underpaid event with F04', async () => {
+    // Arrange -- no devMode set (defaults to false)
+    const handlerFn = vi.fn();
+    const connector = createMockConnector();
+
+    const config: NodeConfig = {
+      secretKey: nodeSecretKey,
+      connector,
+      toonEncoder: encodeEventToToon,
+      toonDecoder: decodeEventFromToon,
+      knownPeers: [],
+      basePricePerByte,
+      // NOTE: devMode intentionally omitted to test default (false)
+      handlers: { 1: handlerFn },
+    };
+    const node = createNode(config);
+    await node.start();
+
+    // Create a validly-signed event but send with insufficient payment
+    const { toonBytes, toonBase64 } = createSignedToonEvent(
+      eventSecretKey,
+      1,
+      'Production pricing test'
+    );
+    const requiredAmount = BigInt(toonBytes.length) * basePricePerByte;
+    const underpaidAmount = requiredAmount / 2n;
 
     // Act
-    const result = await bridge.handlePayment(request);
+    const response = await connector.deliverPacket({
+      amount: underpaidAmount.toString(),
+      destination: 'g.test.prod',
+      data: toonBase64,
+    });
 
-    // Assert
-    expect(result.accept).toBe(false);
+    // Assert -- in production, underpaid events are rejected with F04
+    expect(response.accept).toBe(false);
+    if (!response.accept) {
+      expect(response.code).toBe('F04');
+    }
+    expect(handlerFn).not.toHaveBeenCalled();
+
+    // Cleanup
+    await node.stop();
   });
 });

@@ -18,8 +18,7 @@ export default defineConfig({
       //   create-node.test.ts             -> Story 1.7 (done)
       //   index.test.ts                   -> Story 1.7 (done)
       //   connector-api.test.ts           -> Story 1.8 (done)
-      //   dev-mode.test.ts                -> Story 1.10
-      'src/dev-mode.test.ts',
+      //   dev-mode.test.ts                -> Story 1.10 (done)
     ],
   },
 });

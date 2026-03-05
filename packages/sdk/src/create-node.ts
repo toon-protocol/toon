@@ -217,6 +217,27 @@ export function createNode(config: NodeConfig): ServiceNode {
       };
     }
 
+    // Dev mode: log packet details
+    // Sanitize user-controlled fields (amount, destination) to prevent log injection
+    // via newlines or control characters. meta.kind (integer) and meta.pubkey (validated
+    // hex) are safe; request.data preview is base64 (safe character set).
+    if (config.devMode ?? false) {
+      const toonPreview =
+        request.data.length > 80
+          ? request.data.substring(0, 80) + '...'
+          : request.data;
+      // eslint-disable-next-line no-control-regex
+      const sanitize = (s: string) => s.replace(/[\x00-\x1f\x7f]/g, '');
+      console.log(
+        '[crosstown:dev]',
+        `kind=${meta.kind}`,
+        `pubkey=${meta.pubkey.substring(0, 16)}...`,
+        `amount=${sanitize(request.amount)}`,
+        `dest=${sanitize(request.destination)}`,
+        `toon=${toonPreview}`
+      );
+    }
+
     // Step 2: Verify signature
     const verifyResult = await verifier.verify(meta, request.data);
     if (!verifyResult.verified) {
@@ -228,25 +249,35 @@ export function createNode(config: NodeConfig): ServiceNode {
       return { accept: false, code: 'F06', message: 'Verification failed' };
     }
 
-    // Step 3: Validate pricing
+    // Step 3: Validate pricing (skip in dev mode)
     let amount: bigint;
     try {
       amount = BigInt(request.amount);
     } catch {
-      return { accept: false, code: 'T00', message: 'Invalid payment amount' };
-    }
-    const priceResult = pricer.validate(meta, amount);
-    if (!priceResult.accepted) {
-      // PricingValidationResult.rejection is always set when accepted=false per
-      // createPricingValidator contract. Guard defensively anyway.
-      if (priceResult.rejection) {
-        return priceResult.rejection as HandlePacketResponse;
+      if (config.devMode ?? false) {
+        amount = 0n;
+      } else {
+        return {
+          accept: false,
+          code: 'T00',
+          message: 'Invalid payment amount',
+        };
       }
-      return {
-        accept: false,
-        code: 'F04',
-        message: 'Pricing validation failed',
-      };
+    }
+    if (!(config.devMode ?? false)) {
+      const priceResult = pricer.validate(meta, amount);
+      if (!priceResult.accepted) {
+        // PricingValidationResult.rejection is always set when accepted=false per
+        // createPricingValidator contract. Guard defensively anyway.
+        if (priceResult.rejection) {
+          return priceResult.rejection as HandlePacketResponse;
+        }
+        return {
+          accept: false,
+          code: 'F04',
+          message: 'Pricing validation failed',
+        };
+      }
     }
 
     // Step 4: Build HandlerContext with real metadata
