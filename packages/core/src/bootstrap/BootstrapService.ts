@@ -18,8 +18,13 @@ import { CrosstownError } from '../errors.js';
 import { GenesisPeerLoader, ArDrivePeerRegistry } from '../discovery/index.js';
 import type { GenesisPeer } from '../discovery/index.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
-import { parseIlpPeerInfo, buildIlpPeerInfoEvent, buildSpspRequestEvent, parseSpspResponse } from '../events/index.js';
-import type { IlpPeerInfo } from '../types.js';
+import {
+  parseIlpPeerInfo,
+  buildIlpPeerInfoEvent,
+  buildSpspRequestEvent,
+  parseSpspResponse,
+} from '../events/index.js';
+import type { IlpPeerInfo, ConnectorChannelClient } from '../types.js';
 import type {
   KnownPeer,
   BootstrapResult,
@@ -59,8 +64,8 @@ export class BootstrapService {
   private readonly ownIlpInfo: IlpPeerInfo;
   private readonly pool: SimplePool;
   private connectorAdmin?: ConnectorAdminClient;
-  private channelClient?: import('../types.js').ConnectorChannelClient;
-  private claimSigner?: (channelId: string, amount: bigint) => Promise<any>;
+  private channelClient?: ConnectorChannelClient;
+  private claimSigner?: (channelId: string, amount: bigint) => Promise<unknown>;
 
   // ILP-first flow additions
   private readonly agentRuntimeClient?: AgentRuntimeClient;
@@ -113,7 +118,9 @@ export class BootstrapService {
    * that creates the client after construction.
    */
   setAgentRuntimeClient(client: AgentRuntimeClient): void {
-    (this as unknown as { agentRuntimeClient?: AgentRuntimeClient }).agentRuntimeClient = client;
+    (
+      this as unknown as { agentRuntimeClient?: AgentRuntimeClient }
+    ).agentRuntimeClient = client;
   }
 
   /**
@@ -126,7 +133,7 @@ export class BootstrapService {
   /**
    * Set the channel client for opening payment channels.
    */
-  setChannelClient(client: import('../types.js').ConnectorChannelClient): void {
+  setChannelClient(client: ConnectorChannelClient): void {
     this.channelClient = client;
   }
 
@@ -134,7 +141,9 @@ export class BootstrapService {
    * Set the claim signer for creating signed balance proofs.
    * Used by clients to sign payment channel claims for ILP packets.
    */
-  setClaimSigner(signer: (channelId: string, amount: bigint) => Promise<any>): void {
+  setClaimSigner(
+    signer: (channelId: string, amount: bigint) => Promise<unknown>
+  ): void {
     this.claimSigner = signer;
   }
 
@@ -283,7 +292,8 @@ export class BootstrapService {
           try {
             await this.performSpspHandshake(result);
           } catch (error) {
-            const reason = error instanceof Error ? error.message : 'Unknown error';
+            const reason =
+              error instanceof Error ? error.message : 'Unknown error';
             console.warn(
               `[Bootstrap] SPSP handshake failed for ${result.registeredPeerId}:`,
               reason
@@ -303,7 +313,8 @@ export class BootstrapService {
           try {
             await this.announceViaIlp(result);
           } catch (error) {
-            const reason = error instanceof Error ? error.message : 'Unknown error';
+            const reason =
+              error instanceof Error ? error.message : 'Unknown error';
             this.emit({
               type: 'bootstrap:announce-failed',
               peerId: result.registeredPeerId,
@@ -380,7 +391,9 @@ export class BootstrapService {
     // Only do direct publish if NOT using ILP-first flow (Phase 3 handles it via ILP)
     if (!this.agentRuntimeClient) {
       try {
-        console.log(`[Bootstrap] Publishing our ILP info to ${knownPeer.relayUrl}...`);
+        console.log(
+          `[Bootstrap] Publishing our ILP info to ${knownPeer.relayUrl}...`
+        );
         await this.publishOurInfo(knownPeer.relayUrl);
       } catch (error) {
         console.warn(
@@ -408,16 +421,23 @@ export class BootstrapService {
 
     // Step 1: Create payment channel FIRST (before SPSP) if we have channel client and peer settlement info
     let channelId: string | undefined;
-    if (this.channelClient && result.peerInfo.settlementAddresses && result.peerInfo.supportedChains?.length) {
+    if (
+      this.channelClient &&
+      result.peerInfo.settlementAddresses &&
+      result.peerInfo.supportedChains?.length
+    ) {
       // Use the first supported chain and corresponding settlement address
-      const chain = result.peerInfo.supportedChains[0]!;
+      const chain = result.peerInfo.supportedChains[0];
+      if (!chain) return;
       const peerAddress = result.peerInfo.settlementAddresses[chain];
       const tokenAddress = result.peerInfo.preferredTokens?.[chain];
       const tokenNetwork = result.peerInfo.tokenNetworks?.[chain];
 
       if (peerAddress) {
         try {
-          console.log(`[Bootstrap] Creating payment channel on ${chain} with ${result.registeredPeerId}...`);
+          console.log(
+            `[Bootstrap] Creating payment channel on ${chain} with ${result.registeredPeerId}...`
+          );
           const channelResult = await this.channelClient.openChannel({
             peerId: result.registeredPeerId,
             chain,
@@ -431,7 +451,9 @@ export class BootstrapService {
           result.channelId = channelId;
           result.negotiatedChain = chain;
           result.settlementAddress = peerAddress;
-          console.log(`[Bootstrap] Opened channel ${channelId} with ${result.registeredPeerId}`);
+          console.log(
+            `[Bootstrap] Opened channel ${channelId} with ${result.registeredPeerId}`
+          );
 
           this.emit({
             type: 'bootstrap:channel-opened',
@@ -464,11 +486,13 @@ export class BootstrapService {
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
     // Step 5: Get signed claim if we have channel and claim signer
-    let claim: any;
+    let claim: unknown;
     if (channelId && this.claimSigner) {
       try {
         claim = await this.claimSigner(channelId, BigInt(amount));
-        console.log(`[Bootstrap] Created signed claim for channel ${channelId}`);
+        console.log(
+          `[Bootstrap] Created signed claim for channel ${channelId}`
+        );
       } catch (error) {
         console.warn(
           `[Bootstrap] Failed to create signed claim:`,
@@ -492,7 +516,9 @@ export class BootstrapService {
         claim
       );
     } else {
-      console.log(`[Bootstrap] Sending SPSP without claim (channel or signer not available)...`);
+      console.log(
+        `[Bootstrap] Sending SPSP without claim (channel or signer not available)...`
+      );
       ilpResult = await this.agentRuntimeClient.sendIlpPacket({
         destination: result.peerInfo.ilpAddress,
         amount,
@@ -510,7 +536,9 @@ export class BootstrapService {
     // Step 7: Decode response data (base64 -> TOON -> Nostr event -> parseSpspResponse)
     if (ilpResult.data) {
       try {
-        const responseBytes = Uint8Array.from(Buffer.from(ilpResult.data, 'base64'));
+        const responseBytes = Uint8Array.from(
+          Buffer.from(ilpResult.data, 'base64')
+        );
         const responseEvent = this.toonDecoder(responseBytes);
         const spspResponse = parseSpspResponse(
           responseEvent,
@@ -538,7 +566,8 @@ export class BootstrapService {
             authToken: '',
             routes: [{ prefix: result.peerInfo.ilpAddress }],
             settlement: {
-              preference: result.negotiatedChain || spspResponse.negotiatedChain || 'evm',
+              preference:
+                result.negotiatedChain || spspResponse.negotiatedChain || 'evm',
               ...(result.settlementAddress && {
                 evmAddress: result.settlementAddress,
               }),
@@ -644,7 +673,9 @@ export class BootstrapService {
       };
 
       ws.on('open', () => {
-        console.log(`[Bootstrap] Connected to ${knownPeer.relayUrl}, sending REQ`);
+        console.log(
+          `[Bootstrap] Connected to ${knownPeer.relayUrl}, sending REQ`
+        );
         ws.send(JSON.stringify(['REQ', subId, filter]));
       });
 
@@ -660,7 +691,7 @@ export class BootstrapService {
             try {
               // Simple TOON parser for bootstrap events
               const lines = event.trim().split('\n');
-              const parsed: any = {};
+              const parsed: Record<string, unknown> = {};
               for (const line of lines) {
                 const colonIndex = line.indexOf(':');
                 if (colonIndex > 0) {
@@ -687,13 +718,20 @@ export class BootstrapService {
           }
 
           if (event && event.id) {
-            console.log(`[Bootstrap] Received event: ${event.id.slice(0, 16)}...`);
+            console.log(
+              `[Bootstrap] Received event: ${event.id.slice(0, 16)}...`
+            );
             events.push(event);
           } else {
-            console.warn(`[Bootstrap] Received EVENT message with invalid event data:`, msg);
+            console.warn(
+              `[Bootstrap] Received EVENT message with invalid event data:`,
+              msg
+            );
           }
         } else if (msg[0] === 'EOSE' && msg[1] === subId) {
-          console.log(`[Bootstrap] EOSE received, found ${events.length} events`);
+          console.log(
+            `[Bootstrap] EOSE received, found ${events.length} events`
+          );
           cleanup();
 
           if (events.length === 0) {
@@ -712,7 +750,9 @@ export class BootstrapService {
           const mostRecent = sortedEvents[0];
 
           try {
-            const peerInfo = parseIlpPeerInfo(mostRecent as Parameters<typeof parseIlpPeerInfo>[0]);
+            const peerInfo = parseIlpPeerInfo(
+              mostRecent as Parameters<typeof parseIlpPeerInfo>[0]
+            );
             resolve(peerInfo);
           } catch (error) {
             reject(
@@ -763,7 +803,9 @@ export class BootstrapService {
           const mostRecent = sortedEvents[0];
 
           try {
-            const peerInfo = parseIlpPeerInfo(mostRecent as Parameters<typeof parseIlpPeerInfo>[0]);
+            const peerInfo = parseIlpPeerInfo(
+              mostRecent as Parameters<typeof parseIlpPeerInfo>[0]
+            );
             resolve(peerInfo);
           } catch (error) {
             reject(
@@ -802,7 +844,7 @@ export class BootstrapService {
     await this.connectorAdmin.addPeer({
       id: peerId,
       url: peerInfo.btpEndpoint,
-      authToken: '',  // BTP doesn't need auth
+      authToken: '', // BTP doesn't need auth
       routes: [{ prefix: peerInfo.ilpAddress }],
     });
   }

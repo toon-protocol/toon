@@ -8,16 +8,23 @@
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
-import type { IlpPeerInfo, ConnectorChannelClient, SettlementNegotiationConfig } from './types.js';
-import type { SpspRequestSettlementInfo } from './events/builders.js';
 import type {
-  KnownPeer,
-  BootstrapResult,
-} from './bootstrap/types.js';
+  IlpPeerInfo,
+  ConnectorChannelClient,
+  SettlementNegotiationConfig,
+} from './types.js';
+import type { SpspRequestSettlementInfo } from './events/builders.js';
+import type { KnownPeer, BootstrapResult } from './bootstrap/types.js';
 import type { Subscription } from './types.js';
-import type { SendPacketParams, SendPacketResult } from './bootstrap/direct-runtime-client.js';
+import type {
+  SendPacketParams,
+  SendPacketResult,
+} from './bootstrap/direct-runtime-client.js';
 import type { RegisterPeerParams } from './bootstrap/direct-connector-admin.js';
-import { BootstrapService, BootstrapError } from './bootstrap/BootstrapService.js';
+import {
+  BootstrapService,
+  BootstrapError,
+} from './bootstrap/BootstrapService.js';
 import { RelayMonitor } from './bootstrap/RelayMonitor.js';
 import { createDirectRuntimeClient } from './bootstrap/direct-runtime-client.js';
 import { createDirectConnectorAdmin } from './bootstrap/direct-connector-admin.js';
@@ -85,7 +92,7 @@ export type HandlePacketResponse =
  * how to process both regular events and SPSP requests.
  */
 export type PacketHandler = (
-  request: HandlePacketRequest,
+  request: HandlePacketRequest
 ) => HandlePacketResponse | Promise<HandlePacketResponse>;
 
 /**
@@ -112,7 +119,9 @@ export interface EmbeddableConnectorLike {
    * Optional in HTTP mode where packets are delivered via local delivery HTTP endpoint.
    */
   setPacketHandler?(
-    handler: (request: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>,
+    handler: (
+      request: HandlePacketRequest
+    ) => HandlePacketResponse | Promise<HandlePacketResponse>
   ): void;
   /**
    * Open a payment channel via the connector's settlement layer.
@@ -281,7 +290,7 @@ export interface CrosstownNode {
  * ```
  */
 export function createCrosstownNode(
-  config: CrosstownNodeConfig,
+  config: CrosstownNodeConfig
 ): CrosstownNode {
   // Create direct clients for zero-latency embedded mode
   const directRuntimeClient = createDirectRuntimeClient(config.connector, {
@@ -294,7 +303,9 @@ export function createCrosstownNode(
   const channelClient: ConnectorChannelClient | null =
     config.connector.openChannel && config.connector.getChannelState
       ? createDirectChannelClient(
-          config.connector as Required<Pick<EmbeddableConnectorLike, 'openChannel' | 'getChannelState'>>,
+          config.connector as Required<
+            Pick<EmbeddableConnectorLike, 'openChannel' | 'getChannelState'>
+          >
         )
       : null;
 
@@ -312,7 +323,7 @@ export function createCrosstownNode(
       basePricePerByte: config.basePricePerByte ?? 10n,
     },
     config.secretKey,
-    config.ilpInfo,
+    config.ilpInfo
   );
 
   // Wire clients to bootstrap service
@@ -361,7 +372,7 @@ export function createCrosstownNode(
 
         // Run bootstrap to discover and register peers
         const results = await bootstrapService.bootstrap(
-          config.additionalPeersJson,
+          config.additionalPeersJson
         );
 
         // Extract bootstrapped peer pubkeys for relay monitor exclusion
@@ -381,7 +392,7 @@ export function createCrosstownNode(
         };
       } catch (error) {
         throw new BootstrapError(
-          `Failed to start CrosstownNode: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to start CrosstownNode: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     },

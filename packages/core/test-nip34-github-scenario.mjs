@@ -11,7 +11,11 @@
  * This tests the full payment-gated Git workflow via Nostr events.
  */
 
-import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import {
+  finalizeEvent,
+  generateSecretKey,
+  getPublicKey,
+} from 'nostr-tools/pure';
 import { encode as encodeToon } from '@toon-format/toon';
 import { createHash, randomBytes } from 'crypto';
 import { Buffer } from 'buffer';
@@ -65,7 +69,7 @@ function createILPPrepare(event, destination = 'g.crosstown') {
     destination,
     executionCondition: condition.toString('base64'),
     expiresAt: new Date(Date.now() + 30000).toISOString(),
-    data: dataBuffer.toString('base64')
+    data: dataBuffer.toString('base64'),
   };
 }
 
@@ -74,7 +78,7 @@ async function sendILPPacket(prepare) {
   const response = await fetch(`${BLS_URL}/handle-packet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(prepare)
+    body: JSON.stringify(prepare),
   });
 
   if (!response.ok) {
@@ -96,7 +100,7 @@ async function checkForgejo() {
 
   try {
     const response = await fetch(`${FORGEJO_URL}/api/v1/user`, {
-      headers: { 'Authorization': `token ${FORGEJO_TOKEN}` }
+      headers: { Authorization: `token ${FORGEJO_TOKEN}` },
     });
 
     if (!response.ok) {
@@ -126,16 +130,16 @@ async function createTestRepo(repoName) {
     const response = await fetch(`${FORGEJO_URL}/api/v1/user/repos`, {
       method: 'POST',
       headers: {
-        'Authorization': `token ${FORGEJO_TOKEN}`,
-        'Content-Type': 'application/json'
+        Authorization: `token ${FORGEJO_TOKEN}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         name: repoName,
         description: 'Test repository for NIP-34 integration',
         auto_init: true,
         default_branch: 'main',
-        private: false
-      })
+        private: false,
+      }),
     });
 
     if (response.status === 409) {
@@ -158,19 +162,22 @@ async function createTestRepo(repoName) {
 async function announceRepository(repoName) {
   console.log(`\n📢 Step 3: Announcing repository via NIP-34 (kind:30617)...`);
 
-  const event = finalizeEvent({
-    kind: 30617,
-    content: 'Test repository for NIP-34 integration',
-    tags: [
-      ['d', `${FORGEJO_OWNER}/${repoName}`],
-      ['name', repoName],
-      ['description', 'Test repository for NIP-34 integration'],
-      ['clone', `${FORGEJO_URL}/${FORGEJO_OWNER}/${repoName}.git`],
-      ['web', `${FORGEJO_URL}/${FORGEJO_OWNER}/${repoName}`],
-      ['maintainers', PEER2_PUBKEY]
-    ],
-    created_at: Math.floor(Date.now() / 1000)
-  }, PEER2_SECRET);
+  const event = finalizeEvent(
+    {
+      kind: 30617,
+      content: 'Test repository for NIP-34 integration',
+      tags: [
+        ['d', `${FORGEJO_OWNER}/${repoName}`],
+        ['name', repoName],
+        ['description', 'Test repository for NIP-34 integration'],
+        ['clone', `${FORGEJO_URL}/${FORGEJO_OWNER}/${repoName}.git`],
+        ['web', `${FORGEJO_URL}/${FORGEJO_OWNER}/${repoName}`],
+        ['maintainers', PEER2_PUBKEY],
+      ],
+      created_at: Math.floor(Date.now() / 1000),
+    },
+    PEER2_SECRET
+  );
 
   console.log(`  Event ID: ${event.id}`);
   console.log(`  Kind: ${event.kind} (Repository Announcement)`);
@@ -178,13 +185,17 @@ async function announceRepository(repoName) {
 
   // Create ILP packet
   const prepare = createILPPrepare(event);
-  console.log(`  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`);
+  console.log(
+    `  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`
+  );
 
   try {
     const result = await sendILPPacket(prepare);
 
     if (result.accept) {
-      console.log(`✅ Repository announced (fulfillment: ${result.fulfillment.slice(0, 16)}...)`);
+      console.log(
+        `✅ Repository announced (fulfillment: ${result.fulfillment.slice(0, 16)}...)`
+      );
     } else {
       console.log(`❌ Announcement rejected: ${result.message}`);
     }
@@ -219,17 +230,20 @@ index 0000000..e69de29
 --
 2.40.0`;
 
-  const event = finalizeEvent({
-    kind: 1617,
-    content: patchContent,
-    tags: [
-      ['a', `30617:${PEER2_PUBKEY}:${FORGEJO_OWNER}/${repoName}`],
-      ['p', PEER2_PUBKEY],
-      ['t', 'feature'],
-      ['t', 'nip-34']
-    ],
-    created_at: Math.floor(Date.now() / 1000)
-  }, PEER2_SECRET);
+  const event = finalizeEvent(
+    {
+      kind: 1617,
+      content: patchContent,
+      tags: [
+        ['a', `30617:${PEER2_PUBKEY}:${FORGEJO_OWNER}/${repoName}`],
+        ['p', PEER2_PUBKEY],
+        ['t', 'feature'],
+        ['t', 'nip-34'],
+      ],
+      created_at: Math.floor(Date.now() / 1000),
+    },
+    PEER2_SECRET
+  );
 
   console.log(`  Event ID: ${event.id}`);
   console.log(`  Kind: ${event.kind} (Patch)`);
@@ -237,15 +251,21 @@ index 0000000..e69de29
 
   // Create ILP packet
   const prepare = createILPPrepare(event);
-  console.log(`  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`);
+  console.log(
+    `  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`
+  );
 
   try {
     const result = await sendILPPacket(prepare);
 
     if (result.accept) {
-      console.log(`✅ Patch submitted (fulfillment: ${result.fulfillment.slice(0, 16)}...)`);
+      console.log(
+        `✅ Patch submitted (fulfillment: ${result.fulfillment.slice(0, 16)}...)`
+      );
       if (FORGEJO_TOKEN) {
-        console.log(`   Note: Auto-apply to Forgejo requires NIP-34 handler integration`);
+        console.log(
+          `   Note: Auto-apply to Forgejo requires NIP-34 handler integration`
+        );
       }
     } else {
       console.log(`❌ Patch rejected: ${result.message}`);
@@ -280,18 +300,21 @@ README is minimal.
 - NIP-34 support: Enabled
 - ILP gating: Active`;
 
-  const event = finalizeEvent({
-    kind: 1621,
-    content: issueContent,
-    tags: [
-      ['a', `30617:${PEER2_PUBKEY}:${FORGEJO_OWNER}/${repoName}`],
-      ['p', PEER2_PUBKEY],
-      ['subject', 'Add NIP-34 documentation to README'],
-      ['t', 'bug'],
-      ['t', 'documentation']
-    ],
-    created_at: Math.floor(Date.now() / 1000)
-  }, PEER2_SECRET);
+  const event = finalizeEvent(
+    {
+      kind: 1621,
+      content: issueContent,
+      tags: [
+        ['a', `30617:${PEER2_PUBKEY}:${FORGEJO_OWNER}/${repoName}`],
+        ['p', PEER2_PUBKEY],
+        ['subject', 'Add NIP-34 documentation to README'],
+        ['t', 'bug'],
+        ['t', 'documentation'],
+      ],
+      created_at: Math.floor(Date.now() / 1000),
+    },
+    PEER2_SECRET
+  );
 
   console.log(`  Event ID: ${event.id}`);
   console.log(`  Kind: ${event.kind} (Issue)`);
@@ -299,15 +322,21 @@ README is minimal.
 
   // Create ILP packet
   const prepare = createILPPrepare(event);
-  console.log(`  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`);
+  console.log(
+    `  Payment: ${prepare.amount} units (${Buffer.from(prepare.data, 'base64').length} bytes × 10)`
+  );
 
   try {
     const result = await sendILPPacket(prepare);
 
     if (result.accept) {
-      console.log(`✅ Issue created (fulfillment: ${result.fulfillment.slice(0, 16)}...)`);
+      console.log(
+        `✅ Issue created (fulfillment: ${result.fulfillment.slice(0, 16)}...)`
+      );
       if (FORGEJO_TOKEN) {
-        console.log(`   Note: Auto-create in Forgejo requires NIP-34 handler integration`);
+        console.log(
+          `   Note: Auto-create in Forgejo requires NIP-34 handler integration`
+        );
       }
     } else {
       console.log(`❌ Issue rejected: ${result.message}`);

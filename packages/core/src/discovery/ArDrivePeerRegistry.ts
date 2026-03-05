@@ -9,7 +9,11 @@
 import type { TurboAuthenticatedClient } from '@ardrive/turbo-sdk';
 import type { IlpPeerInfo } from '../types.js';
 import { PeerDiscoveryError } from '../errors.js';
-import { isValidPubkey, isValidIlpAddress, isValidBtpEndpoint } from './GenesisPeerLoader.js';
+import {
+  isValidPubkey,
+  isValidIlpAddress,
+  isValidBtpEndpoint,
+} from './GenesisPeerLoader.js';
 
 const DEFAULT_GATEWAY_URL = 'https://arweave.net/graphql';
 
@@ -70,7 +74,8 @@ function isValidIlpPeerInfo(entry: unknown): entry is IlpPeerInfo {
     typeof obj['assetScale'] === 'number' &&
     Number.isInteger(obj['assetScale']) &&
     (obj['assetScale'] as number) >= 0 &&
-    (obj['settlementEngine'] === undefined || typeof obj['settlementEngine'] === 'string')
+    (obj['settlementEngine'] === undefined ||
+      typeof obj['settlementEngine'] === 'string')
   );
 }
 
@@ -80,7 +85,7 @@ function getPubkeyFromTags(tags: GraphQlTag[]): string | undefined {
 }
 
 async function fetchPeers(
-  gatewayUrl: string = DEFAULT_GATEWAY_URL,
+  gatewayUrl: string = DEFAULT_GATEWAY_URL
 ): Promise<Map<string, IlpPeerInfo>> {
   const result = new Map<string, IlpPeerInfo>();
 
@@ -119,7 +124,9 @@ async function fetchPeers(
         if (isValidIlpPeerInfo(data)) {
           result.set(pubkey, data);
         } else {
-          console.warn(`Skipping transaction ${txId}: invalid IlpPeerInfo data`);
+          console.warn(
+            `Skipping transaction ${txId}: invalid IlpPeerInfo data`
+          );
         }
       } catch (err) {
         console.warn(`Failed to fetch transaction data for ${txId}:`, err);
@@ -135,7 +142,7 @@ async function fetchPeers(
 async function publishPeerInfo(
   peerInfo: IlpPeerInfo,
   pubkey: string,
-  turboClient: TurboAuthenticatedClient,
+  turboClient: TurboAuthenticatedClient
 ): Promise<string> {
   if (!isValidPubkey(pubkey)) {
     throw new PeerDiscoveryError(`Invalid pubkey: ${pubkey}`);
@@ -161,7 +168,7 @@ async function publishPeerInfo(
   } catch (err) {
     throw new PeerDiscoveryError(
       'Failed to publish peer info to ArDrive',
-      err instanceof Error ? err : undefined,
+      err instanceof Error ? err : undefined
     );
   }
 }

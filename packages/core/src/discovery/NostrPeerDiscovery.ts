@@ -71,7 +71,10 @@ export class NostrPeerDiscovery {
 
       // Extract pubkeys from 'p' tags and deduplicate
       const pubkeys = mostRecent.tags
-        .filter((tag): tag is [string, string, ...string[]] => tag[0] === 'p' && typeof tag[1] === 'string')
+        .filter(
+          (tag): tag is [string, string, ...string[]] =>
+            tag[0] === 'p' && typeof tag[1] === 'string'
+        )
         .map((tag) => tag[1]);
 
       return [...new Set(pubkeys)];

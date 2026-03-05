@@ -21,7 +21,9 @@ export type SocialDiscoveryEvent =
 /**
  * Listener callback for social discovery events.
  */
-export type SocialDiscoveryEventListener = (event: SocialDiscoveryEvent) => void;
+export type SocialDiscoveryEventListener = (
+  event: SocialDiscoveryEvent
+) => void;
 
 /**
  * Configuration for SocialPeerDiscovery.

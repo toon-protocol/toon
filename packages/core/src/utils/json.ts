@@ -45,7 +45,10 @@ export function bigIntReviver(_key: string, value: unknown): unknown {
  * @param space - Optional indentation (same as JSON.stringify)
  * @returns JSON string with BigInt values encoded as strings
  */
-export function stringifyWithBigInt(value: unknown, space?: string | number): string {
+export function stringifyWithBigInt(
+  value: unknown,
+  space?: string | number
+): string {
   return JSON.stringify(value, bigIntReplacer, space);
 }
 

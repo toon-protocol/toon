@@ -102,77 +102,81 @@ export class NostrSpspClient {
     const myPubkey = this.pubkey;
     const mySecretKey = this.secretKey;
 
-    return new Promise<SpspInfo & { settlement?: SettlementNegotiationResult }>((resolve, reject) => {
-      let resolved = false;
+    return new Promise<SpspInfo & { settlement?: SettlementNegotiationResult }>(
+      (resolve, reject) => {
+        let resolved = false;
 
-      // Subscribe for kind:23195 events tagged with our pubkey
-      const filter: Filter = {
-        kinds: [SPSP_RESPONSE_KIND],
-        '#p': [myPubkey],
-        since: Math.floor(Date.now() / 1000) - 5,
-      };
+        // Subscribe for kind:23195 events tagged with our pubkey
+        const filter: Filter = {
+          kinds: [SPSP_RESPONSE_KIND],
+          '#p': [myPubkey],
+          since: Math.floor(Date.now() / 1000) - 5,
+        };
 
-      const sub = this.pool.subscribeMany(this.relayUrls, filter, {
-        onevent: (responseEvent) => {
+        const sub = this.pool.subscribeMany(this.relayUrls, filter, {
+          onevent: (responseEvent) => {
+            if (resolved) return;
+
+            try {
+              // Parse and decrypt the response
+              const response = parseSpspResponse(
+                responseEvent,
+                mySecretKey,
+                responseEvent.pubkey
+              );
+
+              // Verify requestId matches
+              if (response.requestId !== requestId) {
+                // Not our response, ignore
+                return;
+              }
+
+              // Success - clean up and resolve
+              resolved = true;
+              clearTimeout(timeoutId);
+              sub.close();
+
+              const result: SpspInfo & {
+                settlement?: SettlementNegotiationResult;
+              } = {
+                destinationAccount: response.destinationAccount,
+                sharedSecret: response.sharedSecret,
+              };
+
+              // Include settlement result if present in response
+              if (response.negotiatedChain && response.settlementAddress) {
+                result.settlement = {
+                  negotiatedChain: response.negotiatedChain,
+                  settlementAddress: response.settlementAddress,
+                  tokenAddress: response.tokenAddress,
+                  tokenNetworkAddress: response.tokenNetworkAddress,
+                  channelId: response.channelId,
+                  settlementTimeout: response.settlementTimeout,
+                };
+              }
+
+              resolve(result);
+            } catch {
+              // Invalid response, ignore and continue waiting
+            }
+          },
+        });
+
+        // Set up timeout
+        const timeoutId = setTimeout(() => {
           if (resolved) return;
 
-          try {
-            // Parse and decrypt the response
-            const response = parseSpspResponse(
-              responseEvent,
-              mySecretKey,
-              responseEvent.pubkey
-            );
+          resolved = true;
+          sub.close();
 
-            // Verify requestId matches
-            if (response.requestId !== requestId) {
-              // Not our response, ignore
-              return;
-            }
-
-            // Success - clean up and resolve
-            resolved = true;
-            clearTimeout(timeoutId);
-            sub.close();
-
-            const result: SpspInfo & { settlement?: SettlementNegotiationResult } = {
-              destinationAccount: response.destinationAccount,
-              sharedSecret: response.sharedSecret,
-            };
-
-            // Include settlement result if present in response
-            if (response.negotiatedChain && response.settlementAddress) {
-              result.settlement = {
-                negotiatedChain: response.negotiatedChain,
-                settlementAddress: response.settlementAddress,
-                tokenAddress: response.tokenAddress,
-                tokenNetworkAddress: response.tokenNetworkAddress,
-                channelId: response.channelId,
-                settlementTimeout: response.settlementTimeout,
-              };
-            }
-
-            resolve(result);
-          } catch {
-            // Invalid response, ignore and continue waiting
-          }
-        },
-      });
-
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        if (resolved) return;
-
-        resolved = true;
-        sub.close();
-
-        reject(
-          new SpspTimeoutError(
-            `SPSP request timed out after ${timeout}ms waiting for response from ${recipientPubkey}`,
-            recipientPubkey
-          )
-        );
-      }, timeout);
-    });
+          reject(
+            new SpspTimeoutError(
+              `SPSP request timed out after ${timeout}ms waiting for response from ${recipientPubkey}`,
+              recipientPubkey
+            )
+          );
+        }, timeout);
+      }
+    );
   }
 }

@@ -13,7 +13,10 @@
  */
 
 import type { Event as NostrEvent } from 'nostr-tools/pure';
-import { ForgejoClient, type CreateRepositoryOptions } from './ForgejoClient.js';
+import {
+  ForgejoClient,
+  type CreateRepositoryOptions,
+} from './ForgejoClient.js';
 import {
   isNIP34Event,
   REPOSITORY_ANNOUNCEMENT_KIND,
@@ -35,13 +38,24 @@ export interface NIP34Config {
   forgejoToken: string;
   /** Default owner/org for repositories */
   defaultOwner: string;
+  /** Git commit identity configuration */
+  gitConfig?: {
+    userName: string;
+    userEmail: string;
+  };
   /** Enable verbose logging */
   verbose?: boolean;
 }
 
 export interface HandleEventResult {
   success: boolean;
-  operation: 'repository' | 'patch' | 'pull_request' | 'issue' | 'status' | 'unsupported';
+  operation:
+    | 'repository'
+    | 'patch'
+    | 'pull_request'
+    | 'issue'
+    | 'status'
+    | 'unsupported';
   message: string;
   metadata?: Record<string, unknown>;
 }
@@ -82,7 +96,9 @@ export class NIP34Handler {
       };
     }
 
-    this.log(`Handling NIP-34 event: kind=${event.kind} id=${event.id.substring(0, 8)}`);
+    this.log(
+      `Handling NIP-34 event: kind=${event.kind} id=${event.id.substring(0, 8)}`
+    );
 
     try {
       switch (event.kind) {
@@ -139,7 +155,9 @@ export class NIP34Handler {
 
     // Extract just the repository name (remove owner prefix if present)
     // e.g., "admin/repo-name" -> "repo-name"
-    const repoName = repoId.includes('/') ? repoId.split('/').pop()! : repoId;
+    const repoName = repoId.includes('/')
+      ? (repoId.split('/').pop() ?? repoId)
+      : repoId;
 
     this.log(`Creating repository: ${repoName}`);
 
@@ -187,7 +205,7 @@ export class NIP34Handler {
     const owner = this.defaultOwner;
     // Extract just the repository name (remove owner prefix if present)
     const repoName = repoRef.repoId.includes('/')
-      ? repoRef.repoId.split('/').pop()!
+      ? (repoRef.repoId.split('/').pop() ?? repoRef.repoId)
       : repoRef.repoId;
 
     // Check if repository exists
@@ -299,7 +317,7 @@ export class NIP34Handler {
     const owner = this.defaultOwner;
     // Extract just the repository name (remove owner prefix if present)
     const repoName = repoRef.repoId.includes('/')
-      ? repoRef.repoId.split('/').pop()!
+      ? (repoRef.repoId.split('/').pop() ?? repoRef.repoId)
       : repoRef.repoId;
 
     this.log(`Creating PR issue for ${owner}/${repoName} from ${cloneUrl}`);
@@ -364,10 +382,10 @@ ${event.content}
     }
 
     const repoRef = parseRepositoryReference(aTag);
-    const owner = this.forgejo['defaultOwner']!;
+    const owner = this.defaultOwner;
     // Extract just the repository name (remove owner prefix if present)
     const repoName = repoRef.repoId.includes('/')
-      ? repoRef.repoId.split('/').pop()!
+      ? (repoRef.repoId.split('/').pop() ?? repoRef.repoId)
       : repoRef.repoId;
 
     this.log(`Creating issue in ${owner}/${repoName}`);
@@ -397,7 +415,13 @@ ${event.content}
    */
   private getOperationType(
     kind: number
-  ): 'repository' | 'patch' | 'pull_request' | 'issue' | 'status' | 'unsupported' {
+  ):
+    | 'repository'
+    | 'patch'
+    | 'pull_request'
+    | 'issue'
+    | 'status'
+    | 'unsupported' {
     switch (kind) {
       case REPOSITORY_ANNOUNCEMENT_KIND:
         return 'repository';
@@ -420,9 +444,11 @@ ${event.content}
   /**
    * Parse git format-patch output to extract file changes
    */
-  private parsePatch(patchContent: string): { files: Array<{ path: string; content: string }> } | null {
+  private parsePatch(
+    patchContent: string
+  ): { files: { path: string; content: string }[] } | null {
     try {
-      const files: Array<{ path: string; content: string }> = [];
+      const files: { path: string; content: string }[] = [];
 
       // Simple parser for git format-patch
       // Look for diff --git lines to identify files
@@ -440,17 +466,17 @@ ${event.content}
         // Extract the patch content for this file
         // For simplicity, we'll extract everything after the diff header
         // In a full implementation, we'd properly parse hunks and apply them
-        const fileStart = match.index!;
+        const fileStart = match.index ?? 0;
         const nextMatch = matches[matches.indexOf(match) + 1];
-        const fileEnd = nextMatch ? nextMatch.index! : patchContent.length;
+        const fileEnd = nextMatch?.index ?? patchContent.length;
         const filePatch = patchContent.substring(fileStart, fileEnd);
 
         // For now, extract content lines (lines starting with +)
         // This is a simplified approach - a full parser would handle hunks properly
         const contentLines = filePatch
           .split('\n')
-          .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-          .map(line => line.substring(1));
+          .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+          .map((line) => line.substring(1));
 
         if (contentLines.length > 0) {
           files.push({
@@ -462,7 +488,9 @@ ${event.content}
 
       return files.length > 0 ? { files } : null;
     } catch (error) {
-      this.log(`Error parsing patch: ${error instanceof Error ? error.message : 'Unknown'}`);
+      this.log(
+        `Error parsing patch: ${error instanceof Error ? error.message : 'Unknown'}`
+      );
       return null;
     }
   }

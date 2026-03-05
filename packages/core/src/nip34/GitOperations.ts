@@ -8,7 +8,8 @@
  *   npm install simple-git
  */
 
-import { simpleGit, SimpleGit, SimpleGitOptions } from 'simple-git';
+import type { SimpleGit, SimpleGitOptions } from 'simple-git';
+import { simpleGit } from 'simple-git';
 import { mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';

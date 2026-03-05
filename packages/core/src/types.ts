@@ -7,6 +7,8 @@
  * Contains information needed to establish an ILP peering relationship.
  */
 export interface IlpPeerInfo {
+  /** Nostr pubkey of the peer (64-char hex) */
+  pubkey?: string;
   /** ILP address of the peer's connector (e.g., "g.example.connector") */
   ilpAddress: string;
   /** BTP WebSocket endpoint URL for packet exchange */
@@ -185,4 +187,3 @@ export interface SettlementNegotiationResult {
   /** Challenge period in seconds */
   settlementTimeout?: number;
 }
-

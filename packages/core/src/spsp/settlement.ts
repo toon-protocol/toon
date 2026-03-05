@@ -26,7 +26,9 @@ export function negotiateSettlementChain(
 ): string | null {
   // Compute intersection preserving requester's order
   const responderSet = new Set(responderChains);
-  const intersection = requesterChains.filter((chain) => responderSet.has(chain));
+  const intersection = requesterChains.filter((chain) =>
+    responderSet.has(chain)
+  );
 
   if (intersection.length === 0) {
     return null;

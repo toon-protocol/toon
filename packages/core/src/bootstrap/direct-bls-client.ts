@@ -37,7 +37,9 @@ export interface DirectBlsClientConfig {
  * });
  * ```
  */
-export function createDirectBlsClient(config: DirectBlsClientConfig): AgentRuntimeClient {
+export function createDirectBlsClient(
+  config: DirectBlsClientConfig
+): AgentRuntimeClient {
   const baseUrl = config.blsUrl.replace(/\/$/, '');
   const timeout = config.timeout ?? 30000;
 
@@ -75,15 +77,15 @@ export function createDirectBlsClient(config: DirectBlsClientConfig): AgentRunti
           };
         }
 
-        const result: any = await response.json();
+        const result = (await response.json()) as Record<string, unknown>;
 
         // BLS returns {accept, fulfillment, data, code, message}
         return {
-          accepted: result.accept ?? false,
-          fulfillment: result.fulfillment,
-          data: result.data,
-          code: result.code,
-          message: result.message,
+          accepted: (result['accept'] as boolean) ?? false,
+          fulfillment: result['fulfillment'] as string | undefined,
+          data: result['data'] as string | undefined,
+          code: result['code'] as string | undefined,
+          message: result['message'] as string | undefined,
         };
       } catch (error) {
         clearTimeout(timeoutId);

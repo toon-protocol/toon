@@ -24,7 +24,9 @@ import type { AgentRuntimeClient, IlpSendResult } from './types.js';
  * });
  * ```
  */
-export function createHttpRuntimeClient(runtimeUrl: string): AgentRuntimeClient {
+export function createHttpRuntimeClient(
+  runtimeUrl: string
+): AgentRuntimeClient {
   const baseUrl = runtimeUrl.replace(/\/$/, '');
 
   return {
@@ -57,20 +59,20 @@ export function createHttpRuntimeClient(runtimeUrl: string): AgentRuntimeClient 
           };
         }
 
-        const result: any = await response.json();
+        const result = (await response.json()) as Record<string, unknown>;
 
         // Map HTTP response to IlpSendResult
-        if (result.accept || result.accepted) {
+        if (result['accept'] || result['accepted']) {
           return {
             accepted: true,
-            fulfillment: result.fulfillment,
-            data: result.data,
+            fulfillment: result['fulfillment'] as string | undefined,
+            data: result['data'] as string | undefined,
           };
         } else {
           return {
             accepted: false,
-            code: result.code || 'T00',
-            message: result.message || 'Unknown error',
+            code: (result['code'] as string) || 'T00',
+            message: (result['message'] as string) || 'Unknown error',
           };
         }
       } catch (error) {

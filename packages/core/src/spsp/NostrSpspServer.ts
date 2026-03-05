@@ -91,7 +91,15 @@ export class NostrSpspServer {
    * All errors are caught and logged silently.
    */
   private async processRequest(
-    event: { id: string; pubkey: string; kind: number; content: string; tags: string[][]; created_at: number; sig: string },
+    event: {
+      id: string;
+      pubkey: string;
+      kind: number;
+      content: string;
+      tags: string[][];
+      created_at: number;
+      sig: string;
+    },
     generator: () => SpspInfo | Promise<SpspInfo>
   ): Promise<void> {
     // Extract sender pubkey from event
@@ -123,7 +131,11 @@ export class NostrSpspServer {
     };
 
     // Attempt settlement negotiation if enabled
-    if (this.settlementConfig && this.channelClient && request.supportedChains) {
+    if (
+      this.settlementConfig &&
+      this.channelClient &&
+      request.supportedChains
+    ) {
       await this.negotiateSettlement(request, senderPubkey, response);
     }
 

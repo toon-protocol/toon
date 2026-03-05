@@ -1,0 +1,60 @@
+/**
+ * Handler registry for @crosstown/sdk.
+ *
+ * Maps event kinds to handler functions for dispatching incoming ILP packets.
+ */
+
+import type {
+  HandlerContext,
+  HandlePacketAcceptResponse,
+  HandlePacketRejectResponse,
+} from './handler-context.js';
+
+export type HandlerResponse =
+  | HandlePacketAcceptResponse
+  | HandlePacketRejectResponse;
+
+export type Handler = (ctx: HandlerContext) => Promise<HandlerResponse>;
+
+/**
+ * Registry that maps Nostr event kinds to handler functions.
+ */
+export class HandlerRegistry {
+  private handlers = new Map<number, Handler>();
+  private defaultHandler: Handler | undefined;
+
+  /**
+   * Register a handler for a specific event kind.
+   * Replaces any existing handler for that kind.
+   */
+  on(kind: number, handler: Handler): this {
+    this.handlers.set(kind, handler);
+    return this;
+  }
+
+  /**
+   * Register a default handler for unrecognized kinds.
+   */
+  onDefault(handler: Handler): this {
+    this.defaultHandler = handler;
+    return this;
+  }
+
+  /**
+   * Dispatch a context to the appropriate handler based on kind.
+   */
+  async dispatch(ctx: HandlerContext): Promise<HandlerResponse> {
+    const handler = this.handlers.get(ctx.kind);
+    if (handler) {
+      return handler(ctx);
+    }
+    if (this.defaultHandler) {
+      return this.defaultHandler(ctx);
+    }
+    return {
+      accept: false,
+      code: 'F00',
+      message: `No handler registered for kind ${ctx.kind}`,
+    };
+  }
+}

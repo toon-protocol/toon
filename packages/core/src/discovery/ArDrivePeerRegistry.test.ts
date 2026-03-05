@@ -19,7 +19,7 @@ function makeGraphQlResponse(
     txId: string;
     pubkey: string;
     extraTags?: { name: string; value: string }[];
-  }[],
+  }[]
 ) {
   return {
     data: {
@@ -68,7 +68,8 @@ describe('ArDrivePeerRegistry', () => {
         { txId: 'tx1', pubkey: VALID_PUBKEY },
       ]);
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           json: () => Promise.resolve(graphQlResponse),
         })
@@ -97,11 +98,11 @@ describe('ArDrivePeerRegistry', () => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: expect.stringContaining('crosstown'),
-        }),
+        })
       );
 
       const body = JSON.parse(
-        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+        (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0]![1].body
       );
       expect(body.query).toContain('App-Name');
       expect(body.query).toContain('ilp-peer-info');
@@ -114,7 +115,8 @@ describe('ArDrivePeerRegistry', () => {
         { txId: 'tx-older', pubkey: VALID_PUBKEY },
       ]);
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           json: () => Promise.resolve(graphQlResponse),
         })
@@ -137,7 +139,8 @@ describe('ArDrivePeerRegistry', () => {
         { txId: 'tx-bad', pubkey: VALID_PUBKEY },
       ]);
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           json: () => Promise.resolve(graphQlResponse),
         })
@@ -149,14 +152,16 @@ describe('ArDrivePeerRegistry', () => {
 
       expect(result.size).toBe(0);
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping transaction tx-bad'),
+        expect.stringContaining('Skipping transaction tx-bad')
       );
     });
 
     it('returns empty Map when GraphQL gateway is unreachable (logs warning, does not throw)', async () => {
       const warnSpy = suppressWarnings();
 
-      globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('Network error'));
+      globalThis.fetch = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('Network error'));
 
       const result = await ArDrivePeerRegistry.fetchPeers();
 
@@ -164,7 +169,7 @@ describe('ArDrivePeerRegistry', () => {
       expect(result).toBeInstanceOf(Map);
       expect(warnSpy).toHaveBeenCalledWith(
         'ArDrive peer registry unavailable:',
-        expect.any(Error),
+        expect.any(Error)
       );
     });
 
@@ -199,7 +204,8 @@ describe('ArDrivePeerRegistry', () => {
         { txId: 'tx-bad-scale', pubkey: VALID_PUBKEY_2 },
       ]);
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           json: () => Promise.resolve(graphQlResponse),
         })
@@ -241,7 +247,7 @@ describe('ArDrivePeerRegistry', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         customUrl,
-        expect.any(Object),
+        expect.any(Object)
       );
     });
 
@@ -253,7 +259,8 @@ describe('ArDrivePeerRegistry', () => {
         { txId: 'tx-ok', pubkey: VALID_PUBKEY_2 },
       ]);
 
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           json: () => Promise.resolve(graphQlResponse),
         })
@@ -270,7 +277,7 @@ describe('ArDrivePeerRegistry', () => {
       expect(result.get(VALID_PUBKEY_2)).toEqual(peerInfo2);
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Failed to fetch transaction data for tx-fail'),
-        expect.any(Error),
+        expect.any(Error)
       );
     });
   });
@@ -283,9 +290,15 @@ describe('ArDrivePeerRegistry', () => {
         dataCaches: [],
         fastFinalityIndexes: [],
       });
-      const mockClient = { uploadFile: mockUploadFile } as unknown as TurboAuthenticatedClient;
+      const mockClient = {
+        uploadFile: mockUploadFile,
+      } as unknown as TurboAuthenticatedClient;
 
-      await ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient);
+      await ArDrivePeerRegistry.publishPeerInfo(
+        peerInfo,
+        VALID_PUBKEY,
+        mockClient
+      );
 
       expect(mockUploadFile).toHaveBeenCalledWith({
         fileStreamFactory: expect.any(Function),
@@ -305,7 +318,9 @@ describe('ArDrivePeerRegistry', () => {
       const callArgs = mockUploadFile.mock.calls[0][0];
       const buffer = callArgs.fileStreamFactory();
       expect(buffer.toString('utf-8')).toBe(JSON.stringify(peerInfo));
-      expect(callArgs.fileSizeFactory()).toBe(Buffer.byteLength(JSON.stringify(peerInfo), 'utf-8'));
+      expect(callArgs.fileSizeFactory()).toBe(
+        Buffer.byteLength(JSON.stringify(peerInfo), 'utf-8')
+      );
     });
 
     it('returns transaction ID on success', async () => {
@@ -318,7 +333,11 @@ describe('ArDrivePeerRegistry', () => {
         }),
       } as unknown as TurboAuthenticatedClient;
 
-      const txId = await ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient);
+      const txId = await ArDrivePeerRegistry.publishPeerInfo(
+        peerInfo,
+        VALID_PUBKEY,
+        mockClient
+      );
 
       expect(txId).toBe('tx-abc-def');
     });
@@ -330,11 +349,11 @@ describe('ArDrivePeerRegistry', () => {
       } as unknown as TurboAuthenticatedClient;
 
       await expect(
-        ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient),
+        ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient)
       ).rejects.toThrow(PeerDiscoveryError);
 
       await expect(
-        ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient),
+        ArDrivePeerRegistry.publishPeerInfo(peerInfo, VALID_PUBKEY, mockClient)
       ).rejects.toThrow('Failed to publish peer info to ArDrive');
     });
 
@@ -345,11 +364,19 @@ describe('ArDrivePeerRegistry', () => {
       } as unknown as TurboAuthenticatedClient;
 
       await expect(
-        ArDrivePeerRegistry.publishPeerInfo(peerInfo, 'invalid-pubkey', mockClient),
+        ArDrivePeerRegistry.publishPeerInfo(
+          peerInfo,
+          'invalid-pubkey',
+          mockClient
+        )
       ).rejects.toThrow(PeerDiscoveryError);
 
       await expect(
-        ArDrivePeerRegistry.publishPeerInfo(peerInfo, 'invalid-pubkey', mockClient),
+        ArDrivePeerRegistry.publishPeerInfo(
+          peerInfo,
+          'invalid-pubkey',
+          mockClient
+        )
       ).rejects.toThrow('Invalid pubkey');
 
       // uploadFile should NOT have been called

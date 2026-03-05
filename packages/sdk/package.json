@@ -1,0 +1,68 @@
+{
+  "name": "@crosstown/sdk",
+  "version": "0.1.0",
+  "description": "Crosstown SDK for building ILP-gated Nostr services",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "crosstown",
+    "nostr",
+    "ilp",
+    "interledger",
+    "sdk"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ALLiDoizCode/crosstown.git",
+    "directory": "packages/sdk"
+  },
+  "author": "ALLiDoizCode",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@crosstown/core": "workspace:*",
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0",
+    "@scure/bip32": "^2.0.0",
+    "@scure/bip39": "^2.0.0",
+    "nostr-tools": "^2.20.0"
+  },
+  "peerDependencies": {
+    "@crosstown/connector": ">=1.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@crosstown/connector": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@crosstown/relay": "workspace:*",
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}

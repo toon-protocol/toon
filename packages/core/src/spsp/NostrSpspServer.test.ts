@@ -10,9 +10,16 @@ import { nip44 } from 'nostr-tools';
 import { NostrSpspServer } from './NostrSpspServer.js';
 import { SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
 import { buildSpspRequestEvent, parseSpspResponse } from '../events/index.js';
-import type { SpspInfo, ConnectorChannelClient, SettlementNegotiationConfig } from '../types.js';
+import type {
+  SpspInfo,
+  ConnectorChannelClient,
+  SettlementNegotiationConfig,
+} from '../types.js';
 
-const MOCK_RELAY_URLS = ['wss://relay1.example.com', 'wss://relay2.example.com'];
+const MOCK_RELAY_URLS = [
+  'wss://relay1.example.com',
+  'wss://relay2.example.com',
+];
 
 // Generate a mock 32-byte secret key (all 1s for testing)
 const MOCK_SECRET_KEY = new Uint8Array(32).fill(1);
@@ -63,12 +70,12 @@ describe('NostrSpspServer', () => {
       capturedOnevent = undefined;
 
       // Mock subscribeMany to capture the onevent callback
-      (mockPool as unknown as { subscribeMany: typeof mockPool.subscribeMany }).subscribeMany = vi.fn(
-        (relays, filters, callbacks) => {
-          capturedOnevent = callbacks.onevent;
-          return mockSub;
-        }
-      );
+      (
+        mockPool as unknown as { subscribeMany: typeof mockPool.subscribeMany }
+      ).subscribeMany = vi.fn((relays, filters, callbacks) => {
+        capturedOnevent = callbacks.onevent;
+        return mockSub;
+      });
     });
 
     // Helper to create an encrypted SPSP request event
@@ -130,7 +137,10 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Simulate incoming request
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         // Wait for async processing
@@ -155,8 +165,14 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Simulate two requests
-        const request1 = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
-        const request2 = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const request1 = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
+        const request2 = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(request1);
         capturedOnevent?.(request2);
 
@@ -180,7 +196,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -203,7 +222,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -226,7 +248,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -235,11 +260,17 @@ describe('NostrSpspServer', () => {
 
         // Get the published response event
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
 
         // Verify sender can decrypt the response
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.sharedSecret).toBe(MOCK_SPSP_INFO.sharedSecret);
       });
 
@@ -258,7 +289,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -266,7 +300,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         expect(responseEvent.kind).toBe(SPSP_RESPONSE_KIND);
       });
 
@@ -296,8 +330,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
         expect(parsed.requestId).toBe(requestId);
       });
 
@@ -317,7 +355,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -325,7 +366,7 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
         expect(responseEvent.tags).toContainEqual(['p', senderPubkey]);
       });
     });
@@ -359,8 +400,12 @@ describe('NostrSpspServer', () => {
 
         // The response requestId should match, proving decryption worked
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
         expect(parsed.requestId).toBe(requestId);
       });
 
@@ -379,7 +424,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -388,8 +436,12 @@ describe('NostrSpspServer', () => {
 
         // Sender should be able to decrypt
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
         expect(parsed).toBeDefined();
       });
 
@@ -465,12 +517,18 @@ describe('NostrSpspServer', () => {
 
         // Client receives and decrypts response
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const response = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const response = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         // Verify complete round-trip
         expect(response.requestId).toBe(requestId);
-        expect(response.destinationAccount).toBe(testSpspInfo.destinationAccount);
+        expect(response.destinationAccount).toBe(
+          testSpspInfo.destinationAccount
+        );
         expect(response.sharedSecret).toBe(testSpspInfo.sharedSecret);
       });
     });
@@ -507,7 +565,10 @@ describe('NostrSpspServer', () => {
         const subscription = server.handleSpspRequests(generator);
 
         // Process one request before unsubscribe
-        const request1 = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const request1 = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(request1);
 
         await vi.waitFor(() => {
@@ -559,7 +620,10 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Create malformed request (encrypted but with invalid payload)
-        const conversationKey = nip44.getConversationKey(senderSecretKey, serverPubkey);
+        const conversationKey = nip44.getConversationKey(
+          senderSecretKey,
+          serverPubkey
+        );
         const invalidPayload = nip44.encrypt('not-valid-json', conversationKey);
         const malformedEvent: NostrEvent = {
           id: '0'.repeat(64),
@@ -597,7 +661,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
 
         // Should not throw
         capturedOnevent?.(requestEvent);
@@ -628,7 +695,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
 
         // Should not throw
         capturedOnevent?.(requestEvent);
@@ -668,13 +738,19 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // First request - will fail in generator
-        const request1 = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const request1 = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(request1);
 
         await new Promise((r) => setTimeout(r, 50));
 
         // Second request - should succeed
-        const request2 = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const request2 = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(request2);
 
         await vi.waitFor(() => {
@@ -692,7 +768,10 @@ describe('NostrSpspServer', () => {
     describe('settlement negotiation - happy path', () => {
       const testSettlementConfig: SettlementNegotiationConfig = {
         ownSupportedChains: ['evm:base:8453', 'xrp:mainnet'],
-        ownSettlementAddresses: { 'evm:base:8453': '0xSERVER_ADDRESS', 'xrp:mainnet': 'rSERVER_ADDRESS' },
+        ownSettlementAddresses: {
+          'evm:base:8453': '0xSERVER_ADDRESS',
+          'xrp:mainnet': 'rSERVER_ADDRESS',
+        },
         ownPreferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
         ownTokenNetworks: { 'evm:base:8453': '0xTOKEN_NETWORK' },
         initialDeposit: '1000000',
@@ -702,8 +781,15 @@ describe('NostrSpspServer', () => {
 
       function createMockChannelClient(): ConnectorChannelClient {
         return {
-          openChannel: vi.fn().mockResolvedValue({ channelId: '0xCHANNEL123', status: 'opening' }),
-          getChannelState: vi.fn().mockResolvedValue({ channelId: '0xCHANNEL123', status: 'open', chain: 'evm:base:8453' }),
+          openChannel: vi.fn().mockResolvedValue({
+            channelId: '0xCHANNEL123',
+            status: 'opening',
+          }),
+          getChannelState: vi.fn().mockResolvedValue({
+            channelId: '0xCHANNEL123',
+            status: 'open',
+            chain: 'evm:base:8453',
+          }),
         };
       }
 
@@ -712,11 +798,18 @@ describe('NostrSpspServer', () => {
         senderSecretKey: Uint8Array,
         recipientPubkey: string
       ): NostrEvent {
-        const { event } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453', 'xrp:mainnet'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER_ADDRESS', 'xrp:mainnet': 'rPEER_ADDRESS' },
-          preferredTokens: { 'evm:base:8453': '0xPEER_TOKEN' },
-        });
+        const { event } = buildSpspRequestEvent(
+          recipientPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453', 'xrp:mainnet'],
+            settlementAddresses: {
+              'evm:base:8453': '0xPEER_ADDRESS',
+              'xrp:mainnet': 'rPEER_ADDRESS',
+            },
+            preferredTokens: { 'evm:base:8453': '0xPEER_TOKEN' },
+          }
+        );
         return event;
       }
 
@@ -738,7 +831,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -746,8 +842,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.negotiatedChain).toBe('evm:base:8453');
         expect(parsed.settlementAddress).toBe('0xSERVER_ADDRESS');
@@ -773,7 +873,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -809,14 +912,19 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
           expect(mockPool.publish).toHaveBeenCalled();
         });
 
-        expect(mockChannelClient.getChannelState).toHaveBeenCalledWith('0xCHANNEL123');
+        expect(mockChannelClient.getChannelState).toHaveBeenCalledWith(
+          '0xCHANNEL123'
+        );
       });
 
       it('response includes tokenAddress and tokenNetworkAddress for EVM chain', async () => {
@@ -837,7 +945,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -845,8 +956,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.tokenAddress).toBe('0xPEER_TOKEN');
         expect(parsed.tokenNetworkAddress).toBe('0xTOKEN_NETWORK');
@@ -870,7 +985,10 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -878,8 +996,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.settlementTimeout).toBe(86400);
       });
@@ -901,7 +1023,10 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Even with settlement fields in request, no settlement negotiation occurs
-        const requestEvent = createSettlementRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createSettlementRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -909,8 +1034,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.negotiatedChain).toBeUndefined();
         expect(parsed.settlementAddress).toBeUndefined();
@@ -936,7 +1065,10 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Request WITHOUT settlement fields
-        const requestEvent = createMockSpspRequestEvent(senderSecretKey, serverPubkey);
+        const requestEvent = createMockSpspRequestEvent(
+          senderSecretKey,
+          serverPubkey
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -944,8 +1076,12 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.negotiatedChain).toBeUndefined();
         expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
@@ -956,7 +1092,10 @@ describe('NostrSpspServer', () => {
     describe('settlement negotiation - error handling', () => {
       const testSettlementConfig: SettlementNegotiationConfig = {
         ownSupportedChains: ['evm:base:8453', 'xrp:mainnet'],
-        ownSettlementAddresses: { 'evm:base:8453': '0xSERVER_ADDRESS', 'xrp:mainnet': 'rSERVER_ADDRESS' },
+        ownSettlementAddresses: {
+          'evm:base:8453': '0xSERVER_ADDRESS',
+          'xrp:mainnet': 'rSERVER_ADDRESS',
+        },
         ownPreferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
         ownTokenNetworks: { 'evm:base:8453': '0xTOKEN_NETWORK' },
         initialDeposit: '1000000',
@@ -986,10 +1125,14 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Request with chains that don't overlap with server
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['aptos:mainnet:1'],
-          settlementAddresses: { 'aptos:mainnet:1': '0xAPTOS_ADDR' },
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['aptos:mainnet:1'],
+            settlementAddresses: { 'aptos:mainnet:1': '0xAPTOS_ADDR' },
+          }
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -997,10 +1140,16 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.negotiatedChain).toBeUndefined();
         expect(parsed.channelId).toBeUndefined();
         expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
@@ -1028,10 +1177,14 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // Request with matching chain but NO settlement address for it
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          // No settlementAddresses — peerAddress will be undefined
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            // No settlementAddresses — peerAddress will be undefined
+          }
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -1039,10 +1192,16 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.negotiatedChain).toBeUndefined();
         expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
       });
@@ -1052,7 +1211,9 @@ describe('NostrSpspServer', () => {
         const serverPubkey = getPublicKey(serverSecretKey);
         const senderSecretKey = generateSecretKey();
         const mockChannelClient: ConnectorChannelClient = {
-          openChannel: vi.fn().mockRejectedValue(new Error('Connector unavailable')),
+          openChannel: vi
+            .fn()
+            .mockRejectedValue(new Error('Connector unavailable')),
           getChannelState: vi.fn(),
         };
 
@@ -1068,10 +1229,14 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -1079,10 +1244,16 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.negotiatedChain).toBeUndefined();
       });
 
@@ -1091,12 +1262,21 @@ describe('NostrSpspServer', () => {
         const serverPubkey = getPublicKey(serverSecretKey);
         const senderSecretKey = generateSecretKey();
         const mockChannelClient: ConnectorChannelClient = {
-          openChannel: vi.fn().mockResolvedValue({ channelId: '0xCH', status: 'opening' }),
-          getChannelState: vi.fn().mockResolvedValue({ channelId: '0xCH', status: 'opening', chain: 'evm:base:8453' }),
+          openChannel: vi
+            .fn()
+            .mockResolvedValue({ channelId: '0xCH', status: 'opening' }),
+          getChannelState: vi.fn().mockResolvedValue({
+            channelId: '0xCH',
+            status: 'opening',
+            chain: 'evm:base:8453',
+          }),
         };
 
         // Use very short timeout
-        const shortTimeoutConfig = { ...testSettlementConfig, channelOpenTimeout: 100 };
+        const shortTimeoutConfig = {
+          ...testSettlementConfig,
+          channelOpenTimeout: 100,
+        };
 
         const server = new NostrSpspServer(
           MOCK_RELAY_URLS,
@@ -1110,21 +1290,34 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(requestEvent);
 
-        await vi.waitFor(() => {
-          expect(mockPool.publish).toHaveBeenCalled();
-        }, { timeout: 5000 });
+        await vi.waitFor(
+          () => {
+            expect(mockPool.publish).toHaveBeenCalled();
+          },
+          { timeout: 5000 }
+        );
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.negotiatedChain).toBeUndefined();
         expect(parsed.channelId).toBeUndefined();
       }, 10000);
@@ -1134,11 +1327,26 @@ describe('NostrSpspServer', () => {
         const serverPubkey = getPublicKey(serverSecretKey);
         const senderSecretKey = generateSecretKey();
         const mockChannelClient: ConnectorChannelClient = {
-          openChannel: vi.fn().mockResolvedValue({ channelId: '0xCH_MULTI', status: 'opening' }),
-          getChannelState: vi.fn()
-            .mockResolvedValueOnce({ channelId: '0xCH_MULTI', status: 'opening', chain: 'evm:base:8453' })
-            .mockResolvedValueOnce({ channelId: '0xCH_MULTI', status: 'opening', chain: 'evm:base:8453' })
-            .mockResolvedValueOnce({ channelId: '0xCH_MULTI', status: 'open', chain: 'evm:base:8453' }),
+          openChannel: vi
+            .fn()
+            .mockResolvedValue({ channelId: '0xCH_MULTI', status: 'opening' }),
+          getChannelState: vi
+            .fn()
+            .mockResolvedValueOnce({
+              channelId: '0xCH_MULTI',
+              status: 'opening',
+              chain: 'evm:base:8453',
+            })
+            .mockResolvedValueOnce({
+              channelId: '0xCH_MULTI',
+              status: 'opening',
+              chain: 'evm:base:8453',
+            })
+            .mockResolvedValueOnce({
+              channelId: '0xCH_MULTI',
+              status: 'open',
+              chain: 'evm:base:8453',
+            }),
         };
 
         // Use short pollInterval and enough timeout for 3 iterations
@@ -1160,23 +1368,34 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(requestEvent);
 
-        await vi.waitFor(() => {
-          expect(mockPool.publish).toHaveBeenCalled();
-        }, { timeout: 5000 });
+        await vi.waitFor(
+          () => {
+            expect(mockPool.publish).toHaveBeenCalled();
+          },
+          { timeout: 5000 }
+        );
 
         // Verify getChannelState was called 3 times (2 opening + 1 open)
         expect(mockChannelClient.getChannelState).toHaveBeenCalledTimes(3);
 
         // Verify response includes settlement fields (channel eventually opened)
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed.negotiatedChain).toBe('evm:base:8453');
         expect(parsed.channelId).toBe('0xCH_MULTI');
@@ -1187,8 +1406,12 @@ describe('NostrSpspServer', () => {
         const serverPubkey = getPublicKey(serverSecretKey);
         const senderSecretKey = generateSecretKey();
         const mockChannelClient: ConnectorChannelClient = {
-          openChannel: vi.fn().mockResolvedValue({ channelId: '0xCH', status: 'opening' }),
-          getChannelState: vi.fn().mockRejectedValue(new Error('Network error')),
+          openChannel: vi
+            .fn()
+            .mockResolvedValue({ channelId: '0xCH', status: 'opening' }),
+          getChannelState: vi
+            .fn()
+            .mockRejectedValue(new Error('Network error')),
         };
 
         const server = new NostrSpspServer(
@@ -1203,10 +1426,14 @@ describe('NostrSpspServer', () => {
 
         server.handleSpspRequests(generator);
 
-        const { event: requestEvent } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: requestEvent } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(requestEvent);
 
         await vi.waitFor(() => {
@@ -1214,10 +1441,16 @@ describe('NostrSpspServer', () => {
         });
 
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent = publishCalls[0][1] as NostrEvent;
-        const parsed = parseSpspResponse(responseEvent, senderSecretKey, serverPubkey);
+        const responseEvent = publishCalls[0]![1] as NostrEvent;
+        const parsed = parseSpspResponse(
+          responseEvent,
+          senderSecretKey,
+          serverPubkey
+        );
 
-        expect(parsed.destinationAccount).toBe(MOCK_SPSP_INFO.destinationAccount);
+        expect(parsed.destinationAccount).toBe(
+          MOCK_SPSP_INFO.destinationAccount
+        );
         expect(parsed.negotiatedChain).toBeUndefined();
       });
 
@@ -1226,10 +1459,15 @@ describe('NostrSpspServer', () => {
         const serverPubkey = getPublicKey(serverSecretKey);
         const senderSecretKey = generateSecretKey();
         const mockChannelClient: ConnectorChannelClient = {
-          openChannel: vi.fn()
+          openChannel: vi
+            .fn()
             .mockRejectedValueOnce(new Error('First call fails'))
             .mockResolvedValueOnce({ channelId: '0xCH2', status: 'opening' }),
-          getChannelState: vi.fn().mockResolvedValue({ channelId: '0xCH2', status: 'open', chain: 'evm:base:8453' }),
+          getChannelState: vi.fn().mockResolvedValue({
+            channelId: '0xCH2',
+            status: 'open',
+            chain: 'evm:base:8453',
+          }),
         };
 
         const server = new NostrSpspServer(
@@ -1245,10 +1483,14 @@ describe('NostrSpspServer', () => {
         server.handleSpspRequests(generator);
 
         // First request — settlement will fail
-        const { event: req1 } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: req1 } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(req1);
 
         await vi.waitFor(() => {
@@ -1256,10 +1498,14 @@ describe('NostrSpspServer', () => {
         });
 
         // Second request — settlement should succeed
-        const { event: req2 } = buildSpspRequestEvent(serverPubkey, senderSecretKey, {
-          supportedChains: ['evm:base:8453'],
-          settlementAddresses: { 'evm:base:8453': '0xPEER' },
-        });
+        const { event: req2 } = buildSpspRequestEvent(
+          serverPubkey,
+          senderSecretKey,
+          {
+            supportedChains: ['evm:base:8453'],
+            settlementAddresses: { 'evm:base:8453': '0xPEER' },
+          }
+        );
         capturedOnevent?.(req2);
 
         await vi.waitFor(() => {
@@ -1268,8 +1514,12 @@ describe('NostrSpspServer', () => {
 
         // Second response should have settlement fields
         const publishCalls = vi.mocked(mockPool.publish).mock.calls;
-        const responseEvent2 = publishCalls[1][1] as NostrEvent;
-        const parsed2 = parseSpspResponse(responseEvent2, senderSecretKey, serverPubkey);
+        const responseEvent2 = publishCalls[1]![1] as NostrEvent;
+        const parsed2 = parseSpspResponse(
+          responseEvent2,
+          senderSecretKey,
+          serverPubkey
+        );
 
         expect(parsed2.negotiatedChain).toBe('evm:base:8453');
         expect(parsed2.channelId).toBe('0xCH2');

@@ -14,6 +14,10 @@
     "./nip34": {
       "types": "./dist/nip34/index.d.ts",
       "import": "./dist/nip34/index.js"
+    },
+    "./toon": {
+      "types": "./dist/toon/index.d.ts",
+      "import": "./dist/toon/index.js"
     }
   },
   "files": [
@@ -44,6 +48,7 @@
   },
   "dependencies": {
     "@ardrive/turbo-sdk": "^1.21.0",
+    "@toon-format/toon": "^1.1.0",
     "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
     "simple-git": "^3.31.1",
@@ -59,7 +64,6 @@
   },
   "devDependencies": {
     "@crosstown/relay": "workspace:*",
-    "@toon-format/toon": "^1.1.0",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.10",
     "tsup": "^8.0.0",

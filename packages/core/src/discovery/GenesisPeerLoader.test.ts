@@ -119,9 +119,13 @@ describe('GenesisPeerLoader', () => {
   describe('loadAdditionalPeers', () => {
     it('parses valid JSON string', () => {
       const peers = [validPeer()];
-      const result = GenesisPeerLoader.loadAdditionalPeers(JSON.stringify(peers));
+      const result = GenesisPeerLoader.loadAdditionalPeers(
+        JSON.stringify(peers)
+      );
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(expect.objectContaining({ pubkey: 'a'.repeat(64) }));
+      expect(result[0]).toEqual(
+        expect.objectContaining({ pubkey: 'a'.repeat(64) })
+      );
     });
 
     it('handles malformed JSON gracefully', () => {
@@ -138,13 +142,17 @@ describe('GenesisPeerLoader', () => {
       const warnSpy = suppressWarnings();
       const result = GenesisPeerLoader.loadAdditionalPeers('{"key":"value"}');
       expect(result).toEqual([]);
-      expect(warnSpy).toHaveBeenCalledWith('Additional peers JSON is not an array');
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Additional peers JSON is not an array'
+      );
     });
 
     it('skips invalid entries with invalid pubkey', () => {
       const warnSpy = suppressWarnings();
       const peers = [validPeer({ pubkey: 'invalid' })];
-      const result = GenesisPeerLoader.loadAdditionalPeers(JSON.stringify(peers));
+      const result = GenesisPeerLoader.loadAdditionalPeers(
+        JSON.stringify(peers)
+      );
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
     });
@@ -152,7 +160,9 @@ describe('GenesisPeerLoader', () => {
     it('skips entries with invalid relay URL', () => {
       const warnSpy = suppressWarnings();
       const peers = [validPeer({ relayUrl: 'http://not-websocket' })];
-      const result = GenesisPeerLoader.loadAdditionalPeers(JSON.stringify(peers));
+      const result = GenesisPeerLoader.loadAdditionalPeers(
+        JSON.stringify(peers)
+      );
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
     });
@@ -160,7 +170,9 @@ describe('GenesisPeerLoader', () => {
     it('skips entries with invalid ILP address', () => {
       const warnSpy = suppressWarnings();
       const peers = [validPeer({ ilpAddress: 'not.valid' })];
-      const result = GenesisPeerLoader.loadAdditionalPeers(JSON.stringify(peers));
+      const result = GenesisPeerLoader.loadAdditionalPeers(
+        JSON.stringify(peers)
+      );
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
     });
@@ -168,7 +180,9 @@ describe('GenesisPeerLoader', () => {
     it('skips entries with invalid BTP endpoint', () => {
       const warnSpy = suppressWarnings();
       const peers = [validPeer({ btpEndpoint: 'http://not-websocket' })];
-      const result = GenesisPeerLoader.loadAdditionalPeers(JSON.stringify(peers));
+      const result = GenesisPeerLoader.loadAdditionalPeers(
+        JSON.stringify(peers)
+      );
       expect(result).toEqual([]);
       expect(warnSpy).toHaveBeenCalled();
     });
@@ -198,7 +212,9 @@ describe('GenesisPeerLoader', () => {
 
     it('merges genesis and additional peers', () => {
       const additional = validPeer({ pubkey: 'b'.repeat(64) });
-      const result = GenesisPeerLoader.loadAllPeers(JSON.stringify([additional]));
+      const result = GenesisPeerLoader.loadAllPeers(
+        JSON.stringify([additional])
+      );
       const pubkeys = result.map((p) => p.pubkey);
       expect(pubkeys).toContain('b'.repeat(64));
     });
@@ -215,7 +231,9 @@ describe('GenesisPeerLoader', () => {
         pubkey: firstGenesis.pubkey,
         relayUrl: 'wss://override.example.com',
       });
-      const result = GenesisPeerLoader.loadAllPeers(JSON.stringify([overridePeer]));
+      const result = GenesisPeerLoader.loadAllPeers(
+        JSON.stringify([overridePeer])
+      );
 
       const match = result.find((p) => p.pubkey === firstGenesis.pubkey);
       expect(match).toBeDefined();
@@ -253,7 +271,14 @@ describe('GenesisPeerLoader', () => {
     it('warns when an invalid genesis-like entry is encountered', () => {
       const warnSpy = suppressWarnings();
       GenesisPeerLoader.loadAdditionalPeers(
-        JSON.stringify([{ pubkey: 'bad', relayUrl: 'bad', ilpAddress: 'bad', btpEndpoint: 'bad' }])
+        JSON.stringify([
+          {
+            pubkey: 'bad',
+            relayUrl: 'bad',
+            ilpAddress: 'bad',
+            btpEndpoint: 'bad',
+          },
+        ])
       );
       expect(warnSpy).toHaveBeenCalledWith(
         'Skipping invalid additional peer entry:',

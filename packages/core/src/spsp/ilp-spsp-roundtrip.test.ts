@@ -8,7 +8,10 @@
 import { describe, it, expect } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
-import { buildSpspRequestEvent, buildSpspResponseEvent } from '../events/builders.js';
+import {
+  buildSpspRequestEvent,
+  buildSpspResponseEvent,
+} from '../events/builders.js';
 import { parseSpspRequest, parseSpspResponse } from '../events/parsers.js';
 
 describe('TOON + NIP-44 SPSP round-trip', () => {
@@ -51,12 +54,18 @@ describe('TOON + NIP-44 SPSP round-trip', () => {
     expect(decodedEvent.content).toBe(event.content);
 
     // 9. Parse and decrypt
-    const parsed = parseSpspRequest(decodedEvent, receiverSecretKey, senderPubkey);
+    const parsed = parseSpspRequest(
+      decodedEvent,
+      receiverSecretKey,
+      senderPubkey
+    );
 
     // 10. Verify all settlement fields match original input
     expect(parsed.requestId).toBe(requestId);
     expect(parsed.supportedChains).toEqual(['evm:base:8453', 'xrp:mainnet']);
-    expect(parsed.settlementAddresses).toEqual({ 'evm:base:8453': '0xSENDER_ADDR' });
+    expect(parsed.settlementAddresses).toEqual({
+      'evm:base:8453': '0xSENDER_ADDR',
+    });
     expect(parsed.preferredTokens).toEqual({ 'evm:base:8453': '0xTOKEN' });
   });
 
@@ -96,12 +105,18 @@ describe('TOON + NIP-44 SPSP round-trip', () => {
     expect(decodedEvent.content).toBe(event.content);
 
     // 5. Parse and decrypt
-    const parsed = parseSpspResponse(decodedEvent, requesterSecretKey, responderPubkey);
+    const parsed = parseSpspResponse(
+      decodedEvent,
+      requesterSecretKey,
+      responderPubkey
+    );
 
     // 6. Verify required fields
     expect(parsed.requestId).toBe('test-request-id');
     expect(parsed.destinationAccount).toBe('g.responder.test');
-    expect(parsed.sharedSecret).toBe(Buffer.from('test-shared-secret').toString('base64'));
+    expect(parsed.sharedSecret).toBe(
+      Buffer.from('test-shared-secret').toString('base64')
+    );
 
     // 7. Verify all settlement fields match original input
     expect(parsed.negotiatedChain).toBe('evm:base:8453');
@@ -184,7 +199,9 @@ describe('TOON + NIP-44 SPSP round-trip', () => {
     const resToonBytes = encodeEventToToon(responseEvent);
     const resBase64 = Buffer.from(resToonBytes).toString('base64');
     const resDecoded = Buffer.from(resBase64, 'base64');
-    const decodedResponseEvent = decodeEventFromToon(new Uint8Array(resDecoded));
+    const decodedResponseEvent = decodeEventFromToon(
+      new Uint8Array(resDecoded)
+    );
 
     // 8. Parse response
     const parsedResponse = parseSpspResponse(

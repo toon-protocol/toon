@@ -8,13 +8,10 @@ import { createCrosstownNode } from './compose.js';
 import type {
   CrosstownNodeConfig,
   EmbeddableConnectorLike,
-  HandlePacketRequest,
-  HandlePacketAcceptResponse,
   PacketHandler,
 } from './compose.js';
 import type { IlpPeerInfo } from './types.js';
 import { BootstrapService } from './bootstrap/BootstrapService.js';
-import { RelayMonitor } from './bootstrap/RelayMonitor.js';
 
 describe('createCrosstownNode', () => {
   let mockConnector: EmbeddableConnectorLike;
@@ -56,7 +53,8 @@ describe('createCrosstownNode', () => {
       secretKey,
       ilpInfo,
       toonEncoder: (event: NostrEvent) => Buffer.from(JSON.stringify(event)),
-      toonDecoder: (bytes: Uint8Array) => JSON.parse(Buffer.from(bytes).toString()) as NostrEvent,
+      toonDecoder: (bytes: Uint8Array) =>
+        JSON.parse(Buffer.from(bytes).toString()) as NostrEvent,
       relayUrl: 'ws://localhost:7100',
       knownPeers: [], // Empty to avoid network calls
       ardriveEnabled: false, // Disable ArDrive to avoid HTTP requests
@@ -80,7 +78,9 @@ describe('createCrosstownNode', () => {
     await node.start();
 
     expect(mockConnector.setPacketHandler).toHaveBeenCalledTimes(1);
-    expect(mockConnector.setPacketHandler).toHaveBeenCalledWith(mockHandlePacket);
+    expect(mockConnector.setPacketHandler).toHaveBeenCalledWith(
+      mockHandlePacket
+    );
   });
 
   it('start() calls bootstrapService.bootstrap() and returns results', async () => {
@@ -136,26 +136,35 @@ describe('createCrosstownNode', () => {
   });
 
   it('direct runtime client is wired correctly to bootstrapService', () => {
-    const setClientSpy = vi.spyOn(BootstrapService.prototype, 'setAgentRuntimeClient');
+    const setClientSpy = vi.spyOn(
+      BootstrapService.prototype,
+      'setAgentRuntimeClient'
+    );
 
     createCrosstownNode(baseConfig);
 
     expect(setClientSpy).toHaveBeenCalledTimes(1);
     expect(setClientSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ sendIlpPacket: expect.any(Function) }),
+      expect.objectContaining({ sendIlpPacket: expect.any(Function) })
     );
 
     setClientSpy.mockRestore();
   });
 
   it('direct admin client is wired correctly to bootstrapService', () => {
-    const setAdminSpy = vi.spyOn(BootstrapService.prototype, 'setConnectorAdmin');
+    const setAdminSpy = vi.spyOn(
+      BootstrapService.prototype,
+      'setConnectorAdmin'
+    );
 
     createCrosstownNode(baseConfig);
 
     expect(setAdminSpy).toHaveBeenCalledTimes(1);
     expect(setAdminSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ addPeer: expect.any(Function), removePeer: expect.any(Function) }),
+      expect.objectContaining({
+        addPeer: expect.any(Function),
+        removePeer: expect.any(Function),
+      })
     );
 
     setAdminSpy.mockRestore();
@@ -224,7 +233,8 @@ describe('createCrosstownNode', () => {
         assetScale: 6,
       },
       toonEncoder: (event: NostrEvent) => Buffer.from(JSON.stringify(event)),
-      toonDecoder: (bytes: Uint8Array) => JSON.parse(Buffer.from(bytes).toString()) as NostrEvent,
+      toonDecoder: (bytes: Uint8Array) =>
+        JSON.parse(Buffer.from(bytes).toString()) as NostrEvent,
       ardriveEnabled: false, // Disable to avoid network calls
     };
 
@@ -270,7 +280,9 @@ describe('createCrosstownNode', () => {
   it('channelClient is created when connector has openChannel and getChannelState', () => {
     const connectorWithChannels = {
       ...mockConnector,
-      openChannel: vi.fn().mockResolvedValue({ channelId: 'ch-1', status: 'open' }),
+      openChannel: vi
+        .fn()
+        .mockResolvedValue({ channelId: 'ch-1', status: 'open' }),
       getChannelState: vi.fn().mockResolvedValue({
         channelId: 'ch-1',
         status: 'open' as const,
@@ -290,7 +302,11 @@ describe('createCrosstownNode', () => {
 
   it('channelClient delegates to connector openChannel/getChannelState', async () => {
     const openChannelResult = { channelId: 'ch-test', status: 'opening' };
-    const channelState = { channelId: 'ch-test', status: 'open' as const, chain: 'evm:base:84532' };
+    const channelState = {
+      channelId: 'ch-test',
+      status: 'open' as const,
+      chain: 'evm:base:84532',
+    };
 
     const connectorWithChannels = {
       ...mockConnector,
@@ -317,6 +333,8 @@ describe('createCrosstownNode', () => {
 
     const state = await node.channelClient!.getChannelState('ch-test');
     expect(state).toEqual(channelState);
-    expect(connectorWithChannels.getChannelState).toHaveBeenCalledWith('ch-test');
+    expect(connectorWithChannels.getChannelState).toHaveBeenCalledWith(
+      'ch-test'
+    );
   });
 });

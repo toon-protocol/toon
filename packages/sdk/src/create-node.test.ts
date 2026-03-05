@@ -1,0 +1,488 @@
+/**
+ * Unit Tests: createNode() composition (Stories 1.7, 1.9)
+ *
+ * Tests defaults, config-based handler registration, builder pattern,
+ * identity derivation, connector pass-through, lifecycle event forwarding,
+ * and peerWith guard behavior using mocked CrosstownNode internals
+ * (no real bootstrap or relay).
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { createNode } from './create-node.js';
+import { NodeError } from './errors.js';
+import type { Handler } from './handler-registry.js';
+import type {
+  HandlePacketRequest,
+  HandlePacketResponse,
+  EmbeddableConnectorLike,
+  BootstrapEventListener,
+  BootstrapEvent,
+} from '@crosstown/core';
+import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
+import type { RegisterPeerParams } from '@crosstown/core';
+
+// ---------------------------------------------------------------------------
+// Mock Connector (minimal)
+// ---------------------------------------------------------------------------
+
+function createMockConnector(): EmbeddableConnectorLike & {
+  packetHandler:
+    | ((
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>)
+    | null;
+} {
+  return {
+    packetHandler: null,
+    async sendPacket(_params: SendPacketParams): Promise<SendPacketResult> {
+      return { type: 'reject', code: 'F02', message: 'No route' };
+    },
+    async registerPeer(_params: RegisterPeerParams): Promise<void> {},
+    async removePeer(_peerId: string): Promise<void> {},
+    setPacketHandler(
+      handler: (
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>
+    ): void {
+      this.packetHandler = handler;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('createNode() unit tests', () => {
+  // -------------------------------------------------------------------------
+  // T-1.7-13: Defaults
+  // -------------------------------------------------------------------------
+
+  it('[P1] createNode with minimal config uses defaults (basePricePerByte=10n, devMode=false)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act -- createNode should not throw with minimal config
+    const node = createNode({
+      secretKey,
+      connector,
+    });
+
+    // Assert -- node is created successfully
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+    expect(node.evmAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  // -------------------------------------------------------------------------
+  // Config-based handler registration (AC: #7)
+  // -------------------------------------------------------------------------
+
+  it('[P1] createNode with handlers map accepts config and creates node', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const handler = vi.fn();
+
+    // Act -- should not throw with handlers in config
+    const node = createNode({
+      secretKey,
+      connector,
+      handlers: { 1: handler },
+    });
+
+    // Assert -- node was created successfully with all expected methods
+    // Full handler dispatch verification is in integration tests
+    expect(node).toBeDefined();
+    expect(node.start).toBeInstanceOf(Function);
+    expect(node.stop).toBeInstanceOf(Function);
+    expect(node.on).toBeInstanceOf(Function);
+    expect(node.onDefault).toBeInstanceOf(Function);
+  });
+
+  it('[P1] createNode with defaultHandler accepts config and creates node', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const defaultHandler = vi.fn();
+
+    // Act -- should not throw with defaultHandler in config
+    const node = createNode({
+      secretKey,
+      connector,
+      defaultHandler,
+    });
+
+    // Assert -- full handler dispatch verification is in integration tests
+    expect(node).toBeDefined();
+    expect(node.start).toBeInstanceOf(Function);
+    expect(node.stop).toBeInstanceOf(Function);
+  });
+
+  // -------------------------------------------------------------------------
+  // Builder pattern chaining
+  // -------------------------------------------------------------------------
+
+  it('[P1] .on(kind, handler) returns this for builder pattern chaining', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act
+    const result = node.on(1, vi.fn());
+
+    // Assert -- returns the same node for chaining
+    expect(result).toBe(node);
+  });
+
+  it('[P1] .onDefault(handler) returns this for builder pattern chaining', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act
+    const result = node.onDefault(vi.fn());
+
+    // Assert -- returns the same node for chaining
+    expect(result).toBe(node);
+  });
+
+  it('[P1] builder pattern allows chaining .on() and .onDefault()', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({ secretKey, connector })
+      .on(1, vi.fn())
+      .on(30617, vi.fn())
+      .onDefault(vi.fn());
+
+    // Assert
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // -------------------------------------------------------------------------
+  // Identity derivation
+  // -------------------------------------------------------------------------
+
+  it('[P1] node.pubkey returns correct x-only public key (T-1.7-11)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const expectedPubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({ secretKey, connector });
+
+    // Assert
+    expect(node.pubkey).toBe(expectedPubkey);
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('[P1] node.evmAddress returns correct EVM address (T-1.7-12)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({ secretKey, connector });
+
+    // Assert
+    expect(node.evmAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(node.evmAddress.length).toBe(42);
+  });
+
+  // -------------------------------------------------------------------------
+  // Connector pass-through
+  // -------------------------------------------------------------------------
+
+  it('[P1] node.connector is pass-through of config.connector', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({ secretKey, connector });
+
+    // Assert
+    expect(node.connector).toBe(connector);
+  });
+
+  // -------------------------------------------------------------------------
+  // Input validation
+  // -------------------------------------------------------------------------
+
+  it('[P1] .on() rejects invalid kind (negative number)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert
+    expect(() => node.on(-1, vi.fn())).toThrow(/non-negative integer/);
+  });
+
+  it('[P1] .on() rejects invalid kind (NaN)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert
+    expect(() => node.on(NaN, vi.fn())).toThrow(/non-negative integer/);
+  });
+
+  it('[P1] .on() rejects invalid kind (non-integer)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert
+    expect(() => node.on(1.5, vi.fn())).toThrow(/non-negative integer/);
+  });
+
+  it('[P1] createNode with invalid secretKey throws NodeError', () => {
+    // Arrange
+    const connector = createMockConnector();
+    const badKey = new Uint8Array(16); // Wrong length
+
+    // Act & Assert
+    expect(() => createNode({ secretKey: badKey, connector })).toThrow(
+      /Invalid secretKey/
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 1.9: on('bootstrap', listener) lifecycle event forwarding (AC #5)
+  // -------------------------------------------------------------------------
+
+  it('[P2] .on("bootstrap", listener) returns node for builder pattern chaining (T-1.9-05)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+    const listener: BootstrapEventListener = vi.fn();
+
+    // Act
+    const result = node.on('bootstrap', listener);
+
+    // Assert -- returns the same node for chaining
+    expect(result).toBe(node);
+  });
+
+  it('[P2] .on("bootstrap", listener) can be chained with .on(kind, handler) (T-1.9-05)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const listener: BootstrapEventListener = vi.fn();
+
+    // Act -- chaining .on('bootstrap') with .on(kind)
+    const node = createNode({ secretKey, connector })
+      .on('bootstrap', listener)
+      .on(1, vi.fn())
+      .onDefault(vi.fn());
+
+    // Assert
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('[P2] .on() with unknown lifecycle event string throws NodeError (T-1.9-05)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert -- unknown string event should throw NodeError
+    expect(() => node.on('unknown-event' as 'bootstrap', vi.fn())).toThrow(
+      /Unknown lifecycle event/
+    );
+  });
+
+  it('[P2] .on() with unknown lifecycle event throws NodeError (not generic Error) (T-1.9-05)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert -- verify the error is a NodeError instance
+    expect(() => node.on('invalid' as 'bootstrap', vi.fn())).toThrow(NodeError);
+  });
+
+  it('[P2] .on("bootstrap", listener) accepts listener without throwing (T-1.9-05)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+    const listener: BootstrapEventListener = () => {
+      // no-op
+    };
+
+    // Act & Assert -- should not throw
+    expect(() => node.on('bootstrap', listener)).not.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 1.9: peerWith(pubkey) guard behavior (AC #4)
+  // -------------------------------------------------------------------------
+
+  it('[P2] peerWith method exists on ServiceNode (T-1.9-04)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({ secretKey, connector });
+
+    // Assert
+    expect(typeof node.peerWith).toBe('function');
+  });
+
+  it('[P2] peerWith throws NodeError when node is not started (T-1.9-04)', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert -- calling peerWith before start should throw NodeError
+    await expect(node.peerWith('aa'.repeat(32))).rejects.toThrow(
+      /Cannot peer: node not started/
+    );
+  });
+
+  it('[P2] peerWith throws NodeError (not generic Error) when not started (T-1.9-04)', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert -- verify the error is a NodeError instance
+    await expect(node.peerWith('bb'.repeat(32))).rejects.toThrow(NodeError);
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 1.9: on('bootstrap', listener) receives lifecycle events (AC #5)
+  // -------------------------------------------------------------------------
+
+  it('[P1] on("bootstrap", listener) forwards events from bootstrapService during start (T-1.9-05)', async () => {
+    // Arrange -- no known peers, so bootstrap completes immediately but
+    // still emits phase transitions and a ready event
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector, knownPeers: [] });
+
+    const events: BootstrapEvent[] = [];
+    node.on('bootstrap', (event: BootstrapEvent) => {
+      events.push(event);
+    });
+
+    // Act
+    await node.start();
+
+    // Assert -- should have received phase and ready events from bootstrapService
+    const phaseEvents = events.filter((e) => e.type === 'bootstrap:phase');
+    expect(phaseEvents.length).toBeGreaterThan(0);
+
+    const readyEvent = events.find((e) => e.type === 'bootstrap:ready');
+    expect(readyEvent).toBeDefined();
+    if (readyEvent?.type === 'bootstrap:ready') {
+      expect(readyEvent.peerCount).toBe(0);
+      expect(readyEvent.channelCount).toBe(0);
+    }
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Security: peerWith pubkey format validation
+  // -------------------------------------------------------------------------
+
+  it('[P2] peerWith rejects pubkey that is too short', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector, knownPeers: [] });
+    await node.start();
+
+    // Act & Assert
+    await expect(node.peerWith('abcd')).rejects.toThrow(/Invalid pubkey/);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  it('[P2] peerWith rejects pubkey with uppercase hex', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector, knownPeers: [] });
+    await node.start();
+
+    // Act & Assert -- uppercase hex should be rejected (Nostr pubkeys are lowercase)
+    await expect(node.peerWith('AA'.repeat(32))).rejects.toThrow(
+      /Invalid pubkey/
+    );
+
+    // Cleanup
+    await node.stop();
+  });
+
+  it('[P2] peerWith rejects pubkey with non-hex characters', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector, knownPeers: [] });
+    await node.start();
+
+    // Act & Assert
+    await expect(node.peerWith('zz'.repeat(32))).rejects.toThrow(
+      /Invalid pubkey/
+    );
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Security: config.handlers kind validation
+  // -------------------------------------------------------------------------
+
+  it('[P2] createNode rejects non-numeric kind keys in handlers config', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act & Assert -- non-numeric key 'foo' should fail Number() -> NaN validation
+    expect(() =>
+      createNode({
+        secretKey,
+        connector,
+        handlers: { foo: vi.fn() } as unknown as Record<number, Handler>,
+      })
+    ).toThrow(/Invalid event kind in handlers config/);
+  });
+
+  // -------------------------------------------------------------------------
+  // Security: lifecycle event name sanitization
+  // -------------------------------------------------------------------------
+
+  it('[P2] on() with control characters in event name sanitizes before error', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Act & Assert -- control characters should be stripped from error message
+    expect(() => node.on('evil\n\rinjection' as 'bootstrap', vi.fn())).toThrow(
+      /Unknown lifecycle event: 'evilinjection'/
+    );
+  });
+});

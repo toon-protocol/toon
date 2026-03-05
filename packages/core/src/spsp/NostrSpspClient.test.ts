@@ -13,7 +13,10 @@ import { SPSP_RESPONSE_KIND } from '../constants.js';
 import { SpspError, SpspTimeoutError } from '../errors.js';
 import type { SpspResponse } from '../types.js';
 
-const MOCK_RELAY_URLS = ['wss://relay1.example.com', 'wss://relay2.example.com'];
+const MOCK_RELAY_URLS = [
+  'wss://relay1.example.com',
+  'wss://relay2.example.com',
+];
 
 describe('NostrSpspClient', () => {
   let mockPool: SimplePool;
@@ -66,8 +69,14 @@ describe('NostrSpspClient', () => {
     senderSecretKey: Uint8Array
   ): NostrEvent {
     const senderPubkey = getPublicKey(senderSecretKey);
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
-    const encryptedContent = nip44.encrypt(JSON.stringify(response), conversationKey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
+    const encryptedContent = nip44.encrypt(
+      JSON.stringify(response),
+      conversationKey
+    );
 
     return {
       id: 'response-event-id',
@@ -94,37 +103,46 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       // Set up mock to trigger response immediately
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '', // Will be matched dynamically
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
-          // We need to get the requestId from the published event
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            // Decrypt the request to get requestId
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '', // Will be matched dynamically
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            // We need to get the requestId from the published event
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              // Decrypt the request to get requestId
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
@@ -140,34 +158,43 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, filters, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '',
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, filters, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '',
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
@@ -183,36 +210,47 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '',
-            destinationAccount: 'g.test.alice',
-            sharedSecret: 'YWxpY2Utc2VjcmV0',
-          };
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '',
+              destinationAccount: 'g.test.alice',
+              sharedSecret: 'YWxpY2Utc2VjcmV0',
+            };
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
+
+      const result = await client.requestSpspInfo(recipientPubkey, {
+        timeout: 1000,
       });
-
-      const result = await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
       expect(result.destinationAccount).toBe('g.test.alice');
       expect(result.sharedSecret).toBe('YWxpY2Utc2VjcmV0');
@@ -224,34 +262,43 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '',
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '',
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
@@ -267,34 +314,43 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '',
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '',
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
@@ -310,38 +366,47 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const response: SpspResponse = {
-            requestId: '',
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
-            response.requestId = request.requestId;
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const response: SpspResponse = {
+              requestId: '',
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
+              response.requestId = request.requestId;
 
-            // Verify decryption worked
-            expect(request.requestId).toBeDefined();
-            expect(request.timestamp).toBeDefined();
+              // Verify decryption worked
+              expect(request.requestId).toBeDefined();
+              expect(request.timestamp).toBeDefined();
 
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
     });
@@ -353,7 +418,11 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       // Don't trigger any response
       vi.mocked(mockPool.subscribeMany).mockReturnValue(mockSubCloser);
@@ -368,7 +437,11 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       vi.mocked(mockPool.subscribeMany).mockReturnValue(mockSubCloser);
 
@@ -386,7 +459,11 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       vi.mocked(mockPool.subscribeMany).mockReturnValue(mockSubCloser);
 
@@ -403,7 +480,11 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       vi.mocked(mockPool.subscribeMany).mockReturnValue(mockSubCloser);
 
@@ -420,7 +501,11 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       vi.mocked(mockPool.subscribeMany).mockReturnValue(mockSubCloser);
 
@@ -430,7 +515,9 @@ describe('NostrSpspClient', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(SpspTimeoutError);
         expect((error as SpspTimeoutError).message).toContain(recipientPubkey);
-        expect((error as SpspTimeoutError).recipientPubkey).toBe(recipientPubkey);
+        expect((error as SpspTimeoutError).recipientPubkey).toBe(
+          recipientPubkey
+        );
       }
     }, 1000);
   });
@@ -441,7 +528,9 @@ describe('NostrSpspClient', () => {
       const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool);
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      await expect(client.requestSpspInfo(recipientPubkey)).rejects.toThrow(SpspError);
+      await expect(client.requestSpspInfo(recipientPubkey)).rejects.toThrow(
+        SpspError
+      );
       await expect(client.requestSpspInfo(recipientPubkey)).rejects.toThrow(
         'Secret key required'
       );
@@ -449,9 +538,15 @@ describe('NostrSpspClient', () => {
 
     it('throws SpspError for invalid recipientPubkey format', async () => {
       const senderSecretKey = generateSecretKey();
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      await expect(client.requestSpspInfo('invalid')).rejects.toThrow(SpspError);
+      await expect(client.requestSpspInfo('invalid')).rejects.toThrow(
+        SpspError
+      );
       await expect(client.requestSpspInfo('invalid')).rejects.toThrow(
         'Invalid recipientPubkey format'
       );
@@ -461,9 +556,15 @@ describe('NostrSpspClient', () => {
       const senderSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(generateSecretKey());
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.publish).mockRejectedValue(new Error('Publish failed'));
+      vi.mocked(mockPool.publish).mockRejectedValue(
+        new Error('Publish failed')
+      );
 
       await expect(
         client.requestSpspInfo(recipientPubkey, { timeout: 1000 })
@@ -479,27 +580,33 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          // Send response with wrong requestId
-          const response: SpspResponse = {
-            requestId: 'wrong-request-id',
-            destinationAccount: 'g.test.receiver',
-            sharedSecret: 'c2VjcmV0',
-          };
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            // Send response with wrong requestId
+            const response: SpspResponse = {
+              requestId: 'wrong-request-id',
+              destinationAccount: 'g.test.receiver',
+              sharedSecret: 'c2VjcmV0',
+            };
 
-          const responseEvent = createEncryptedResponseEvent(
-            response,
-            senderSecretKey,
-            senderPubkey,
-            recipientSecretKey
-          );
-          callbacks.onevent?.(responseEvent as VerifiedEvent);
-        }, 10);
-        return mockSubCloser;
-      });
+            const responseEvent = createEncryptedResponseEvent(
+              response,
+              senderSecretKey,
+              senderPubkey,
+              recipientSecretKey
+            );
+            callbacks.onevent?.(responseEvent as VerifiedEvent);
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       // Should timeout because the requestId doesn't match
       await expect(
@@ -512,24 +619,30 @@ describe('NostrSpspClient', () => {
       const recipientSecretKey = generateSecretKey();
       const recipientPubkey = getPublicKey(recipientSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          // Send malformed event that will fail parsing
-          const malformedEvent: NostrEvent = {
-            id: 'bad-event',
-            pubkey: 'a'.repeat(64),
-            kind: SPSP_RESPONSE_KIND,
-            content: 'not-encrypted-content',
-            tags: [['p', getPublicKey(senderSecretKey)]],
-            created_at: Math.floor(Date.now() / 1000),
-            sig: '0'.repeat(128),
-          };
-          callbacks.onevent?.(malformedEvent as VerifiedEvent);
-        }, 10);
-        return mockSubCloser;
-      });
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            // Send malformed event that will fail parsing
+            const malformedEvent: NostrEvent = {
+              id: 'bad-event',
+              pubkey: 'a'.repeat(64),
+              kind: SPSP_RESPONSE_KIND,
+              content: 'not-encrypted-content',
+              tags: [['p', getPublicKey(senderSecretKey)]],
+              created_at: Math.floor(Date.now() / 1000),
+              sig: '0'.repeat(128),
+            };
+            callbacks.onevent?.(malformedEvent as VerifiedEvent);
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       // Should timeout because the event parsing fails
       await expect(
@@ -546,7 +659,11 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
       const settlementInfo = {
         supportedChains: ['evm:base:8453'],
@@ -554,36 +671,45 @@ describe('NostrSpspClient', () => {
         preferredTokens: { 'evm:base:8453': '0xMY_TOKEN' },
       };
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
 
-            // Verify settlement fields are in the request
-            expect(request.supportedChains).toEqual(['evm:base:8453']);
-            expect(request.settlementAddresses).toEqual({ 'evm:base:8453': '0xMY_ADDR' });
-            expect(request.preferredTokens).toEqual({ 'evm:base:8453': '0xMY_TOKEN' });
+              // Verify settlement fields are in the request
+              expect(request.supportedChains).toEqual(['evm:base:8453']);
+              expect(request.settlementAddresses).toEqual({
+                'evm:base:8453': '0xMY_ADDR',
+              });
+              expect(request.preferredTokens).toEqual({
+                'evm:base:8453': '0xMY_TOKEN',
+              });
 
-            const response: SpspResponse = {
-              requestId: request.requestId,
-              destinationAccount: 'g.test.receiver',
-              sharedSecret: 'c2VjcmV0',
-            };
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const response: SpspResponse = {
+                requestId: request.requestId,
+                destinationAccount: 'g.test.receiver',
+                sharedSecret: 'c2VjcmV0',
+              };
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       await client.requestSpspInfo(recipientPubkey, {
         timeout: 1000,
@@ -600,42 +726,53 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
 
-            // Response with settlement fields
-            const response: SpspResponse = {
-              requestId: request.requestId,
-              destinationAccount: 'g.test.receiver',
-              sharedSecret: 'c2VjcmV0',
-              negotiatedChain: 'evm:base:8453',
-              settlementAddress: '0xSERVER_ADDR',
-              tokenAddress: '0xTOKEN',
-              tokenNetworkAddress: '0xTOKEN_NET',
-              channelId: '0xCHANNEL',
-              settlementTimeout: 86400,
-            };
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
+              // Response with settlement fields
+              const response: SpspResponse = {
+                requestId: request.requestId,
+                destinationAccount: 'g.test.receiver',
+                sharedSecret: 'c2VjcmV0',
+                negotiatedChain: 'evm:base:8453',
+                settlementAddress: '0xSERVER_ADDR',
+                tokenAddress: '0xTOKEN',
+                tokenNetworkAddress: '0xTOKEN_NET',
+                channelId: '0xCHANNEL',
+                settlementTimeout: 86400,
+              };
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
+
+      const result = await client.requestSpspInfo(recipientPubkey, {
+        timeout: 1000,
       });
-
-      const result = await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
 
       expect(result.destinationAccount).toBe('g.test.receiver');
       expect(result.settlement).toBeDefined();
@@ -654,40 +791,51 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
 
-            // Verify no settlement fields in request
-            expect(request.supportedChains).toBeUndefined();
-            expect(request.settlementAddresses).toBeUndefined();
+              // Verify no settlement fields in request
+              expect(request.supportedChains).toBeUndefined();
+              expect(request.settlementAddresses).toBeUndefined();
 
-            const response: SpspResponse = {
-              requestId: request.requestId,
-              destinationAccount: 'g.test.receiver',
-              sharedSecret: 'c2VjcmV0',
-            };
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              const response: SpspResponse = {
+                requestId: request.requestId,
+                destinationAccount: 'g.test.receiver',
+                sharedSecret: 'c2VjcmV0',
+              };
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       // No settlementInfo option
-      const result = await client.requestSpspInfo(recipientPubkey, { timeout: 1000 });
+      const result = await client.requestSpspInfo(recipientPubkey, {
+        timeout: 1000,
+      });
 
       expect(result.destinationAccount).toBe('g.test.receiver');
     });
@@ -698,34 +846,43 @@ describe('NostrSpspClient', () => {
       const recipientPubkey = getPublicKey(recipientSecretKey);
       const senderPubkey = getPublicKey(senderSecretKey);
 
-      const client = new NostrSpspClient(MOCK_RELAY_URLS, mockPool, senderSecretKey);
+      const client = new NostrSpspClient(
+        MOCK_RELAY_URLS,
+        mockPool,
+        senderSecretKey
+      );
 
-      vi.mocked(mockPool.subscribeMany).mockImplementation((_, __, callbacks) => {
-        setTimeout(() => {
-          const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
-          if (publishCall) {
-            const event = publishCall[1] as NostrEvent;
-            const convKey = nip44.getConversationKey(recipientSecretKey, senderPubkey);
-            const decrypted = nip44.decrypt(event.content, convKey);
-            const request = JSON.parse(decrypted);
+      vi.mocked(mockPool.subscribeMany).mockImplementation(
+        (_, __, callbacks) => {
+          setTimeout(() => {
+            const publishCall = vi.mocked(mockPool.publish).mock.calls[0];
+            if (publishCall) {
+              const event = publishCall[1] as NostrEvent;
+              const convKey = nip44.getConversationKey(
+                recipientSecretKey,
+                senderPubkey
+              );
+              const decrypted = nip44.decrypt(event.content, convKey);
+              const request = JSON.parse(decrypted);
 
-            // Basic response with no settlement fields
-            const response: SpspResponse = {
-              requestId: request.requestId,
-              destinationAccount: 'g.test.receiver',
-              sharedSecret: 'c2VjcmV0',
-            };
-            const responseEvent = createEncryptedResponseEvent(
-              response,
-              senderSecretKey,
-              senderPubkey,
-              recipientSecretKey
-            );
-            callbacks.onevent?.(responseEvent as VerifiedEvent);
-          }
-        }, 10);
-        return mockSubCloser;
-      });
+              // Basic response with no settlement fields
+              const response: SpspResponse = {
+                requestId: request.requestId,
+                destinationAccount: 'g.test.receiver',
+                sharedSecret: 'c2VjcmV0',
+              };
+              const responseEvent = createEncryptedResponseEvent(
+                response,
+                senderSecretKey,
+                senderPubkey,
+                recipientSecretKey
+              );
+              callbacks.onevent?.(responseEvent as VerifiedEvent);
+            }
+          }, 10);
+          return mockSubCloser;
+        }
+      );
 
       const result = await client.requestSpspInfo(recipientPubkey, {
         timeout: 1000,

@@ -2,10 +2,23 @@ import { describe, it, expect } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { nip44 } from 'nostr-tools';
-import { parseIlpPeerInfo, parseSpspRequest, parseSpspResponse, validateChainId } from './parsers.js';
-import { buildIlpPeerInfoEvent, buildSpspRequestEvent, buildSpspResponseEvent } from './builders.js';
+import {
+  parseIlpPeerInfo,
+  parseSpspRequest,
+  parseSpspResponse,
+  validateChainId,
+} from './parsers.js';
+import {
+  buildIlpPeerInfoEvent,
+  buildSpspRequestEvent,
+  buildSpspResponseEvent,
+} from './builders.js';
 import { InvalidEventError } from '../errors.js';
-import { ILP_PEER_INFO_KIND, SPSP_REQUEST_KIND, SPSP_RESPONSE_KIND } from '../constants.js';
+import {
+  ILP_PEER_INFO_KIND,
+  SPSP_REQUEST_KIND,
+  SPSP_RESPONSE_KIND,
+} from '../constants.js';
 import type { IlpPeerInfo, SpspRequest, SpspResponse } from '../types.js';
 
 // Test fixtures
@@ -25,10 +38,7 @@ function createTestIlpPeerInfoWithSettlement(): IlpPeerInfo {
   };
 }
 
-function createMockEvent(
-  kind: number,
-  content: string
-): NostrEvent {
+function createMockEvent(kind: number, content: string): NostrEvent {
   return {
     id: '0'.repeat(64),
     pubkey: '0'.repeat(64),
@@ -73,7 +83,10 @@ describe('parseIlpPeerInfo', () => {
 
   it('throws for wrong event kind', () => {
     // Arrange
-    const event = createMockEvent(SPSP_REQUEST_KIND, JSON.stringify(createTestIlpPeerInfo()));
+    const event = createMockEvent(
+      SPSP_REQUEST_KIND,
+      JSON.stringify(createTestIlpPeerInfo())
+    );
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
@@ -88,7 +101,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Failed to parse event content as JSON');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Failed to parse event content as JSON'
+    );
   });
 
   it('throws for non-object JSON content', () => {
@@ -97,7 +112,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Event content must be a JSON object');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Event content must be a JSON object'
+    );
   });
 
   it('throws for missing ilpAddress', () => {
@@ -111,7 +128,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Missing or invalid required field: ilpAddress');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Missing or invalid required field: ilpAddress'
+    );
   });
 
   it('throws for missing btpEndpoint', () => {
@@ -125,7 +144,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Missing or invalid required field: btpEndpoint');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Missing or invalid required field: btpEndpoint'
+    );
   });
 
   it('throws for missing assetCode', () => {
@@ -139,7 +160,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Missing or invalid required field: assetCode');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Missing or invalid required field: assetCode'
+    );
   });
 
   it('throws for missing assetScale', () => {
@@ -153,7 +176,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Missing or invalid required field: assetScale');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Missing or invalid required field: assetScale'
+    );
   });
 
   it('throws for non-integer assetScale', () => {
@@ -168,7 +193,9 @@ describe('parseIlpPeerInfo', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Missing or invalid required field: assetScale');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Missing or invalid required field: assetScale'
+    );
   });
 
   it('throws for invalid settlementEngine type', () => {
@@ -224,8 +251,12 @@ describe('parseIlpPeerInfo - settlement fields', () => {
       'evm:base:8453': '0x1234567890abcdef1234567890abcdef12345678',
       'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
     });
-    expect(result.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
-    expect(result.tokenNetworks).toEqual({ 'evm:base:8453': '0xTOKEN_NETWORK' });
+    expect(result.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
+    expect(result.tokenNetworks).toEqual({
+      'evm:base:8453': '0xTOKEN_NETWORK',
+    });
   });
 
   it('parses event with only supportedChains and settlementAddresses', () => {
@@ -300,7 +331,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('supportedChains must be a non-empty array when provided');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'supportedChains must be a non-empty array when provided'
+    );
   });
 
   it('throws for invalid chain ID in supportedChains', () => {
@@ -316,7 +349,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid chain identifier: evm');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Invalid chain identifier: evm'
+    );
   });
 
   it('throws for non-array supportedChains', () => {
@@ -332,7 +367,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('supportedChains must be an array');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'supportedChains must be an array'
+    );
   });
 
   it('throws for non-object settlementAddresses', () => {
@@ -348,7 +385,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('settlementAddresses must be an object');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'settlementAddresses must be an object'
+    );
   });
 
   it('throws for settlementAddresses with non-string values', () => {
@@ -364,7 +403,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
 
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow('settlementAddresses values must be non-empty strings');
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'settlementAddresses values must be non-empty strings'
+    );
   });
 
   it('throws when settlementAddresses key is not in supportedChains', () => {
@@ -403,7 +444,9 @@ describe('parseIlpPeerInfo - settlement fields', () => {
     const result = parseIlpPeerInfo(event);
 
     // Assert — subset is fine
-    expect(result.settlementAddresses).toEqual({ 'evm:base:8453': '0xADDRESS' });
+    expect(result.settlementAddresses).toEqual({
+      'evm:base:8453': '0xADDRESS',
+    });
   });
 });
 
@@ -445,8 +488,14 @@ function createEncryptedSpspResponseEvent(
   recipientPubkey: string
 ): NostrEvent {
   const senderPubkey = getPublicKey(senderSecretKey);
-  const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
-  const encryptedContent = nip44.encrypt(JSON.stringify(payload), conversationKey);
+  const conversationKey = nip44.getConversationKey(
+    senderSecretKey,
+    recipientPubkey
+  );
+  const encryptedContent = nip44.encrypt(
+    JSON.stringify(payload),
+    conversationKey
+  );
 
   return {
     id: '0'.repeat(64),
@@ -473,7 +522,11 @@ describe('parseSpspResponse', () => {
       sharedSecret: 'c2VjcmV0MTIz',
     };
 
-    const event = createEncryptedSpspResponseEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspResponseEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspResponse(event, recipientSecretKey, senderPubkey);
@@ -491,8 +544,12 @@ describe('parseSpspResponse', () => {
     const event = createMockEvent(ILP_PEER_INFO_KIND, 'encrypted-content');
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(
       `Expected event kind ${SPSP_RESPONSE_KIND}, got ${ILP_PEER_INFO_KIND}`
     );
   });
@@ -503,13 +560,18 @@ describe('parseSpspResponse', () => {
     const senderPubkey = getPublicKey(generateSecretKey());
 
     // Create event with content encrypted for wrong recipient
-    const event = createMockEvent(SPSP_RESPONSE_KIND, 'invalid-encrypted-content');
+    const event = createMockEvent(
+      SPSP_RESPONSE_KIND,
+      'invalid-encrypted-content'
+    );
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Failed to decrypt event content'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Failed to decrypt event content');
   });
 
   it('throws for invalid JSON after decryption', () => {
@@ -520,7 +582,10 @@ describe('parseSpspResponse', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Encrypt invalid JSON
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt('not valid json', conversationKey);
 
     const event: NostrEvent = {
@@ -534,10 +599,12 @@ describe('parseSpspResponse', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Failed to parse decrypted content as JSON'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Failed to parse decrypted content as JSON');
   });
 
   it('throws for non-object JSON content', () => {
@@ -547,7 +614,10 @@ describe('parseSpspResponse', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt('"just a string"', conversationKey);
 
     const event: NostrEvent = {
@@ -561,10 +631,12 @@ describe('parseSpspResponse', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Decrypted content must be a JSON object'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Decrypted content must be a JSON object');
   });
 
   it('throws for missing requestId', () => {
@@ -574,7 +646,10 @@ describe('parseSpspResponse', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         destinationAccount: 'g.example.receiver',
@@ -594,10 +669,12 @@ describe('parseSpspResponse', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: requestId'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: requestId');
   });
 
   it('throws for missing destinationAccount', () => {
@@ -607,7 +684,10 @@ describe('parseSpspResponse', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-123',
@@ -627,10 +707,12 @@ describe('parseSpspResponse', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: destinationAccount'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: destinationAccount');
   });
 
   it('throws for missing sharedSecret', () => {
@@ -640,7 +722,10 @@ describe('parseSpspResponse', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-123',
@@ -660,10 +745,12 @@ describe('parseSpspResponse', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: sharedSecret'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: sharedSecret');
   });
 
   it('throws for empty requestId', () => {
@@ -685,10 +772,12 @@ describe('parseSpspResponse', () => {
     );
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: requestId'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: requestId');
   });
 });
 
@@ -699,8 +788,14 @@ function createEncryptedSpspRequestEvent(
   recipientPubkey: string
 ): NostrEvent {
   const senderPubkey = getPublicKey(senderSecretKey);
-  const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
-  const encryptedContent = nip44.encrypt(JSON.stringify(payload), conversationKey);
+  const conversationKey = nip44.getConversationKey(
+    senderSecretKey,
+    recipientPubkey
+  );
+  const encryptedContent = nip44.encrypt(
+    JSON.stringify(payload),
+    conversationKey
+  );
 
   return {
     id: '0'.repeat(64),
@@ -726,7 +821,11 @@ describe('parseSpspRequest', () => {
       timestamp: Math.floor(Date.now() / 1000),
     };
 
-    const event = createEncryptedSpspRequestEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspRequestEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspRequest(event, recipientSecretKey, senderPubkey);
@@ -743,7 +842,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey
+    );
 
     // Act
     const result = parseSpspRequest(event, recipientSecretKey, senderPubkey);
@@ -761,8 +863,12 @@ describe('parseSpspRequest', () => {
     const event = createMockEvent(ILP_PEER_INFO_KIND, 'encrypted-content');
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(
       `Expected event kind ${SPSP_REQUEST_KIND}, got ${ILP_PEER_INFO_KIND}`
     );
   });
@@ -773,13 +879,18 @@ describe('parseSpspRequest', () => {
     const senderPubkey = getPublicKey(generateSecretKey());
 
     // Create event with content encrypted for wrong recipient
-    const event = createMockEvent(SPSP_REQUEST_KIND, 'invalid-encrypted-content');
+    const event = createMockEvent(
+      SPSP_REQUEST_KIND,
+      'invalid-encrypted-content'
+    );
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Failed to decrypt event content'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Failed to decrypt event content');
   });
 
   it('throws for invalid JSON after decryption', () => {
@@ -790,7 +901,10 @@ describe('parseSpspRequest', () => {
     const senderPubkey = getPublicKey(senderSecretKey);
 
     // Encrypt invalid JSON
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt('not valid json', conversationKey);
 
     const event: NostrEvent = {
@@ -804,10 +918,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Failed to parse decrypted content as JSON'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Failed to parse decrypted content as JSON');
   });
 
   it('throws for non-object JSON content', () => {
@@ -817,7 +933,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt('"just a string"', conversationKey);
 
     const event: NostrEvent = {
@@ -831,10 +950,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Decrypted content must be a JSON object'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Decrypted content must be a JSON object');
   });
 
   it('throws for missing requestId', () => {
@@ -844,7 +965,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         timestamp: Math.floor(Date.now() / 1000),
@@ -863,10 +987,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: requestId'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: requestId');
   });
 
   it('throws for empty requestId', () => {
@@ -887,10 +1013,12 @@ describe('parseSpspRequest', () => {
     );
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: requestId'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: requestId');
   });
 
   it('throws for missing timestamp', () => {
@@ -900,7 +1028,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-123',
@@ -919,10 +1050,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: timestamp'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: timestamp');
   });
 
   it('throws for non-integer timestamp', () => {
@@ -932,7 +1065,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-123',
@@ -952,10 +1088,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: timestamp'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: timestamp');
   });
 
   it('throws for string timestamp', () => {
@@ -965,7 +1103,10 @@ describe('parseSpspRequest', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-123',
@@ -985,10 +1126,12 @@ describe('parseSpspRequest', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Missing or invalid required field: timestamp'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Missing or invalid required field: timestamp');
   });
 });
 
@@ -1012,7 +1155,11 @@ describe('parseSpspRequest - settlement fields', () => {
       preferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
     };
 
-    const event = createEncryptedSpspRequestEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspRequestEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspRequest(event, recipientSecretKey, senderPubkey);
@@ -1021,7 +1168,9 @@ describe('parseSpspRequest - settlement fields', () => {
     expect(result.ilpAddress).toBe('g.example.sender');
     expect(result.supportedChains).toEqual(['evm:base:8453', 'xrp:mainnet']);
     expect(result.settlementAddresses).toEqual(payload.settlementAddresses);
-    expect(result.preferredTokens).toEqual({ 'evm:base:8453': '0xAGENT_TOKEN' });
+    expect(result.preferredTokens).toEqual({
+      'evm:base:8453': '0xAGENT_TOKEN',
+    });
   });
 
   it('parses request with only supportedChains and settlementAddresses', () => {
@@ -1038,7 +1187,11 @@ describe('parseSpspRequest - settlement fields', () => {
       settlementAddresses: { 'evm:base:8453': '0xABC' },
     };
 
-    const event = createEncryptedSpspRequestEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspRequestEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspRequest(event, recipientSecretKey, senderPubkey);
@@ -1062,7 +1215,11 @@ describe('parseSpspRequest - settlement fields', () => {
       timestamp: Math.floor(Date.now() / 1000),
     };
 
-    const event = createEncryptedSpspRequestEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspRequestEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspRequest(event, recipientSecretKey, senderPubkey);
@@ -1088,13 +1245,19 @@ describe('parseSpspRequest - settlement fields', () => {
       supportedChains: ['evm'],
     };
 
-    const event = createEncryptedSpspRequestEvent(payload as SpspRequest, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspRequestEvent(
+      payload as SpspRequest,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Invalid chain identifier in SPSP request: evm'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Invalid chain identifier in SPSP request: evm');
   });
 
   it('throws InvalidEventError for non-array supportedChains', () => {
@@ -1104,7 +1267,10 @@ describe('parseSpspRequest - settlement fields', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-request',
@@ -1125,10 +1291,12 @@ describe('parseSpspRequest - settlement fields', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'supportedChains must be an array'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('supportedChains must be an array');
   });
 
   it('throws InvalidEventError for non-object settlementAddresses', () => {
@@ -1138,7 +1306,10 @@ describe('parseSpspRequest - settlement fields', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-request',
@@ -1159,10 +1330,12 @@ describe('parseSpspRequest - settlement fields', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'settlementAddresses must be an object'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('settlementAddresses must be an object');
   });
 
   it('throws InvalidEventError for settlementAddresses with non-string values', () => {
@@ -1172,7 +1345,10 @@ describe('parseSpspRequest - settlement fields', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-request',
@@ -1193,10 +1369,12 @@ describe('parseSpspRequest - settlement fields', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
-      'settlementAddresses values must be non-empty strings'
-    );
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow('settlementAddresses values must be non-empty strings');
   });
 
   it('round-trip (build with settlement → parse) preserves all settlement fields', () => {
@@ -1217,14 +1395,20 @@ describe('parseSpspRequest - settlement fields', () => {
     };
 
     // Act
-    const { event, requestId } = buildSpspRequestEvent(recipientPubkey, senderSecretKey, settlementInfo);
+    const { event, requestId } = buildSpspRequestEvent(
+      recipientPubkey,
+      senderSecretKey,
+      settlementInfo
+    );
     const parsed = parseSpspRequest(event, recipientSecretKey, senderPubkey);
 
     // Assert
     expect(parsed.requestId).toBe(requestId);
     expect(parsed.ilpAddress).toBe('g.example.sender');
     expect(parsed.supportedChains).toEqual(settlementInfo.supportedChains);
-    expect(parsed.settlementAddresses).toEqual(settlementInfo.settlementAddresses);
+    expect(parsed.settlementAddresses).toEqual(
+      settlementInfo.settlementAddresses
+    );
     expect(parsed.preferredTokens).toEqual(settlementInfo.preferredTokens);
   });
 
@@ -1235,7 +1419,10 @@ describe('parseSpspRequest - settlement fields', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-request',
@@ -1257,8 +1444,12 @@ describe('parseSpspRequest - settlement fields', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspRequest(event, recipientSecretKey, senderPubkey)).toThrow(
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspRequest(event, recipientSecretKey, senderPubkey)
+    ).toThrow(
       "settlementAddresses key 'xrp:mainnet' is not in supportedChains"
     );
   });
@@ -1284,14 +1475,20 @@ describe('parseSpspResponse - settlement fields', () => {
       settlementTimeout: 3600,
     };
 
-    const event = createEncryptedSpspResponseEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspResponseEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspResponse(event, recipientSecretKey, senderPubkey);
 
     // Assert
     expect(result.negotiatedChain).toBe('evm:base:8453');
-    expect(result.settlementAddress).toBe('0x1234567890abcdef1234567890abcdef12345678');
+    expect(result.settlementAddress).toBe(
+      '0x1234567890abcdef1234567890abcdef12345678'
+    );
     expect(result.tokenAddress).toBe('0xAGENT_TOKEN');
     expect(result.tokenNetworkAddress).toBe('0xTOKEN_NETWORK');
     expect(result.channelId).toBe('channel-abc-123');
@@ -1313,7 +1510,11 @@ describe('parseSpspResponse - settlement fields', () => {
       settlementAddress: 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
     };
 
-    const event = createEncryptedSpspResponseEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspResponseEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspResponse(event, recipientSecretKey, senderPubkey);
@@ -1340,7 +1541,11 @@ describe('parseSpspResponse - settlement fields', () => {
       sharedSecret: 'c2VjcmV0MTIz',
     };
 
-    const event = createEncryptedSpspResponseEvent(payload, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspResponseEvent(
+      payload,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act
     const result = parseSpspResponse(event, recipientSecretKey, senderPubkey);
@@ -1369,13 +1574,19 @@ describe('parseSpspResponse - settlement fields', () => {
       negotiatedChain: 'invalid',
     };
 
-    const event = createEncryptedSpspResponseEvent(payload as SpspResponse, senderSecretKey, recipientPubkey);
+    const event = createEncryptedSpspResponseEvent(
+      payload as SpspResponse,
+      senderSecretKey,
+      recipientPubkey
+    );
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'Invalid negotiatedChain: invalid'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('Invalid negotiatedChain: invalid');
   });
 
   it('throws InvalidEventError for non-integer settlementTimeout', () => {
@@ -1385,7 +1596,10 @@ describe('parseSpspResponse - settlement fields', () => {
     const recipientPubkey = getPublicKey(recipientSecretKey);
     const senderPubkey = getPublicKey(senderSecretKey);
 
-    const conversationKey = nip44.getConversationKey(senderSecretKey, recipientPubkey);
+    const conversationKey = nip44.getConversationKey(
+      senderSecretKey,
+      recipientPubkey
+    );
     const encryptedContent = nip44.encrypt(
       JSON.stringify({
         requestId: 'test-request',
@@ -1407,10 +1621,12 @@ describe('parseSpspResponse - settlement fields', () => {
     };
 
     // Act & Assert
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(InvalidEventError);
-    expect(() => parseSpspResponse(event, recipientSecretKey, senderPubkey)).toThrow(
-      'settlementTimeout must be a positive integer'
-    );
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow(InvalidEventError);
+    expect(() =>
+      parseSpspResponse(event, recipientSecretKey, senderPubkey)
+    ).toThrow('settlementTimeout must be a positive integer');
   });
 
   it('round-trip (build with settlement → parse) preserves all settlement fields', () => {
@@ -1433,7 +1649,11 @@ describe('parseSpspResponse - settlement fields', () => {
     };
 
     // Act
-    const event = buildSpspResponseEvent(responseWithSettlement, senderPubkey, responderSecretKey);
+    const event = buildSpspResponseEvent(
+      responseWithSettlement,
+      senderPubkey,
+      responderSecretKey
+    );
     const parsed = parseSpspResponse(event, senderSecretKey, responderPubkey);
 
     // Assert

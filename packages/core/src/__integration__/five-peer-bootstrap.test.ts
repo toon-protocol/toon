@@ -23,12 +23,22 @@ import {
   type HandlePacketResponse,
 } from '../compose.js';
 import type { CrosstownNode } from '../compose.js';
-import type { SendPacketParams, SendPacketResult } from '../bootstrap/direct-runtime-client.js';
+import type {
+  SendPacketParams,
+  SendPacketResult,
+} from '../bootstrap/direct-runtime-client.js';
 import type { RegisterPeerParams } from '../bootstrap/direct-connector-admin.js';
 import { createDirectChannelClient } from '../bootstrap/direct-channel-client.js';
 import type { BootstrapEvent } from '../bootstrap/types.js';
-import type { IlpPeerInfo, ConnectorChannelClient, SettlementNegotiationConfig } from '../types.js';
-import { buildIlpPeerInfoEvent, buildSpspResponseEvent } from '../events/builders.js';
+import type {
+  IlpPeerInfo,
+  ConnectorChannelClient,
+  SettlementNegotiationConfig,
+} from '../types.js';
+import {
+  buildIlpPeerInfoEvent,
+  buildSpspResponseEvent,
+} from '../events/builders.js';
 import type { SpspRequestSettlementInfo } from '../events/builders.js';
 import { parseSpspRequest } from '../events/parsers.js';
 import type { SpspResponse } from '../types.js';
@@ -73,7 +83,10 @@ class InMemoryIlpRouter {
     let target: MockConnectorWithRouter | undefined;
 
     for (const [prefix, connector] of this.routes) {
-      if (params.destination.startsWith(prefix) && prefix.length > bestMatch.length) {
+      if (
+        params.destination.startsWith(prefix) &&
+        prefix.length > bestMatch.length
+      ) {
         bestMatch = prefix;
         target = connector;
       }
@@ -114,10 +127,17 @@ class InMemoryIlpRouter {
           : new Uint8Array(32),
       };
       // Pass through SPSP response data if present (extra field not in HandlePacketAcceptResponse)
-      const anyResponse = response as Record<string, unknown>;
+      const anyResponse = response as unknown as Record<string, unknown>;
       if ('data' in anyResponse && typeof anyResponse['data'] === 'string') {
-        (result as { type: 'fulfill'; fulfillment: Uint8Array; data?: Uint8Array }).data =
-          Uint8Array.from(Buffer.from(anyResponse['data'] as string, 'base64'));
+        (
+          result as {
+            type: 'fulfill';
+            fulfillment: Uint8Array;
+            data?: Uint8Array;
+          }
+        ).data = Uint8Array.from(
+          Buffer.from(anyResponse['data'] as string, 'base64')
+        );
       }
       return result;
     }
@@ -137,12 +157,19 @@ class InMemoryIlpRouter {
 class MockConnectorWithRouter implements EmbeddableConnectorLike {
   readonly registeredPeers = new Map<string, RegisterPeerParams>();
   readonly removedPeers: string[] = [];
-  readonly openedChannels = new Map<string, {
-    peerId: string;
-    chain: string;
-    status: 'opening' | 'open' | 'closed' | 'settled';
-  }>();
-  private packetHandler: ((req: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>) | null = null;
+  readonly openedChannels = new Map<
+    string,
+    {
+      peerId: string;
+      chain: string;
+      status: 'opening' | 'open' | 'closed' | 'settled';
+    }
+  >();
+  private packetHandler:
+    | ((
+        req: HandlePacketRequest
+      ) => HandlePacketResponse | Promise<HandlePacketResponse>)
+    | null = null;
   private channelCounter = 0;
 
   constructor(private router: InMemoryIlpRouter) {}
@@ -161,7 +188,9 @@ class MockConnectorWithRouter implements EmbeddableConnectorLike {
   }
 
   setPacketHandler(
-    handler: (req: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse>,
+    handler: (
+      req: HandlePacketRequest
+    ) => HandlePacketResponse | Promise<HandlePacketResponse>
   ): void {
     this.packetHandler = handler;
   }
@@ -217,8 +246,10 @@ function createPeerPacketHandler(
     spspMinPrice?: bigint;
     channelClient?: ConnectorChannelClient;
     negotiationConfig?: SettlementNegotiationConfig;
-  } = {},
-): (req: HandlePacketRequest) => HandlePacketResponse | Promise<HandlePacketResponse> {
+  } = {}
+): (
+  req: HandlePacketRequest
+) => HandlePacketResponse | Promise<HandlePacketResponse> {
   const basePricePerByte = 10n;
 
   // BLS handles regular event storage + pricing
@@ -228,10 +259,12 @@ function createPeerPacketHandler(
       ownerPubkey: peer.pubkey,
       spspMinPrice: options.spspMinPrice,
     },
-    peer.eventStore,
+    peer.eventStore
   );
 
-  return async (request: HandlePacketRequest): Promise<HandlePacketResponse> => {
+  return async (
+    request: HandlePacketRequest
+  ): Promise<HandlePacketResponse> => {
     // Decode the TOON to check if it's an SPSP request
     let event: NostrEvent;
     let toonBytes: Uint8Array;
@@ -240,7 +273,7 @@ function createPeerPacketHandler(
       event = decodeEventFromToon(toonBytes);
     } catch {
       // If we can't decode, pass through to BLS for error handling
-      return bls.handlePacket(request);
+      return bls.handlePacket(request) as HandlePacketResponse;
     }
 
     // Intercept kind:23194 SPSP requests
@@ -271,7 +304,11 @@ function createPeerPacketHandler(
       }
 
       try {
-        const spspRequest = parseSpspRequest(event, peer.secretKey, event.pubkey);
+        const spspRequest = parseSpspRequest(
+          event,
+          peer.secretKey,
+          event.pubkey
+        );
 
         // Negotiate settlement chain and open payment channel if configured
         let channelId: string | undefined;
@@ -310,7 +347,9 @@ function createPeerPacketHandler(
         const response: SpspResponse = {
           requestId: spspRequest.requestId,
           destinationAccount: peer.ilpAddress,
-          sharedSecret: Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('base64'),
+          sharedSecret: Buffer.from(
+            crypto.getRandomValues(new Uint8Array(32))
+          ).toString('base64'),
           negotiatedChain,
           settlementAddress,
           tokenAddress,
@@ -322,12 +361,13 @@ function createPeerPacketHandler(
           response,
           event.pubkey,
           peer.secretKey,
-          event.id,
+          event.id
         );
 
         // TOON-encode the response and return as data on the accept
         const responseToonBytes = encodeEventToToon(responseEvent);
-        const responseBase64 = Buffer.from(responseToonBytes).toString('base64');
+        const responseBase64 =
+          Buffer.from(responseToonBytes).toString('base64');
 
         // Store the SPSP request event
         peer.eventStore.store(event);
@@ -347,7 +387,7 @@ function createPeerPacketHandler(
     }
 
     // Non-SPSP: delegate to BLS
-    return bls.handlePacket(request);
+    return bls.handlePacket(request) as HandlePacketResponse;
   };
 }
 
@@ -369,9 +409,9 @@ describe('Five-Peer Bootstrap Integration', () => {
 
     // Create all peer fixtures
     for (let i = 0; i < PEER_COUNT; i++) {
-      const walletData = testnetWallets.peers[i];
+      const walletData = testnetWallets.peers[i]!;
       const secretKey = Uint8Array.from(
-        Buffer.from(walletData.nostr.secretKey, 'hex'),
+        Buffer.from(walletData.nostr.secretKey, 'hex')
       );
       const pubkey = getPublicKey(secretKey);
       const ilpAddress = `g.test.peer${i}`;
@@ -405,20 +445,25 @@ describe('Five-Peer Bootstrap Integration', () => {
 
     // Genesis (peer0): seed kind:10032 event directly into its event store
     const genesisIlpInfo: IlpPeerInfo = {
-      ilpAddress: peers[0].ilpAddress,
-      btpEndpoint: peers[0].btpEndpoint,
+      ilpAddress: peers[0]!.ilpAddress,
+      btpEndpoint: peers[0]!.btpEndpoint,
       assetCode: 'USD',
       assetScale: 6,
       supportedChains: [CHAIN_ID],
-      settlementAddresses: { [CHAIN_ID]: peers[0].evmAddress },
+      settlementAddresses: { [CHAIN_ID]: peers[0]!.evmAddress },
       preferredTokens: { [CHAIN_ID]: TOKEN_ADDRESS },
       tokenNetworks: { [CHAIN_ID]: TOKEN_NETWORK },
     };
-    const genesisEvent = buildIlpPeerInfoEvent(genesisIlpInfo, peers[0].secretKey);
-    peers[0].eventStore.store(genesisEvent);
+    const genesisEvent = buildIlpPeerInfoEvent(
+      genesisIlpInfo,
+      peers[0]!.secretKey
+    );
+    peers[0]!.eventStore.store(genesisEvent);
 
     // Settlement info shared by all peers
-    const makeSettlementInfo = (peer: PeerFixture): SpspRequestSettlementInfo => ({
+    const makeSettlementInfo = (
+      peer: PeerFixture
+    ): SpspRequestSettlementInfo => ({
       ilpAddress: peer.ilpAddress,
       supportedChains: [CHAIN_ID],
       settlementAddresses: { [CHAIN_ID]: peer.evmAddress },
@@ -428,8 +473,8 @@ describe('Five-Peer Bootstrap Integration', () => {
 
     // Create CrosstownNode instances
     for (let i = 0; i < PEER_COUNT; i++) {
-      const peer = peers[i];
-      const settlementInfo = makeSettlementInfo(peer);
+      const peer = peers[i]!;
+      const settlementInfo = makeSettlementInfo(peer!);
 
       const ilpInfo: IlpPeerInfo = {
         ilpAddress: peer.ilpAddress,
@@ -460,24 +505,20 @@ describe('Five-Peer Bootstrap Integration', () => {
       // Genesis: spspMinPrice=0n (accepts free bootstrap SPSP handshakes)
       // Joiners: no spspMinPrice (standard pricing — requires payment)
       // All peers: channel client + negotiation config for payment channel opening
-      const handlePacket = createPeerPacketHandler(
-        peer,
-        settlementInfo,
-        {
-          ...(i === 0 ? { spspMinPrice: 0n } : {}),
-          channelClient,
-          negotiationConfig,
-        },
-      );
+      const handlePacket = createPeerPacketHandler(peer, settlementInfo, {
+        ...(i === 0 ? { spspMinPrice: 0n } : {}),
+        channelClient,
+        negotiationConfig,
+      });
 
       const knownPeers =
         i === 0
           ? []
           : [
               {
-                pubkey: peers[0].pubkey,
-                relayUrl: peers[0].relayUrl,
-                btpEndpoint: peers[0].btpEndpoint,
+                pubkey: peers[0]!.pubkey,
+                relayUrl: peers[0]!.relayUrl,
+                btpEndpoint: peers[0]!.btpEndpoint,
               },
             ];
 
@@ -488,7 +529,7 @@ describe('Five-Peer Bootstrap Integration', () => {
         ilpInfo,
         toonEncoder: encodeEventToToon,
         toonDecoder: decodeEventFromToon,
-        relayUrl: peers[0].relayUrl,
+        relayUrl: peers[0]!.relayUrl,
         knownPeers,
         settlementInfo,
         basePricePerByte: 10n,
@@ -504,10 +545,10 @@ describe('Five-Peer Bootstrap Integration', () => {
     }
 
     // Start sequentially: genesis first, then joiners
-    await peers[0].node!.start();
+    await peers[0]!.node!.start();
 
     for (let i = 1; i < PEER_COUNT; i++) {
-      await peers[i].node!.start();
+      await peers[i]!.node!.start();
     }
 
     // Wait for RelayMonitor event propagation
@@ -532,30 +573,36 @@ describe('Five-Peer Bootstrap Integration', () => {
   // -------------------------------------------------------------------------
 
   it('genesis starts with 0 peers', () => {
-    const readyEvent = peers[0].events.find(
-      (e) => e.type === 'bootstrap:ready',
+    const readyEvent = peers[0]!.events.find(
+      (e) => e.type === 'bootstrap:ready'
     );
     expect(readyEvent).toBeDefined();
-    expect(readyEvent!.type === 'bootstrap:ready' && readyEvent!.peerCount).toBe(0);
+    expect(
+      readyEvent!.type === 'bootstrap:ready' && readyEvent!.peerCount
+    ).toBe(0);
   });
 
   it('peers 1-4 discover genesis', () => {
     for (let i = 1; i < PEER_COUNT; i++) {
-      const registered = peers[i].events.filter(
-        (e) => e.type === 'bootstrap:peer-registered',
+      const registered = peers[i]!.events.filter(
+        (e) => e.type === 'bootstrap:peer-registered'
       );
       expect(registered.length).toBeGreaterThanOrEqual(1);
       const registeredWithGenesis = registered.find(
-        (e) => e.type === 'bootstrap:peer-registered' && e.peerPubkey === peers[0].pubkey,
+        (e) =>
+          e.type === 'bootstrap:peer-registered' &&
+          e.peerPubkey === peers[0]!.pubkey
       );
       expect(registeredWithGenesis).toBeDefined();
     }
   });
 
   it('peers 1-4 register genesis in connector', () => {
-    const expectedPeerId = `nostr-${peers[0].pubkey.slice(0, 16)}`;
+    const expectedPeerId = `nostr-${peers[0]!.pubkey.slice(0, 16)}`;
     for (let i = 1; i < PEER_COUNT; i++) {
-      expect(peers[i].connector.registeredPeers.has(expectedPeerId)).toBe(true);
+      expect(peers[i]!.connector.registeredPeers.has(expectedPeerId)).toBe(
+        true
+      );
     }
   });
 
@@ -563,10 +610,11 @@ describe('Five-Peer Bootstrap Integration', () => {
     // BootstrapService Phase 2 sends 0-amount SPSP to genesis.
     // Genesis has spspMinPrice=0n so it accepts free handshakes.
     // Verify no handshake failures targeting the genesis peer ID.
-    const genesisPeerId = `nostr-${peers[0].pubkey.slice(0, 16)}`;
+    const genesisPeerId = `nostr-${peers[0]!.pubkey.slice(0, 16)}`;
     for (let i = 1; i < PEER_COUNT; i++) {
-      const genesisFailures = peers[i].events.filter(
-        (e) => e.type === 'bootstrap:handshake-failed' && e.peerId === genesisPeerId,
+      const genesisFailures = peers[i]!.events.filter(
+        (e) =>
+          e.type === 'bootstrap:handshake-failed' && e.peerId === genesisPeerId
       );
       expect(genesisFailures).toEqual([]);
     }
@@ -575,8 +623,8 @@ describe('Five-Peer Bootstrap Integration', () => {
   it('peers 1-4 announce to genesis with paid amounts', () => {
     // Phase 3: announcements are paid ILP PREPAREs (basePricePerByte * toonBytes)
     for (let i = 1; i < PEER_COUNT; i++) {
-      const announced = peers[i].events.filter(
-        (e) => e.type === 'bootstrap:announced',
+      const announced = peers[i]!.events.filter(
+        (e) => e.type === 'bootstrap:announced'
       );
       expect(announced.length).toBeGreaterThanOrEqual(1);
       for (const event of announced) {
@@ -592,9 +640,10 @@ describe('Five-Peer Bootstrap Integration', () => {
     // Joiner peers have no spspMinPrice override, so they require full pricing.
     // Half-price < full price → REJECTED (non-fatal: peer stays registered).
     // Peer4 (last to start) discovers peers 1-3 and tries SPSP with each.
-    const genesisPeerId = `nostr-${peers[0].pubkey.slice(0, 16)}`;
-    const peer4Failures = peers[4].events.filter(
-      (e) => e.type === 'bootstrap:handshake-failed' && e.peerId !== genesisPeerId,
+    const genesisPeerId = `nostr-${peers[0]!.pubkey.slice(0, 16)}`;
+    const peer4Failures = peers[4]!.events.filter(
+      (e) =>
+        e.type === 'bootstrap:handshake-failed' && e.peerId !== genesisPeerId
     );
     // Peer4 should have pricing failures for at least one non-genesis peer
     expect(peer4Failures.length).toBeGreaterThan(0);
@@ -607,11 +656,11 @@ describe('Five-Peer Bootstrap Integration', () => {
   });
 
   it('genesis event store has kind:10032 events from all 5 peers', () => {
-    const storedEvents = peers[0].eventStore.query([{ kinds: [10032] }]);
+    const storedEvents = peers[0]!.eventStore.query([{ kinds: [10032] }]);
     const storedPubkeys = new Set(storedEvents.map((e) => e.pubkey));
 
     for (let i = 0; i < PEER_COUNT; i++) {
-      expect(storedPubkeys.has(peers[i].pubkey)).toBe(true);
+      expect(storedPubkeys.has(peers[i]!.pubkey)).toBe(true);
     }
   });
 
@@ -623,17 +672,17 @@ describe('Five-Peer Bootstrap Integration', () => {
     // However, peers that start LATER subscribe to the relay AFTER earlier peers
     // have already announced, so they discover earlier peers via historical query.
     // Peer4 (last to start) should discover peers 1-3 via RelayMonitor.
-    const peer4Discovered = peers[4].events.filter(
-      (e) => e.type === 'bootstrap:peer-discovered',
+    const peer4Discovered = peers[4]!.events.filter(
+      (e) => e.type === 'bootstrap:peer-discovered'
     );
     const discoveredPubkeys = new Set(
-      peer4Discovered.map((e) => (e as { peerPubkey: string }).peerPubkey),
+      peer4Discovered.map((e) => (e as { peerPubkey: string }).peerPubkey)
     );
 
     // Peer4's RelayMonitor excludes peer0 (bootstrapped) and peer4 (own pubkey),
     // so it should discover peers 1-3 from the historical query
     for (let i = 1; i < PEER_COUNT - 1; i++) {
-      expect(discoveredPubkeys.has(peers[i].pubkey)).toBe(true);
+      expect(discoveredPubkeys.has(peers[i]!.pubkey)).toBe(true);
     }
   });
 
@@ -647,14 +696,14 @@ describe('Five-Peer Bootstrap Integration', () => {
 
   it('peers use real Nostr identities from fixture', () => {
     for (let i = 0; i < PEER_COUNT; i++) {
-      expect(peers[i].pubkey).toBe(testnetWallets.peers[i].nostr.pubkey);
+      expect(peers[i]!.pubkey).toBe(testnetWallets.peers[i]!.nostr.pubkey);
     }
   });
 
   it('settlement info includes M2M token in SPSP responses', () => {
     for (let i = 1; i < PEER_COUNT; i++) {
-      const readyEvent = peers[i].events.find(
-        (e) => e.type === 'bootstrap:ready',
+      const readyEvent = peers[i]!.events.find(
+        (e) => e.type === 'bootstrap:ready'
       );
       expect(readyEvent).toBeDefined();
       if (readyEvent?.type === 'bootstrap:ready') {
@@ -667,9 +716,13 @@ describe('Five-Peer Bootstrap Integration', () => {
     // MockConnectorWithRouter implements openChannel() and getChannelState(),
     // so createCrosstownNode() should detect them and create a channelClient.
     for (let i = 0; i < PEER_COUNT; i++) {
-      expect(peers[i].node!.channelClient).not.toBeNull();
-      expect(peers[i].node!.channelClient!.openChannel).toBeInstanceOf(Function);
-      expect(peers[i].node!.channelClient!.getChannelState).toBeInstanceOf(Function);
+      expect(peers[i]!.node!.channelClient).not.toBeNull();
+      expect(peers[i]!.node!.channelClient!.openChannel).toBeInstanceOf(
+        Function
+      );
+      expect(peers[i]!.node!.channelClient!.getChannelState).toBeInstanceOf(
+        Function
+      );
     }
   });
 
@@ -677,7 +730,7 @@ describe('Five-Peer Bootstrap Integration', () => {
     // When peers 1-4 send SPSP requests to genesis, the handler calls
     // negotiateAndOpenChannel() which calls connector.openChannel().
     // Genesis connector should have opened channels for each joiner.
-    const genesisChannels = peers[0].connector.openedChannels;
+    const genesisChannels = peers[0]!.connector.openedChannels;
     expect(genesisChannels.size).toBeGreaterThanOrEqual(4);
 
     // Verify channels are for the correct chain
@@ -690,8 +743,8 @@ describe('Five-Peer Bootstrap Integration', () => {
   it('joiner peers receive bootstrap:channel-opened events', () => {
     // BootstrapService reads channelId from SPSP response and emits channel-opened
     for (let i = 1; i < PEER_COUNT; i++) {
-      const channelEvents = peers[i].events.filter(
-        (e) => e.type === 'bootstrap:channel-opened',
+      const channelEvents = peers[i]!.events.filter(
+        (e) => e.type === 'bootstrap:channel-opened'
       );
       expect(channelEvents.length).toBeGreaterThanOrEqual(1);
       if (channelEvents[0]?.type === 'bootstrap:channel-opened') {
@@ -705,8 +758,8 @@ describe('Five-Peer Bootstrap Integration', () => {
     // Each joiner should have a distinct channel opened on genesis
     const allChannelIds = new Set<string>();
     for (let i = 1; i < PEER_COUNT; i++) {
-      const channelEvents = peers[i].events.filter(
-        (e) => e.type === 'bootstrap:channel-opened',
+      const channelEvents = peers[i]!.events.filter(
+        (e) => e.type === 'bootstrap:channel-opened'
       );
       for (const event of channelEvents) {
         if (event.type === 'bootstrap:channel-opened') {
@@ -721,9 +774,9 @@ describe('Five-Peer Bootstrap Integration', () => {
   it('peer registration includes settlement config after channel open', () => {
     // After SPSP response with channelId, BootstrapService re-registers the peer
     // with settlement config including the channelId.
-    const genesisPeerId = `nostr-${peers[0].pubkey.slice(0, 16)}`;
+    const genesisPeerId = `nostr-${peers[0]!.pubkey.slice(0, 16)}`;
     for (let i = 1; i < PEER_COUNT; i++) {
-      const peerReg = peers[i].connector.registeredPeers.get(genesisPeerId);
+      const peerReg = peers[i]!.connector.registeredPeers.get(genesisPeerId);
       expect(peerReg).toBeDefined();
       // After channel open, peer is re-registered with settlement config
       if (peerReg?.settlement) {
