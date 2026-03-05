@@ -17,9 +17,8 @@ export default defineConfig({
       //   payment-handler-bridge.test.ts  -> Story 1.6 (done)
       //   create-node.test.ts             -> Story 1.7 (done)
       //   index.test.ts                   -> Story 1.7 (done)
-      //   connector-api.test.ts           -> Story 1.8 (uses createNode, available after 1.7)
+      //   connector-api.test.ts           -> Story 1.8 (done)
       //   dev-mode.test.ts                -> Story 1.10
-      'src/connector-api.test.ts',
       'src/dev-mode.test.ts',
     ],
   },
