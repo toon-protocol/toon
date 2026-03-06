@@ -34,16 +34,16 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // ============================================================================
 
 /** Known Arbitrum One USDC address (per Story 3.2 spec). */
-const ARBITRUM_ONE_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+const _ARBITRUM_ONE_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
 
 /** Anvil deterministic chain ID. */
-const ANVIL_CHAIN_ID = 31337;
+const _ANVIL_CHAIN_ID = 31337;
 
 /** Arbitrum Sepolia chain ID. */
-const ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
+const _ARBITRUM_SEPOLIA_CHAIN_ID = 421614;
 
 /** Arbitrum One chain ID. */
-const ARBITRUM_ONE_CHAIN_ID = 42161;
+const _ARBITRUM_ONE_CHAIN_ID = 42161;
 
 // ============================================================================
 // Tests

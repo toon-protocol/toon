@@ -54,6 +54,8 @@ export interface HandlePacketAcceptResponse {
   accept: true;
   /** Base64-encoded fulfillment (SHA-256 of event.id) */
   fulfillment: string;
+  /** Base64-encoded response data (e.g., TOON-encoded SPSP response for relay back in ILP FULFILL) */
+  data?: string;
   metadata?: Record<string, unknown>;
 }
 

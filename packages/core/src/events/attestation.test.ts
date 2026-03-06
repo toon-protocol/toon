@@ -112,9 +112,9 @@ describe('attestation server lifecycle', () => {
   // Will fail because the attestation server module does not exist yet.
   it.skip('publishes kind:10033 event on startup (T-4.2-04)', async () => {
     // Arrange
-    const secretKey = generateSecretKey();
+    const _secretKey = generateSecretKey();
     const publishedEvents: NostrEvent[] = [];
-    const mockPublish = async (event: NostrEvent) => {
+    const _mockPublish = async (event: NostrEvent) => {
       publishedEvents.push(event);
     };
 
@@ -135,12 +135,12 @@ describe('attestation server lifecycle', () => {
   // Will fail because the attestation server module does not exist yet.
   it.skip('refreshes kind:10033 event on configurable interval (T-4.2-05)', async () => {
     // Arrange
-    const secretKey = generateSecretKey();
+    const _secretKey = generateSecretKey();
     const publishedEvents: NostrEvent[] = [];
-    const mockPublish = async (event: NostrEvent) => {
+    const _mockPublish = async (event: NostrEvent) => {
       publishedEvents.push(event);
     };
-    const refreshIntervalMs = 100; // Short interval for testing
+    const _refreshIntervalMs = 100; // Short interval for testing
 
     // Act — start and wait for at least one refresh cycle (module does not exist yet)
     // const server = new AttestationServer({

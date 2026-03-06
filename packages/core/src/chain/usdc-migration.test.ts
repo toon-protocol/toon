@@ -36,7 +36,7 @@ const ANVIL_CHAIN_ID = 31337;
 /**
  * Creates a mock USDC contract configuration with sensible defaults.
  */
-function createUsdcConfig(overrides: Record<string, unknown> = {}) {
+function _createUsdcConfig(overrides: Record<string, unknown> = {}) {
   return {
     name: 'USD Coin',
     symbol: 'USDC',

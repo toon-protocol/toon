@@ -17,7 +17,7 @@
  * - 3.4-INT-004 [P1]: Publish kind:10036 seed list event
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi as _vi } from 'vitest';
 
 // These imports DO NOT EXIST yet — will cause module-not-found errors
 // until implementation is created.
@@ -35,7 +35,7 @@ import { describe, it, expect, vi } from 'vitest';
 const SEED_RELAY_LIST_KIND = 10036;
 
 /** kind:10032 — ILP Peer Info event kind. */
-const ILP_PEER_INFO_KIND = 10032;
+const _ILP_PEER_INFO_KIND = 10032;
 
 // ============================================================================
 // Factories
@@ -55,7 +55,7 @@ function createSeedRelayList(count = 3) {
 /**
  * Creates a mock kind:10036 Nostr event.
  */
-function createSeedRelayEvent(
+function _createSeedRelayEvent(
   seedRelays: ReturnType<typeof createSeedRelayList> = createSeedRelayList(),
   overrides: Record<string, unknown> = {}
 ) {

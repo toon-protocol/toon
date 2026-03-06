@@ -82,7 +82,7 @@ function createValidAttestationEvent(): NostrEvent {
  * Creates an attestation event with an expired expiry tag.
  * Useful for testing stale/expired attestation handling.
  */
-function createExpiredAttestationEvent(): NostrEvent {
+function _createExpiredAttestationEvent(): NostrEvent {
   const secretKey = generateSecretKey();
   return {
     id: '1'.repeat(64),
@@ -148,12 +148,12 @@ function createMockVerifier(
 
 describe('AttestationBootstrap (Story 4.6)', () => {
   let secretKey: Uint8Array;
-  let pubkey: string;
+  let _pubkey: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
     secretKey = generateSecretKey();
-    pubkey = getPublicKey(secretKey);
+    _pubkey = getPublicKey(secretKey);
   });
 
   afterEach(() => {
@@ -437,19 +437,17 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
 
     // Assert — relay service exposes port 7100
     const relayPorts = compose.services.relay.ports;
-    expect(relayPorts).toContainEqual(
-      expect.stringContaining('7100')
-    );
+    expect(relayPorts).toContainEqual(expect.stringContaining('7100'));
 
     // Assert — connector service exposes port 8080
     const connectorPorts = compose.services.connector.ports;
-    expect(connectorPorts).toContainEqual(
-      expect.stringContaining('8080')
-    );
+    expect(connectorPorts).toContainEqual(expect.stringContaining('8080'));
 
     // Assert — all services have image defined
     for (const name of serviceNames) {
-      expect(compose.services[name].image || compose.services[name].build).toBeDefined();
+      expect(
+        compose.services[name].image || compose.services[name].build
+      ).toBeDefined();
     }
   });
 
@@ -535,8 +533,7 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     expect(relayReadyIdx).toBeLessThan(attestationPublishIdx);
 
     // Verify mock call order using invocationCallOrder
-    const healthCheckOrder =
-      mockRelayHealthCheck.mock.invocationCallOrder[0]!;
+    const healthCheckOrder = mockRelayHealthCheck.mock.invocationCallOrder[0]!;
     const attestationPublishOrder =
       mockAttestationPublish.mock.invocationCallOrder[0]!;
     expect(healthCheckOrder).toBeLessThan(attestationPublishOrder);
@@ -574,11 +571,9 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     });
 
     // Act — query health for all 3 processes
-    const [relayHealth, connectorHealth, attestationHealth] = await Promise.all([
-      mockRelayHealth(),
-      mockConnectorHealth(),
-      mockAttestationHealth(),
-    ]);
+    const [relayHealth, connectorHealth, attestationHealth] = await Promise.all(
+      [mockRelayHealth(), mockConnectorHealth(), mockAttestationHealth()]
+    );
 
     // Assert — each process is running and healthy
     expect(relayHealth.process).toBe('relay');

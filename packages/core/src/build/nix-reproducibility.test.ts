@@ -95,16 +95,17 @@ function createBuildPair(identical: boolean): {
  * in Dockerfile.nix. Each entry includes the pattern string and a human-readable
  * reason explaining why it breaks reproducibility.
  */
-function createForbiddenPatterns(): Array<{
+function createForbiddenPatterns(): {
   pattern: RegExp;
   name: string;
   reason: string;
-}> {
+}[] {
   return [
     {
       pattern: /apt-get\s+update/,
       name: 'apt-get update',
-      reason: 'Package indices change daily; produces different layers on every build',
+      reason:
+        'Package indices change daily; produces different layers on every build',
     },
     {
       pattern: /npm\s+install\s+(?!.*--frozen-lockfile)(?!.*ci\b)/,
@@ -113,9 +114,11 @@ function createForbiddenPatterns(): Array<{
         'npm install without --frozen-lockfile or npm ci resolves latest versions non-deterministically',
     },
     {
-      pattern: /git\s+clone\s+(?!.*--branch\s+\S+\s+--single-branch)(?!.*@[0-9a-f]{40})/,
+      pattern:
+        /git\s+clone\s+(?!.*--branch\s+\S+\s+--single-branch)(?!.*@[0-9a-f]{40})/,
       name: 'git clone without pinned commit',
-      reason: 'git clone without a pinned commit hash fetches HEAD which changes over time',
+      reason:
+        'git clone without a pinned commit hash fetches HEAD which changes over time',
     },
     {
       pattern: /FROM\s+\S+:latest\b/,
@@ -125,7 +128,8 @@ function createForbiddenPatterns(): Array<{
     {
       pattern: /FROM\s+\S+(?!.*@sha256:)/,
       name: 'base image without digest pin',
-      reason: 'Without @sha256: digest pin, tag can resolve to different images',
+      reason:
+        'Without @sha256: digest pin, tag can resolve to different images',
     },
     {
       pattern: /pip\s+install\s+(?!.*==)(?!.*-r\s+\S+)/,
@@ -135,7 +139,8 @@ function createForbiddenPatterns(): Array<{
     {
       pattern: /curl\s+.*\|\s*(ba)?sh/,
       name: 'curl pipe to shell',
-      reason: 'Remote scripts change over time; produces non-deterministic results',
+      reason:
+        'Remote scripts change over time; produces non-deterministic results',
     },
   ];
 }
@@ -399,7 +404,10 @@ describe('T-4.5-03: Dockerfile.nix determinism — static analysis', () => {
     const forbiddenPatterns = createForbiddenPatterns();
 
     // Act — run the static analysis
-    const report = analyzeDockerfileForNonDeterminism(content, forbiddenPatterns);
+    const report = analyzeDockerfileForNonDeterminism(
+      content,
+      forbiddenPatterns
+    );
 
     // Assert — no violations found
     expect(report.violations).toHaveLength(0);
@@ -425,7 +433,10 @@ describe('T-4.5-03: Dockerfile.nix determinism — static analysis', () => {
     const forbiddenPatterns = createForbiddenPatterns();
 
     // Act
-    const report = analyzeDockerfileForNonDeterminism(badDockerfile, forbiddenPatterns);
+    const report = analyzeDockerfileForNonDeterminism(
+      badDockerfile,
+      forbiddenPatterns
+    );
 
     // Assert — multiple violations detected
     expect(report.deterministic).toBe(false);
@@ -465,7 +476,10 @@ describe('T-4.5-03: Dockerfile.nix determinism — static analysis', () => {
     const forbiddenPatterns = createForbiddenPatterns();
 
     // Act
-    const report = analyzeDockerfileForNonDeterminism(goodDockerfile, forbiddenPatterns);
+    const report = analyzeDockerfileForNonDeterminism(
+      goodDockerfile,
+      forbiddenPatterns
+    );
 
     // Assert — no violations
     expect(report.deterministic).toBe(true);

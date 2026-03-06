@@ -40,7 +40,11 @@ function createNonDeterministicDockerfile(): string {
 }
 
 /** Create a PCR result object for comparison tests. */
-function createPcrResult(pcr0: string): { pcr0: string; pcr1: string; pcr2: string } {
+function createPcrResult(pcr0: string): {
+  pcr0: string;
+  pcr1: string;
+  pcr2: string;
+} {
   return {
     pcr0,
     pcr1: 'b'.repeat(96),
@@ -161,8 +165,16 @@ describe('comparePcrs', () => {
   // Will fail because comparePcrs does not exist yet.
   it.skip('returns false when pcr1 differs even if pcr0 matches (T-4.5-02)', () => {
     // Arrange
-    const buildA = { pcr0: KNOWN_PCR0, pcr1: 'b'.repeat(96), pcr2: 'c'.repeat(96) };
-    const buildB = { pcr0: KNOWN_PCR0, pcr1: 'e'.repeat(96), pcr2: 'c'.repeat(96) };
+    const buildA = {
+      pcr0: KNOWN_PCR0,
+      pcr1: 'b'.repeat(96),
+      pcr2: 'c'.repeat(96),
+    };
+    const buildB = {
+      pcr0: KNOWN_PCR0,
+      pcr1: 'e'.repeat(96),
+      pcr2: 'c'.repeat(96),
+    };
 
     // Act
     const result = comparePcrs(buildA, buildB);
@@ -260,7 +272,9 @@ describe('validateDockerfileDeterminism', () => {
     // Assert
     expect(result.valid).toBe(false);
     expect(result.violations.length).toBeGreaterThanOrEqual(1);
-    expect(result.violations.some((v) => v.pattern === 'apt-get update')).toBe(true);
+    expect(result.violations.some((v) => v.pattern === 'apt-get update')).toBe(
+      true
+    );
   });
 
   // T-4.5-03 (anti-pattern): Unpinned base image (`FROM ubuntu:latest`)
@@ -279,7 +293,9 @@ describe('validateDockerfileDeterminism', () => {
 
     // Assert
     expect(result.valid).toBe(false);
-    expect(result.violations.some((v) => v.pattern === 'unpinned base image')).toBe(true);
+    expect(
+      result.violations.some((v) => v.pattern === 'unpinned base image')
+    ).toBe(true);
   });
 
   // T-4.5-03 (anti-pattern): `curl | bash` pattern fetches arbitrary remote
@@ -298,7 +314,9 @@ describe('validateDockerfileDeterminism', () => {
 
     // Assert
     expect(result.valid).toBe(false);
-    expect(result.violations.some((v) => v.pattern === 'curl pipe bash')).toBe(true);
+    expect(result.violations.some((v) => v.pattern === 'curl pipe bash')).toBe(
+      true
+    );
   });
 
   // T-4.5-03 (anti-pattern): `pip install` without pinned versions downloads
@@ -317,7 +335,9 @@ describe('validateDockerfileDeterminism', () => {
 
     // Assert
     expect(result.valid).toBe(false);
-    expect(result.violations.some((v) => v.pattern === 'unpinned pip install')).toBe(true);
+    expect(
+      result.violations.some((v) => v.pattern === 'unpinned pip install')
+    ).toBe(true);
   });
 
   // T-4.5-03 (anti-pattern): `npm install` without lockfile or pinned versions
@@ -336,7 +356,9 @@ describe('validateDockerfileDeterminism', () => {
 
     // Assert
     expect(result.valid).toBe(false);
-    expect(result.violations.some((v) => v.pattern === 'unpinned npm install')).toBe(true);
+    expect(
+      result.violations.some((v) => v.pattern === 'unpinned npm install')
+    ).toBe(true);
   });
 
   // T-4.5-03 (compound): A Dockerfile with multiple anti-patterns reports all

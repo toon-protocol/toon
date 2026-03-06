@@ -18,7 +18,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import {
+  generateSecretKey as _generateSecretKey,
+  getPublicKey as _getPublicKey,
+} from 'nostr-tools/pure';
 
 // These imports DO NOT EXIST yet — will cause module-not-found errors
 // until implementation is created.
@@ -34,7 +37,7 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 // ============================================================================
 
 /** kind:10035 — x402 Service Discovery event kind. */
-const SERVICE_DISCOVERY_KIND = 10035;
+const _SERVICE_DISCOVERY_KIND = 10035;
 
 // ============================================================================
 // Factories
@@ -43,7 +46,7 @@ const SERVICE_DISCOVERY_KIND = 10035;
 /**
  * Creates a mock service discovery content payload.
  */
-function createServiceDiscoveryContent(
+function _createServiceDiscoveryContent(
   overrides: Record<string, unknown> = {}
 ) {
   return {

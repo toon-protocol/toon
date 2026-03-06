@@ -10,7 +10,7 @@
  * No transport mocks needed — these are pure logic tests.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect as _expect, vi, beforeEach } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
@@ -129,8 +129,8 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: parseAttestation module does not exist yet.
       //
       // Arrange
-      const attestation = createTestAttestation();
-      const event = createAttestationEvent(pubkey, attestation);
+      const _attestation = createTestAttestation();
+      const _event = createAttestationEvent(pubkey, attestation);
 
       // Act
       // const result = parseAttestation(event);
@@ -154,9 +154,9 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class does not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({ knownGoodPcrs: registry });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
 
       // Act
       // const result = verifier.verify(attestation as TeeAttestation);
@@ -175,9 +175,9 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class does not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({ knownGoodPcrs: registry });
-      const attestation = createTestAttestation({
+      const _attestation = createTestAttestation({
         pcr0: 'd'.repeat(96), // Not in the registry
       });
 
@@ -199,13 +199,13 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and rankPeers method do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({ knownGoodPcrs: registry });
 
       const attestedPubkey = 'a'.repeat(64);
       const nonAttestedPubkey = 'b'.repeat(64);
 
-      const peers = [
+      const _peers = [
         createPeerDescriptor(nonAttestedPubkey, false),
         createPeerDescriptor(attestedPubkey, true, TEST_CREATED_AT),
       ];
@@ -228,17 +228,17 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and AttestationState enum do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
 
       // Time just after validity expires: attestedAt + validitySeconds + 1
-      const now = attestedAt + ATTESTATION_VALIDITY_SECONDS + 1;
+      const _now = attestedAt + ATTESTATION_VALIDITY_SECONDS + 1;
 
       // Act
       // const state = verifier.getAttestationState(attestation as TeeAttestation, attestedAt, now);
@@ -251,21 +251,18 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and AttestationState enum do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
 
       // Time after validity + grace: attestedAt + validitySeconds + graceSeconds + 1
-      const now =
-        attestedAt +
-        ATTESTATION_VALIDITY_SECONDS +
-        GRACE_PERIOD_SECONDS +
-        1;
+      const _now =
+        attestedAt + ATTESTATION_VALIDITY_SECONDS + GRACE_PERIOD_SECONDS + 1;
 
       // Act
       // const state = verifier.getAttestationState(attestation as TeeAttestation, attestedAt, now);
@@ -278,17 +275,17 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and AttestationState enum do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
 
       // Time still within validity: attestedAt + validitySeconds - 1
-      const now = attestedAt + ATTESTATION_VALIDITY_SECONDS - 1;
+      const _now = attestedAt + ATTESTATION_VALIDITY_SECONDS - 1;
 
       // Act
       // const state = verifier.getAttestationState(attestation as TeeAttestation, attestedAt, now);
@@ -307,17 +304,17 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and AttestationState enum do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
 
       // Exactly at the boundary: validity expired + exactly 30s grace
-      const now =
+      const _now =
         attestedAt + ATTESTATION_VALIDITY_SECONDS + GRACE_PERIOD_SECONDS;
 
       // Act
@@ -331,21 +328,18 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and AttestationState enum do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
 
       // One second past the grace boundary
-      const now =
-        attestedAt +
-        ATTESTATION_VALIDITY_SECONDS +
-        GRACE_PERIOD_SECONDS +
-        1;
+      const _now =
+        attestedAt + ATTESTATION_VALIDITY_SECONDS + GRACE_PERIOD_SECONDS + 1;
 
       // Act
       // const state = verifier.getAttestationState(attestation as TeeAttestation, attestedAt, now);
@@ -364,7 +358,7 @@ describe('AttestationVerifier', () => {
       // WILL FAIL: AttestationVerifier class and rankPeers method do not exist yet.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({ knownGoodPcrs: registry });
 
       const peerA = createPeerDescriptor('a'.repeat(64), false); // non-attested
@@ -372,7 +366,7 @@ describe('AttestationVerifier', () => {
       const peerC = createPeerDescriptor('c'.repeat(64), false); // non-attested
       const peerD = createPeerDescriptor('d'.repeat(64), true, TEST_CREATED_AT); // attested
 
-      const peers = [peerA, peerB, peerC, peerD]; // interleaved order
+      const _peers = [peerA, peerB, peerC, peerD]; // interleaved order
 
       // Act
       // const ranked = verifier.rankPeers(peers);
@@ -400,15 +394,15 @@ describe('AttestationVerifier', () => {
       // AttestationVerifier instance, ensuring they never diverge.
       //
       // Arrange
-      const registry = createKnownGoodRegistry();
+      const _registry = createKnownGoodRegistry();
       // const verifier = new AttestationVerifier({
       //   knownGoodPcrs: registry,
       //   validitySeconds: ATTESTATION_VALIDITY_SECONDS,
       //   graceSeconds: GRACE_PERIOD_SECONDS,
       // });
-      const attestation = createTestAttestation();
+      const _attestation = createTestAttestation();
       const attestedAt = TEST_CREATED_AT;
-      const now = attestedAt + ATTESTATION_VALIDITY_SECONDS + 10; // within grace
+      const _now = attestedAt + ATTESTATION_VALIDITY_SECONDS + 10; // within grace
 
       // Act — simulate both channels querying the same verifier
       // const stateFromNostrPath = verifier.getAttestationState(

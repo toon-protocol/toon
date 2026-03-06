@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { generateSecretKey, getPublicKey, verifyEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey as _generateSecretKey,
+  getPublicKey as _getPublicKey,
+  verifyEvent,
+} from 'nostr-tools/pure';
 
 // These imports do not exist yet — each will cause a build/import failure
 // until the corresponding module is implemented.
@@ -33,7 +37,7 @@ describe('deriveFromKmsSeed — Schnorr signature validity', () => {
     const { secretKey, pubkey } = deriveFromKmsSeed(TEST_KMS_SEED);
 
     // Act — build a minimal unsigned event template and sign it
-    const unsigned = {
+    const _unsigned = {
       kind: 1,
       created_at: Math.floor(Date.now() / 1000),
       tags: [],
@@ -58,7 +62,7 @@ describe('deriveFromKmsSeed — Schnorr signature validity', () => {
 // T-4.4-02 [P0] KMS seed derivation follows NIP-06 path
 // ---------------------------------------------------------------------------
 describe('deriveFromKmsSeed — NIP-06 compatibility', () => {
-  it.skip('T-4.4-02: derived key matches NIP-06 path m/44\'/1237\'/0\'/0/0 for known mnemonic', () => {
+  it.skip("T-4.4-02: derived key matches NIP-06 path m/44'/1237'/0'/0/0 for known mnemonic", () => {
     // Will fail: ./kms-identity.js does not exist yet.
     //
     // Arrange — use the well-known BIP-39 test mnemonic
@@ -149,7 +153,9 @@ describe('KMS identity — error handling', () => {
       deriveFromKmsSeed(badSeed);
     } catch (err) {
       expect(err).toBeInstanceOf(KmsIdentityError);
-      expect((err as KmsIdentityError).message).toMatch(/KMS|seed|unavailable/i);
+      expect((err as KmsIdentityError).message).toMatch(
+        /KMS|seed|unavailable/i
+      );
     }
   });
 });
