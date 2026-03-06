@@ -54,10 +54,7 @@ export interface HandlePacketAcceptResponse {
   accept: true;
   /** Base64-encoded fulfillment (SHA-256 of event.id) */
   fulfillment: string;
-  metadata?: {
-    eventId: string;
-    storedAt: number;
-  };
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -69,10 +66,7 @@ export interface HandlePacketRejectResponse {
   code: string;
   /** Human-readable error message */
   message: string;
-  metadata?: {
-    required?: string;
-    received?: string;
-  };
+  metadata?: Record<string, unknown>;
 }
 
 /**

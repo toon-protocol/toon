@@ -244,7 +244,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       // VerificationResult.rejection is always set when verified=false per
       // createVerificationPipeline contract. Guard defensively anyway.
       if (verifyResult.rejection) {
-        return verifyResult.rejection as HandlePacketResponse;
+        return verifyResult.rejection;
       }
       return { accept: false, code: 'F06', message: 'Verification failed' };
     }
@@ -270,7 +270,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         // PricingValidationResult.rejection is always set when accepted=false per
         // createPricingValidator contract. Guard defensively anyway.
         if (priceResult.rejection) {
-          return priceResult.rejection as HandlePacketResponse;
+          return priceResult.rejection;
         }
         return {
           accept: false,
@@ -290,12 +290,8 @@ export function createNode(config: NodeConfig): ServiceNode {
     });
 
     // Step 5: Dispatch to handler (T00 error boundary)
-    // NOTE: HandlerResponse (SDK) uses Record<string, unknown> for metadata
-    // while HandlePacketResponse (core) uses narrow metadata types. The shapes
-    // are structurally compatible at runtime; the double-cast bridges this
-    // intentional type-widening in the SDK.
     try {
-      return (await registry.dispatch(ctx)) as unknown as HandlePacketResponse;
+      return await registry.dispatch(ctx);
     } catch (err: unknown) {
       // Log only the error message, not the full error object (which may contain payload data)
       const errMsg = err instanceof Error ? err.message : 'Unknown error';

@@ -7,6 +7,13 @@
 
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type {
+  HandlePacketAcceptResponse,
+  HandlePacketRejectResponse,
+} from '@crosstown/core';
+
+// Re-export core response types so SDK consumers don't need to import from core
+export type { HandlePacketAcceptResponse, HandlePacketRejectResponse };
 
 /**
  * The handler context passed to each kind-based handler.
@@ -28,19 +35,6 @@ export interface HandlerContext {
   accept(metadata?: Record<string, unknown>): HandlePacketAcceptResponse;
   /** Reject the packet with an ILP error code and message. */
   reject(code: string, message: string): HandlePacketRejectResponse;
-}
-
-export interface HandlePacketAcceptResponse {
-  accept: true;
-  fulfillment: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface HandlePacketRejectResponse {
-  accept: false;
-  code: string;
-  message: string;
-  metadata?: Record<string, unknown>;
 }
 
 export interface CreateHandlerContextOptions {
