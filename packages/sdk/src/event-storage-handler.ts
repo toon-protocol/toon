@@ -1,15 +1,24 @@
 /**
- * Event storage handler for @crosstown/sdk.
+ * Event storage handler stub for @crosstown/sdk.
  *
- * Stub: Will be implemented as part of the SDK epic.
- * Handles incoming ILP packets containing Nostr events, validates payment,
- * stores the event, and returns accept/reject responses.
+ * This is a stub that throws. The real implementation lives in
+ * `@crosstown/town` -- see `createEventStorageHandler` from that package.
+ *
+ * The SDK is the framework; Town is the relay implementation. SDK consumers
+ * building relay functionality should use `@crosstown/town` directly.
  */
 
 /**
  * Creates an event storage handler.
- * Stub implementation -- will be filled in when SDK is implemented.
+ *
+ * **Stub** -- throws "not yet implemented". See `@crosstown/town` for the
+ * real relay implementation of this handler.
+ *
+ * @see {@link https://github.com/ALLiDoizCode/crosstown/tree/main/packages/town | @crosstown/town}
  */
 export function createEventStorageHandler(_config: unknown): unknown {
-  throw new Error('createEventStorageHandler is not yet implemented');
+  throw new Error(
+    'createEventStorageHandler is not yet implemented in @crosstown/sdk. ' +
+      'Use @crosstown/town for the relay implementation.'
+  );
 }
