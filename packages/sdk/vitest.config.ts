@@ -19,6 +19,7 @@ export default defineConfig({
       //   index.test.ts                   -> Story 1.7 (done)
       //   connector-api.test.ts           -> Story 1.8 (done)
       //   dev-mode.test.ts                -> Story 1.10 (done)
+      //   publish-event.test.ts          -> Story 2.6 (done)
     ],
   },
 });

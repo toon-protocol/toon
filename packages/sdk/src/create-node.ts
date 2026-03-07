@@ -97,6 +97,17 @@ export interface StartResult {
 }
 
 /**
+ * Result returned by ServiceNode.publishEvent().
+ */
+export interface PublishEventResult {
+  success: boolean;
+  eventId: string;
+  fulfillment?: string;
+  code?: string;
+  message?: string;
+}
+
+/**
  * A fully wired Crosstown node with lifecycle management.
  */
 export interface ServiceNode {
@@ -120,6 +131,20 @@ export interface ServiceNode {
   stop(): Promise<void>;
   /** Initiate peering with a discovered peer (register + SPSP handshake) */
   peerWith(pubkey: string): Promise<void>;
+  /**
+   * Publish a Nostr event to a remote peer via the embedded connector.
+   *
+   * TOON-encodes the event, computes payment amount, and sends as an
+   * ILP PREPARE packet via the runtime client.
+   *
+   * @param event - The Nostr event to publish
+   * @param options - Must include destination ILP address
+   * @returns Result with success/failure info and event ID
+   */
+  publishEvent(
+    event: NostrEvent,
+    options?: { destination: string }
+  ): Promise<PublishEventResult>;
 }
 
 /**
@@ -422,6 +447,69 @@ export function createNode(config: NodeConfig): ServiceNode {
         );
       }
       return crosstownNode.peerWith(targetPubkey);
+    },
+
+    async publishEvent(
+      event: NostrEvent,
+      options?: { destination: string }
+    ): Promise<PublishEventResult> {
+      // Guard: node must be started
+      if (!started) {
+        throw new NodeError(
+          'Cannot publish: node not started. Call start() first.'
+        );
+      }
+
+      // Guard: destination is required
+      if (!options?.destination) {
+        throw new NodeError(
+          "Cannot publish: destination is required. Pass { destination: 'g.peer.address' }."
+        );
+      }
+
+      try {
+        // TOON-encode the event
+        const toonData = encoder(event);
+
+        // Compute amount: basePricePerByte * toonData.length
+        const amount =
+          (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
+
+        // Convert to base64
+        const base64Data = Buffer.from(toonData).toString('base64');
+
+        // Send via runtimeClient
+        const result = await crosstownNode.runtimeClient.sendIlpPacket({
+          destination: options.destination,
+          amount: String(amount),
+          data: base64Data,
+        });
+
+        // Map IlpSendResult to PublishEventResult
+        if (result.accepted) {
+          return {
+            success: true,
+            eventId: event.id,
+            fulfillment: result.fulfillment ?? '',
+          };
+        }
+
+        return {
+          success: false,
+          eventId: event.id,
+          code: result.code ?? 'T00',
+          message: result.message ?? 'Unknown error',
+        };
+      } catch (error: unknown) {
+        // Propagate NodeError directly
+        if (error instanceof NodeError) {
+          throw error;
+        }
+        throw new NodeError(
+          `Failed to publish event: ${error instanceof Error ? error.message : String(error)}`,
+          error instanceof Error ? error : undefined
+        );
+      }
     },
   };
 
