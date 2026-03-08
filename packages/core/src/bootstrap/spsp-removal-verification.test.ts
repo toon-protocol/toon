@@ -3,7 +3,7 @@
  *
  * These tests verify the acceptance criteria for the SPSP removal
  * and peer discovery cleanup story. They fill gaps not covered by
- * existing unit tests in BootstrapService.test.ts and RelayMonitor.test.ts.
+ * existing unit tests in BootstrapService.test.ts and discovery-tracker.test.ts.
  *
  * AC Coverage:
  * - AC #1: Phase flow is discovering -> registering -> announcing (no handshaking)

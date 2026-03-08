@@ -14,7 +14,6 @@ export type {
   BootstrapEventListener,
   AgentRuntimeClient,
   IlpSendResult,
-  RelayMonitorConfig,
   DiscoveredPeer,
   SettlementConfig,
 } from './types.js';
@@ -22,8 +21,12 @@ export type {
 // Service and errors
 export { BootstrapService, BootstrapError } from './BootstrapService.js';
 
-// Relay monitor
-export { RelayMonitor } from './RelayMonitor.js';
+// Discovery tracker
+export {
+  createDiscoveryTracker,
+  type DiscoveryTracker,
+  type DiscoveryTrackerConfig,
+} from './discovery-tracker.js';
 
 // Agent-runtime client factories
 export {

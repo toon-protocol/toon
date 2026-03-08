@@ -122,9 +122,9 @@ export interface ServiceNode {
   on(event: 'bootstrap', listener: BootstrapEventListener): ServiceNode;
   /** Register a default handler for unrecognized kinds (builder pattern) */
   onDefault(handler: Handler): ServiceNode;
-  /** Start the node: wire packet handler, run bootstrap, start relay monitor */
+  /** Start the node: wire packet handler, run bootstrap, start discovery */
   start(): Promise<StartResult>;
-  /** Stop the node: unsubscribe relay monitor, clean up lifecycle state */
+  /** Stop the node: clean up lifecycle state */
   stop(): Promise<void>;
   /** Initiate peering with a discovered peer (register + settlement) */
   peerWith(pubkey: string): Promise<void>;
@@ -313,7 +313,18 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     // Step 5: Dispatch to handler (T00 error boundary)
     try {
-      return await registry.dispatch(ctx);
+      const result = await registry.dispatch(ctx);
+
+      // Feed accepted kind:10032 events to discovery tracker for peer discovery.
+      // Uses late-binding reference since crosstownNode is created after this handler.
+      if (result.accept && meta.kind === 10032 && trackerRef.current) {
+        const decoded = ctx.decode();
+        if (decoded) {
+          trackerRef.current.processEvent(decoded);
+        }
+      }
+
+      return result;
     } catch (err: unknown) {
       // Log only the error message, not the full error object (which may contain payload data)
       const errMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -323,6 +334,8 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // 9. Create CrosstownNode from @crosstown/core for bootstrap/relay monitor lifecycle
+  // Mutable ref so the packet handler closure can access the tracker after it's created.
+  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } = {};
   const crosstownNode = createCrosstownNode({
     connector: config.connector,
     handlePacket: pipelinedHandler,
@@ -341,6 +354,9 @@ export function createNode(config: NodeConfig): ServiceNode {
     basePricePerByte: config.basePricePerByte,
     ardriveEnabled: config.ardriveEnabled,
   });
+
+  // Wire discovery tracker for late-binding in the packet handler
+  trackerRef.current = crosstownNode.discoveryTracker;
 
   // 10. Track SDK-level lifecycle state
   let started = false;
@@ -373,10 +389,10 @@ export function createNode(config: NodeConfig): ServiceNode {
         }
         registry.on(kindOrEvent, handlerOrListener as Handler);
       } else if (kindOrEvent === 'bootstrap') {
-        // Lifecycle event listener -- forward to bootstrapService AND relayMonitor
+        // Lifecycle event listener -- forward to bootstrapService AND discoveryTracker
         const listener = handlerOrListener as BootstrapEventListener;
         crosstownNode.bootstrapService.on(listener);
-        crosstownNode.relayMonitor.on(listener);
+        crosstownNode.discoveryTracker.on(listener);
       } else {
         // Sanitize event name to prevent log injection via control characters
         // eslint-disable-next-line no-control-regex

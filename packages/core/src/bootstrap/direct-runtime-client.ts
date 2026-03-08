@@ -32,10 +32,16 @@ export interface SendPacketParams {
 
 /**
  * Result returned by ConnectorNode.sendPacket().
+ *
+ * Accepts both string discriminants ('fulfill'/'reject') for backward
+ * compatibility with test mocks, and numeric PacketType enum values
+ * (13 = FULFILL, 14 = REJECT) used by @crosstown/connector@1.6.0+.
  */
 export type SendPacketResult =
-  | { type: 'fulfill'; fulfillment: Uint8Array; data?: Uint8Array }
-  | { type: 'reject'; code: string; message: string; data?: Uint8Array };
+  | { type: 'fulfill'; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | { type: 13; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | { type: 'reject'; code: string; message: string; data?: Uint8Array | Buffer }
+  | { type: 14; code: string; message: string; data?: Uint8Array | Buffer };
 
 /**
  * Structural interface matching ConnectorNode's sendPacket() method.
@@ -106,15 +112,19 @@ export function createDirectRuntimeClient(
         }
 
         // Call connector.sendPacket()
+        // expiresAt is required by ConnectorNode.sendPacket() even though the
+        // interface marks it optional. Default to 30 seconds from now.
         const result = await connector.sendPacket({
           destination: params.destination,
           amount,
           data,
           executionCondition,
+          expiresAt: new Date(Date.now() + 30000),
         });
 
         // Map result to IlpSendResult
-        if (result.type === 'fulfill') {
+        // ConnectorNode returns PacketType enum (13=FULFILL, 14=REJECT)
+        if (result.type === 'fulfill' || result.type === 13) {
           return {
             accepted: true,
             fulfillment: Buffer.from(result.fulfillment).toString('base64'),

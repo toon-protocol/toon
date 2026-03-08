@@ -3,7 +3,7 @@
  *
  * ATDD tests for Story 1.9 -- network discovery and bootstrap integration
  *
- * Tests that the SDK integrates with BootstrapService and RelayMonitor from
+ * Tests that the SDK integrates with BootstrapService and DiscoveryTracker from
  * @crosstown/core for automatic peer discovery and network join. Uses real
  * local infrastructure (relay, connector, Anvil) where available, with
  * graceful skip when services are unavailable.
@@ -261,10 +261,10 @@ describe('Network Discovery and Bootstrap Integration', () => {
   });
 
   // -------------------------------------------------------------------------
-  // [P1] RelayMonitor detects new kind:10032 events on relay
+  // [P1] Discovery tracker detects new kind:10032 events on relay
   // -------------------------------------------------------------------------
 
-  it('[P1] RelayMonitor detects existing kind:10032 events on the relay', async () => {
+  it('[P1] Discovery tracker detects existing kind:10032 events on the relay', async () => {
     // Arrange
     if (!infraAvailable.relay) {
       console.log('Skipping: Relay not available');
@@ -280,7 +280,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
       toonEncoder: encodeEventToToon,
       toonDecoder: decodeEventFromToon,
       relayUrl: RELAY_URL,
-      // Start with NO known peers — RelayMonitor should discover from relay
+      // Start with NO known peers — discovery tracker should discover from relay
       knownPeers: [],
       ardriveEnabled: false,
     };
@@ -298,12 +298,12 @@ describe('Network Discovery and Bootstrap Integration', () => {
     // Act
     await node.start();
 
-    // Wait for RelayMonitor to process historical kind:10032 events
+    // Wait for discovery tracker to process historical kind:10032 events
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     // Assert
     // The genesis node should have a kind:10032 on the relay
-    // RelayMonitor should discover it (excluding our own pubkey)
+    // DiscoveryTracker should discover it (excluding our own pubkey)
     expect(discoveredPeers.length).toBeGreaterThanOrEqual(1);
     expect(discoveredPeers).toContain(GENESIS_PUBKEY);
 
@@ -414,7 +414,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
     const node = createNode(config);
     await node.start();
 
-    // Wait for RelayMonitor to discover genesis peer
+    // Wait for discovery tracker to discover genesis peer
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     // Collect peering events

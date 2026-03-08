@@ -2,7 +2,7 @@
  * Crosstown Node composition API.
  *
  * Provides createCrosstownNode() — a single composition function that wires
- * ConnectorNode ↔ BLS ↔ BootstrapService ↔ RelayMonitor into one object
+ * ConnectorNode ↔ BLS ↔ BootstrapService ↔ DiscoveryTracker into one object
  * with start() / stop() lifecycle, enabling zero-latency embedded mode without
  * manually wiring each component.
  */
@@ -14,7 +14,6 @@ import type {
   BootstrapResult,
   SettlementConfig,
 } from './bootstrap/types.js';
-import type { Subscription } from './types.js';
 import type {
   SendPacketParams,
   SendPacketResult,
@@ -25,7 +24,8 @@ import {
   BootstrapService,
   BootstrapError,
 } from './bootstrap/BootstrapService.js';
-import { RelayMonitor } from './bootstrap/RelayMonitor.js';
+import { createDiscoveryTracker } from './bootstrap/discovery-tracker.js';
+import type { DiscoveryTracker } from './bootstrap/discovery-tracker.js';
 import { createDirectRuntimeClient } from './bootstrap/direct-runtime-client.js';
 import { createDirectConnectorAdmin } from './bootstrap/direct-connector-admin.js';
 import { createDirectChannelClient } from './bootstrap/direct-channel-client.js';
@@ -161,12 +161,12 @@ export interface CrosstownNodeConfig {
   ilpInfo: IlpPeerInfo;
   /**
    * TOON encoder — **required** for encoding Nostr events to binary.
-   * Used by RelayMonitor and BootstrapService.
+   * Used by BootstrapService.
    */
   toonEncoder: (event: NostrEvent) => Uint8Array;
   /**
    * TOON decoder — **required** for decoding binary to Nostr events.
-   * Used by RelayMonitor, BootstrapService, and DirectRuntimeClient.
+   * Used by BootstrapService and DirectRuntimeClient.
    */
   toonDecoder: (bytes: Uint8Array) => NostrEvent;
   /** Relay WebSocket URL for monitoring (default: 'ws://localhost:7100') */
@@ -209,7 +209,7 @@ export interface CrosstownNode {
    */
   start(): Promise<CrosstownNodeStartResult>;
   /**
-   * Tear down subscriptions and clean up.
+   * Tear down and clean up.
    * Safe to call when not started (no-op).
    */
   stop(): Promise<void>;
@@ -219,10 +219,10 @@ export interface CrosstownNode {
    */
   readonly bootstrapService: BootstrapService;
   /**
-   * Read-only access to the relay monitor.
+   * Read-only access to the discovery tracker.
    * Allows attaching event listeners before calling start().
    */
-  readonly relayMonitor: RelayMonitor;
+  readonly discoveryTracker: DiscoveryTracker;
   /**
    * Channel client for payment channel operations.
    * Null if the connector does not expose openChannel()/getChannelState().
@@ -236,19 +236,19 @@ export interface CrosstownNode {
   readonly runtimeClient: AgentRuntimeClient;
   /**
    * Initiate peering with a discovered peer.
-   * The peer must have been discovered by the RelayMonitor first.
+   * The peer must have been discovered by the discovery tracker first.
    * Registers the peer with the connector and attempts settlement.
    */
   peerWith(pubkey: string): Promise<void>;
 }
 
 /**
- * Create an Crosstown Node with integrated bootstrap and relay monitoring.
+ * Create a Crosstown Node with integrated bootstrap and discovery tracking.
  *
  * This composition function wires ConnectorNode ↔ DirectRuntimeClient ↔
- * DirectConnectorAdmin ↔ BootstrapService ↔ RelayMonitor into a single object
- * with start() / stop() lifecycle, enabling zero-latency embedded mode without
- * manually wiring each component.
+ * DirectConnectorAdmin ↔ BootstrapService ↔ DiscoveryTracker into a single
+ * object with start() / stop() lifecycle, enabling zero-latency embedded mode
+ * without manually wiring each component.
  *
  * @param config - Configuration for the node
  * @returns CrosstownNode instance with start() / stop() methods
@@ -272,7 +272,7 @@ export interface CrosstownNode {
  *
  * // Attach event listeners before start
  * node.bootstrapService.on((event) => console.log('bootstrap:', event));
- * node.relayMonitor.on((event) => console.log('relay:', event));
+ * node.discoveryTracker.on((event) => console.log('discovery:', event));
  *
  * // Start the node
  * const result = await node.start();
@@ -326,35 +326,29 @@ export function createCrosstownNode(
     bootstrapService.setChannelClient(channelClient);
   }
 
-  // Create RelayMonitor with mapped config
-  const relayMonitor = new RelayMonitor({
-    relayUrl: config.relayUrl ?? 'ws://localhost:7100',
+  // Create DiscoveryTracker
+  const discoveryTracker = createDiscoveryTracker({
     secretKey: config.secretKey,
-    toonEncoder: config.toonEncoder,
-    toonDecoder: config.toonDecoder,
-    basePricePerByte: config.basePricePerByte,
     settlementInfo: config.settlementInfo,
   });
 
-  // Wire clients to relay monitor
-  relayMonitor.setAgentRuntimeClient(directRuntimeClient);
-  relayMonitor.setConnectorAdmin(directAdminClient);
+  // Wire clients to discovery tracker
+  discoveryTracker.setConnectorAdmin(directAdminClient);
   if (channelClient) {
-    relayMonitor.setChannelClient(channelClient);
+    discoveryTracker.setChannelClient(channelClient);
   }
 
   // Track lifecycle state
   let started = false;
-  let relayMonitorSubscription: Subscription | null = null;
 
   return {
     bootstrapService,
-    relayMonitor,
+    discoveryTracker,
     channelClient,
     runtimeClient: directRuntimeClient,
 
     peerWith(pubkey: string): Promise<void> {
-      return relayMonitor.peerWith(pubkey);
+      return discoveryTracker.peerWith(pubkey);
     },
 
     async start(): Promise<CrosstownNodeStartResult> {
@@ -375,11 +369,11 @@ export function createCrosstownNode(
           config.additionalPeersJson
         );
 
-        // Extract bootstrapped peer pubkeys for relay monitor exclusion
+        // Extract bootstrapped peer pubkeys for discovery tracker exclusion
         const bootstrapPeerPubkeys = results.map((r) => r.knownPeer.pubkey);
 
-        // Start relay monitor, excluding already-bootstrapped peers
-        relayMonitorSubscription = relayMonitor.start(bootstrapPeerPubkeys);
+        // Exclude already-bootstrapped peers from discovery
+        discoveryTracker.addExcludedPubkeys(bootstrapPeerPubkeys);
 
         started = true;
 
@@ -400,12 +394,6 @@ export function createCrosstownNode(
     async stop(): Promise<void> {
       if (!started) {
         return; // No-op if not started
-      }
-
-      // Unsubscribe relay monitor
-      if (relayMonitorSubscription) {
-        relayMonitorSubscription.unsubscribe();
-        relayMonitorSubscription = null;
       }
 
       started = false;

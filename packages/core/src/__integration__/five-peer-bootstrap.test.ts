@@ -370,7 +370,7 @@ describe('Five-Peer Bootstrap Integration', () => {
       await peers[i]!.node!.start();
     }
 
-    // Wait for RelayMonitor event propagation
+    // Wait for DiscoveryTracker event propagation
     await new Promise((resolve) => setTimeout(resolve, 3000));
   }, 60_000);
 
@@ -449,14 +449,14 @@ describe('Five-Peer Bootstrap Integration', () => {
     }
   });
 
-  it('later peers discover earlier peers via RelayMonitor', () => {
-    // Genesis RelayMonitor subscribes before any peer announces, so it only
+  it('later peers discover earlier peers via DiscoveryTracker', () => {
+    // Genesis tracker processes events before any peer announces, so it only
     // sees historical events (just its own, excluded). BLS-stored events don't
     // push to existing WebSocket subscriptions, so genesis won't discover live.
     //
     // However, peers that start LATER subscribe to the relay AFTER earlier peers
     // have already announced, so they discover earlier peers via historical query.
-    // Peer4 (last to start) should discover peers 1-3 via RelayMonitor.
+    // Peer4 (last to start) should discover peers 1-3 via DiscoveryTracker.
     const peer4Discovered = peers[4]!.events.filter(
       (e) => e.type === 'bootstrap:peer-discovered'
     );
@@ -464,7 +464,7 @@ describe('Five-Peer Bootstrap Integration', () => {
       peer4Discovered.map((e) => (e as { peerPubkey: string }).peerPubkey)
     );
 
-    // Peer4's RelayMonitor excludes peer0 (bootstrapped) and peer4 (own pubkey),
+    // Peer4's DiscoveryTracker excludes peer0 (bootstrapped) and peer4 (own pubkey),
     // so it should discover peers 1-3 from the historical query
     for (let i = 1; i < PEER_COUNT - 1; i++) {
       expect(discoveredPubkeys.has(peers[i]!.pubkey)).toBe(true);

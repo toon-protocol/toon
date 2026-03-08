@@ -55,7 +55,9 @@ export {
 export {
   BootstrapService,
   BootstrapError,
-  RelayMonitor,
+  createDiscoveryTracker,
+  type DiscoveryTracker,
+  type DiscoveryTrackerConfig,
   createHttpRuntimeClient,
   createAgentRuntimeClient,
   createDirectRuntimeClient,
@@ -70,7 +72,6 @@ export {
   type BootstrapEventListener,
   type AgentRuntimeClient,
   type IlpSendResult,
-  type RelayMonitorConfig,
   type ConnectorNodeLike,
   type SendPacketParams,
   type SendPacketResult,

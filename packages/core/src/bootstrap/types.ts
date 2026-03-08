@@ -230,22 +230,3 @@ export interface BootstrapServiceConfig extends BootstrapConfig {
   basePricePerByte?: bigint;
 }
 
-/**
- * Configuration for the RelayMonitor service.
- */
-export interface RelayMonitorConfig {
-  /** Relay URL to monitor for kind:10032 events */
-  relayUrl: string;
-  /** Nostr secret key for signing events */
-  secretKey: Uint8Array;
-  /** DI callback for TOON encoding (avoids circular dep) */
-  toonEncoder: (event: NostrEvent) => Uint8Array;
-  /** DI callback for TOON decoding (avoids circular dep) */
-  toonDecoder: (bytes: Uint8Array) => NostrEvent;
-  /** Base price per byte for ILP packet pricing (default: 10n) */
-  basePricePerByte?: bigint;
-  /** Own settlement preferences for settlement during peer registration */
-  settlementInfo?: SettlementConfig;
-  /** Settlement timeout in milliseconds (default: 30000) */
-  defaultTimeout?: number;
-}
