@@ -1,18 +1,21 @@
 /**
  * Relay monitor for discovering new peers via kind:10032 subscription.
  *
- * Discovery is passive (automatic via start()) — peers are tracked but no
- * registration or paid handshakes occur until peerWith() is called explicitly.
+ * Discovery is passive (automatic via start()) -- peers are tracked but no
+ * registration or channel opening occurs until peerWith() is called explicitly.
  */
 
 import { SimplePool } from 'nostr-tools/pool';
 import { getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
-import { parseIlpPeerInfo, buildSpspRequestEvent } from '../events/index.js';
-import type { Subscription } from '../types.js';
+import { parseIlpPeerInfo } from '../events/index.js';
+import {
+  negotiateSettlementChain,
+  resolveTokenForChain,
+} from '../settlement/index.js';
+import type { Subscription, ConnectorChannelClient } from '../types.js';
 import { BootstrapError } from './BootstrapService.js';
-import { IlpSpspClient } from '../spsp/IlpSpspClient.js';
 import type {
   RelayMonitorConfig,
   ConnectorAdminClient,
@@ -23,8 +26,8 @@ import type {
 } from './types.js';
 
 /**
- * Monitors a relay for new kind:10032 events. Discovery is passive —
- * peering (registration + SPSP handshake) is triggered explicitly via peerWith().
+ * Monitors a relay for new kind:10032 events. Discovery is passive --
+ * peering (registration + channel opening) is triggered explicitly via peerWith().
  */
 export class RelayMonitor {
   private readonly config: RelayMonitorConfig;
@@ -35,6 +38,7 @@ export class RelayMonitor {
 
   private connectorAdmin?: ConnectorAdminClient;
   private agentRuntimeClient?: AgentRuntimeClient;
+  private channelClient?: ConnectorChannelClient;
   private listeners: BootstrapEventListener[] = [];
 
   /** Peers discovered via kind:10032 events (keyed by pubkey). */
@@ -43,9 +47,6 @@ export class RelayMonitor {
   private readonly peeredPubkeys = new Set<string>();
   /** Timestamps of the latest kind:10032 event per pubkey (for stale-event filtering). */
   private readonly peerTimestamps = new Map<string, number>();
-
-  /** Memoized IlpSpspClient instance (created lazily on first peerWith() call). */
-  private spspClient?: IlpSpspClient;
 
   constructor(config: RelayMonitorConfig, pool?: SimplePool) {
     this.config = config;
@@ -67,6 +68,13 @@ export class RelayMonitor {
    */
   setAgentRuntimeClient(client: AgentRuntimeClient): void {
     this.agentRuntimeClient = client;
+  }
+
+  /**
+   * Set the channel client for opening payment channels.
+   */
+  setChannelClient(client: ConnectorChannelClient): void {
+    this.channelClient = client;
   }
 
   /**
@@ -100,8 +108,8 @@ export class RelayMonitor {
    * Start monitoring the relay for kind:10032 events (discovery only).
    *
    * Unlike the previous version, this does NOT require connectorAdmin or
-   * agentRuntimeClient — it only discovers peers passively. Use peerWith()
-   * to initiate registration and SPSP handshakes.
+   * agentRuntimeClient -- it only discovers peers passively. Use peerWith()
+   * to initiate registration and channel opening.
    *
    * @param excludePubkeys - Pubkeys to exclude (e.g., already-bootstrapped peers)
    * @returns Subscription handle for stopping the monitor
@@ -153,7 +161,7 @@ export class RelayMonitor {
     try {
       peerInfo = parseIlpPeerInfo(event);
     } catch {
-      // Parse failure — treat as empty content
+      // Parse failure -- treat as empty content
     }
 
     // Deregistration: empty content or missing ilpAddress (AC 7)
@@ -167,7 +175,7 @@ export class RelayMonitor {
       return;
     }
 
-    // Track discovered peer (update if already known — newer timestamp)
+    // Track discovered peer (update if already known -- newer timestamp)
     this.discoveredPeers.set(event.pubkey, {
       pubkey: event.pubkey,
       peerId,
@@ -214,7 +222,7 @@ export class RelayMonitor {
 
   /**
    * Explicitly peer with a discovered peer: register via connector admin
-   * and initiate a paid SPSP handshake.
+   * and open a payment channel unilaterally using kind:10032 settlement data.
    *
    * @param pubkey - Nostr pubkey of a previously discovered peer
    * @throws BootstrapError if peer not discovered, or admin/runtime not set
@@ -245,7 +253,6 @@ export class RelayMonitor {
 
     const { peerId, peerInfo } = discovered;
     const connectorAdmin = this.connectorAdmin;
-    const spspClient = this.getOrCreateSpspClient();
 
     // Register peer via connector admin
     try {
@@ -268,70 +275,83 @@ export class RelayMonitor {
       const reason = error instanceof Error ? error.message : 'Unknown error';
       console.warn(`[RelayMonitor] Failed to register ${peerId}:`, reason);
       this.emit({
-        type: 'bootstrap:handshake-failed',
+        type: 'bootstrap:settlement-failed',
         peerId,
         reason: `Registration failed: ${reason}`,
       });
       return;
     }
 
-    // Send paid SPSP handshake
-    try {
-      const amount = this.calculateSpspAmount(pubkey);
+    // Local chain selection + unilateral channel opening
+    if (
+      this.channelClient &&
+      this.config.settlementInfo?.supportedChains?.length &&
+      peerInfo.supportedChains?.length &&
+      peerInfo.settlementAddresses
+    ) {
+      try {
+        const negotiatedChain = negotiateSettlementChain(
+          this.config.settlementInfo.supportedChains,
+          peerInfo.supportedChains,
+          this.config.settlementInfo.preferredTokens,
+          peerInfo.preferredTokens
+        );
 
-      const spspResult = await spspClient.requestSpspInfo(
-        pubkey,
-        peerInfo.ilpAddress,
-        {
-          amount,
-          timeout: this.defaultTimeout,
-          settlementInfo: this.config.settlementInfo,
+        if (negotiatedChain) {
+          const peerAddress = peerInfo.settlementAddresses[negotiatedChain];
+          const tokenAddress = resolveTokenForChain(
+            negotiatedChain,
+            this.config.settlementInfo.preferredTokens,
+            peerInfo.preferredTokens
+          );
+          const tokenNetwork = peerInfo.tokenNetworks?.[negotiatedChain];
+
+          if (peerAddress) {
+            const channelResult = await this.channelClient.openChannel({
+              peerId,
+              chain: negotiatedChain,
+              token: tokenAddress,
+              tokenNetwork,
+              peerAddress,
+              initialDeposit: '100000',
+              settlementTimeout: 86400,
+            });
+
+            // Update registration with settlement info
+            await connectorAdmin.addPeer({
+              id: peerId,
+              url: peerInfo.btpEndpoint,
+              authToken: '',
+              routes: [{ prefix: peerInfo.ilpAddress }],
+              settlement: {
+                preference: negotiatedChain,
+                ...(peerAddress && { evmAddress: peerAddress }),
+                ...(tokenAddress && { tokenAddress }),
+                ...(tokenNetwork && { tokenNetworkAddress: tokenNetwork }),
+                ...(channelResult.channelId && {
+                  channelId: channelResult.channelId,
+                }),
+              },
+            });
+
+            this.emit({
+              type: 'bootstrap:channel-opened',
+              peerId,
+              channelId: channelResult.channelId,
+              negotiatedChain,
+            });
+          }
         }
-      );
-
-      // Update registration with settlement info if channel was opened
-      if (spspResult.settlement?.channelId) {
-        await connectorAdmin.addPeer({
-          id: peerId,
-          url: peerInfo.btpEndpoint,
-          authToken: '',
-          routes: [{ prefix: peerInfo.ilpAddress }],
-          settlement: {
-            preference: spspResult.settlement.negotiatedChain || 'evm',
-            ...(spspResult.settlement.settlementAddress && {
-              evmAddress: spspResult.settlement.settlementAddress,
-            }),
-            ...(spspResult.settlement.tokenAddress && {
-              tokenAddress: spspResult.settlement.tokenAddress,
-            }),
-            ...(spspResult.settlement.tokenNetworkAddress && {
-              tokenNetworkAddress: spspResult.settlement.tokenNetworkAddress,
-            }),
-            ...(spspResult.settlement.channelId && {
-              channelId: spspResult.settlement.channelId,
-            }),
-          },
-        });
-
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`[RelayMonitor] Settlement failed for ${peerId}:`, reason);
         this.emit({
-          type: 'bootstrap:channel-opened',
+          type: 'bootstrap:settlement-failed',
           peerId,
-          channelId: spspResult.settlement.channelId,
-          negotiatedChain: spspResult.settlement.negotiatedChain || 'unknown',
+          reason,
         });
+        // Non-fatal: peer remains registered, monitoring continues
       }
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Unknown error';
-      console.warn(
-        `[RelayMonitor] SPSP handshake failed for ${peerId}:`,
-        reason
-      );
-      this.emit({
-        type: 'bootstrap:handshake-failed',
-        peerId,
-        reason,
-      });
-      // Non-fatal: peer remains registered, monitoring continues
     }
   }
 
@@ -349,47 +369,5 @@ export class RelayMonitor {
    */
   isPeered(pubkey: string): boolean {
     return this.peeredPubkeys.has(pubkey);
-  }
-
-  /**
-   * Lazily create and memoize the IlpSpspClient.
-   * Requires agentRuntimeClient to be set.
-   */
-  private getOrCreateSpspClient(): IlpSpspClient {
-    if (!this.spspClient) {
-      if (!this.agentRuntimeClient) {
-        throw new BootstrapError(
-          'agentRuntimeClient must be set before SPSP handshake'
-        );
-      }
-      this.spspClient = new IlpSpspClient(
-        this.agentRuntimeClient,
-        this.config.secretKey,
-        {
-          toonEncoder: this.config.toonEncoder,
-          toonDecoder: this.config.toonDecoder,
-          defaultTimeout: this.defaultTimeout,
-        }
-      );
-    }
-    return this.spspClient;
-  }
-
-  /**
-   * Calculate the amount for a paid SPSP handshake.
-   * Uses half-price for kind:23194 SPSP requests.
-   */
-  private calculateSpspAmount(pubkey: string): string {
-    // Build an SPSP request event to get the TOON byte size
-    const { event: spspRequestEvent } = buildSpspRequestEvent(
-      pubkey,
-      this.config.secretKey,
-      this.config.settlementInfo
-    );
-
-    const toonBytes = this.config.toonEncoder(spspRequestEvent);
-    // Half-price for kind:23194 SPSP requests
-    const amount = BigInt(toonBytes.length) * (this.basePricePerByte / 2n);
-    return String(amount);
   }
 }

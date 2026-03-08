@@ -60,7 +60,7 @@ function _createServiceDiscoveryContent(
       enabled: true,
       endpoint: '/publish',
     },
-    supportedKinds: [1, 10032, 23194],
+    supportedKinds: [1, 10032],
     capabilities: ['relay', 'x402'],
     chain: 'arbitrum-one',
     version: '1.0.0',

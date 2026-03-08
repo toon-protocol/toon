@@ -76,10 +76,9 @@ describe('@crosstown/sdk public API exports', () => {
     expect(typeof sdk.PricingError).toBe('function');
   });
 
-  it('[P2] exports event storage and SPSP handshake handler stubs (T-1.11-01)', () => {
+  it('[P2] exports event storage handler stub (T-1.11-01)', () => {
     // Arrange & Act & Assert
     expect(typeof sdk.createEventStorageHandler).toBe('function');
-    expect(typeof sdk.createSpspHandshakeHandler).toBe('function');
   });
 
   it('[P2] exports exactly the expected set of runtime symbols (T-1.11-01)', () => {
@@ -109,7 +108,6 @@ describe('@crosstown/sdk public API exports', () => {
       'createPaymentHandlerBridge',
       // Stubs (Story 1.7)
       'createEventStorageHandler',
-      'createSpspHandshakeHandler',
       // Node composition (Story 1.7)
       'createNode',
     ]);

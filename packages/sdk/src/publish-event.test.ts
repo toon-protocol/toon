@@ -123,7 +123,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
 
     // Assert -- sendPacket was called
     expect(connector.sendPacketCalls.length).toBe(1);
-    const call = connector.sendPacketCalls[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
 
     // Assert -- destination is passed through
     expect(call.destination).toBe('g.peer.address');
@@ -161,7 +162,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.publishEvent(event, { destination: 'g.peer.address' });
 
     // Assert -- amount = basePricePerByte * toonData.length
-    const call = connector.sendPacketCalls[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
     // The amount should be 20n * (TOON byte length), and it must be > 0
     expect(call.amount).toBeGreaterThan(0n);
     // Verify it's a multiple of basePricePerByte
@@ -198,7 +200,7 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Assert -- success result shape
     expect(result.success).toBe(true);
     expect(result.eventId).toBe('dd'.repeat(32));
-    expect(result.fulfillment).toBeDefined();
+    expect(typeof result.fulfillment).toBe('string');
     expect(result.fulfillment?.length).toBeGreaterThan(0);
 
     // Cleanup
@@ -343,7 +345,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.publishEvent(event, { destination: 'g.peer.address' });
 
     // Assert -- amount should be a multiple of customPrice
-    const call = connector.sendPacketCalls[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
     expect(call.amount % customPrice).toBe(0n);
     // With 50n per byte the amount should be higher than with the default 10n
     expect(call.amount).toBeGreaterThan(0n);
@@ -376,7 +379,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.publishEvent(event, { destination: 'g.peer.address' });
 
     // Assert -- amount should be a multiple of 10n (default basePricePerByte)
-    const call = connector.sendPacketCalls[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
     expect(call.amount % 10n).toBe(0n);
     expect(call.amount).toBeGreaterThan(0n);
 
@@ -439,7 +443,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.publishEvent(event, { destination: 'g.peer.address' });
 
     // Assert -- exact amount match
-    const call = connector.sendPacketCalls[0];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
     expect(call.amount).toBe(expectedAmount);
 
     // Cleanup
@@ -614,13 +619,248 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.publishEvent(largeEvent, { destination: 'g.peer.address' });
 
     // Assert -- larger content should produce larger amount
-    const smallCall = connector.sendPacketCalls[0];
-    const largeCall = connector.sendPacketCalls[1];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: two sendPacket calls above
+    const smallCall = connector.sendPacketCalls[0]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: two sendPacket calls above
+    const largeCall = connector.sendPacketCalls[1]!;
     expect(largeCall.amount).toBeGreaterThan(smallCall.amount);
 
     // Both amounts should be multiples of basePricePerByte
     expect(smallCall.amount % basePricePerByte).toBe(0n);
     expect(largeCall.amount % basePricePerByte).toBe(0n);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#1: Custom TOON encoder is actually used (success path)
+  // -------------------------------------------------------------------------
+
+  it('[P1] publishEvent() uses the configured toonEncoder for encoding (AC#1)', async () => {
+    // Arrange -- spy-wrapping encoder that delegates to the real encoder
+    // but lets us verify it was called (not the default)
+    const { encodeEventToToon } = await import('@crosstown/core/toon');
+    const customEncoder = vi.fn((event: NostrEvent) =>
+      encodeEventToToon(event)
+    );
+
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const basePricePerByte = 10n;
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte,
+      toonEncoder: customEncoder,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act
+    await node.publishEvent(event, { destination: 'g.peer.address' });
+
+    // Assert -- custom encoder was called with the event
+    expect(customEncoder).toHaveBeenCalledTimes(1);
+    expect(customEncoder).toHaveBeenCalledWith(event);
+
+    // Assert -- the data sent to connector matches the custom encoder output
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
+    const expectedToon = encodeEventToToon(event);
+    expect(Buffer.from(call.data).equals(Buffer.from(expectedToon))).toBe(true);
+
+    // Assert -- amount is computed from the custom encoder's output length
+    expect(call.amount).toBe(basePricePerByte * BigInt(expectedToon.length));
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#4: Success result does not contain rejection-only fields
+  // -------------------------------------------------------------------------
+
+  it('[P1] publishEvent() success result does not include code or message fields (AC#4)', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+    });
+
+    // Assert -- success shape has no code or message
+    expect(result.success).toBe(true);
+    expect(result.code).toBeUndefined();
+    expect(result.message).toBeUndefined();
+    expect(result.fulfillment).toBeDefined();
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#4: Rejection result does not contain fulfillment field
+  // -------------------------------------------------------------------------
+
+  it('[P1] publishEvent() rejection result does not include fulfillment field (AC#4)', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'reject',
+      code: 'F02',
+      message: 'No route to destination',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.unreachable',
+    });
+
+    // Assert -- rejection shape has no fulfillment
+    expect(result.success).toBe(false);
+    expect(result.fulfillment).toBeUndefined();
+    expect(result.code).toBe('F02');
+    expect(result.message).toBe('No route to destination');
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#4: Rejection result uses defaults when connector omits code/message
+  // -------------------------------------------------------------------------
+
+  it('[P2] publishEvent() passes through empty code and message when connector rejects with empty strings (AC#4)', async () => {
+    // Arrange -- connector returns reject with no code or message fields
+    const connector = createMockConnector({
+      type: 'reject',
+      code: '',
+      message: '',
+    });
+    // Override sendPacket to return a reject with missing fields
+    connector.sendPacket = async () => ({
+      type: 'reject' as const,
+      code: '',
+      message: '',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+    });
+
+    // Assert -- implementation falls back to code ?? 'T00', message ?? 'Unknown error'
+    // Empty strings are falsy but not nullish, so ?? does not trigger for them.
+    // This test documents the actual behavior: empty strings pass through.
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('');
+    expect(result.message).toBe('');
+
+    // Cleanup
+    await node.stop();
+  });
+
+  it('[P2] publishEvent() returns empty fulfillment when connector fulfill omits it (AC#4)', async () => {
+    // Arrange -- connector returns fulfill without a fulfillment field
+    const connector = createMockConnector();
+    // DirectRuntimeClient converts fulfill.fulfillment (Uint8Array) to base64 string.
+    // When the connector returns a fulfill, fulfillment is always present as Uint8Array.
+    // The ?? '' fallback in publishEvent covers the edge case where IlpSendResult.fulfillment
+    // is undefined (e.g., from an HTTP-based runtime client).
+    // Simulate this by overriding sendPacket to return a fulfill with empty fulfillment.
+    connector.sendPacket = async () => ({
+      type: 'fulfill' as const,
+      fulfillment: new Uint8Array(0),
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+    });
+
+    // Assert -- fulfillment should be a string (base64 of empty Uint8Array = '')
+    expect(result.success).toBe(true);
+    expect(typeof result.fulfillment).toBe('string');
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#1: TOON-encoded data matches the encoder output after roundtrip
+  // -------------------------------------------------------------------------
+
+  it('[P2] publishEvent() sends TOON-encoded bytes that match the encoder output (AC#1)', async () => {
+    // Arrange -- use the default encoder and verify data roundtrip
+    const { encodeEventToToon, decodeEventFromToon } =
+      await import('@crosstown/core/toon');
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent({ content: 'roundtrip test content' });
+    const expectedToon = encodeEventToToon(event);
+
+    // Act
+    await node.publishEvent(event, { destination: 'g.peer.address' });
+
+    // Assert -- the data bytes sent to the connector match the TOON encoding
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
+    const call = connector.sendPacketCalls[0]!;
+    expect(Buffer.from(call.data).equals(Buffer.from(expectedToon))).toBe(true);
+
+    // Assert -- the data can be decoded back to the original event
+    const decoded = decodeEventFromToon(call.data);
+    expect(decoded.id).toBe(event.id);
+    expect(decoded.content).toBe('roundtrip test content');
+    expect(decoded.kind).toBe(event.kind);
 
     // Cleanup
     await node.stop();

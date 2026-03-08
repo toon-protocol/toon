@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   VERSION,
   ILP_PEER_INFO_KIND,
-  SPSP_REQUEST_KIND,
-  SPSP_RESPONSE_KIND,
   encodeEventToToon,
   encodeEventToToonString,
   decodeEventFromToon,
@@ -12,13 +10,7 @@ import {
   ToonError,
   CrosstownError,
 } from './index.js';
-import type {
-  IlpPeerInfo,
-  SpspInfo,
-  SpspRequest,
-  SpspResponse,
-  ToonRoutingMeta,
-} from './index.js';
+import type { IlpPeerInfo, ToonRoutingMeta } from './index.js';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 describe('@crosstown/core', () => {
@@ -29,14 +21,6 @@ describe('@crosstown/core', () => {
   describe('exports event kind constants', () => {
     it('should export ILP_PEER_INFO_KIND', () => {
       expect(ILP_PEER_INFO_KIND).toBe(10032);
-    });
-
-    it('should export SPSP_REQUEST_KIND', () => {
-      expect(SPSP_REQUEST_KIND).toBe(23194);
-    });
-
-    it('should export SPSP_RESPONSE_KIND', () => {
-      expect(SPSP_RESPONSE_KIND).toBe(23195);
     });
   });
 
@@ -49,31 +33,6 @@ describe('@crosstown/core', () => {
         assetScale: 6,
       };
       expect(peerInfo).toBeDefined();
-    });
-
-    it('should export SpspInfo type', () => {
-      const spspInfo: SpspInfo = {
-        destinationAccount: 'g.test.user',
-        sharedSecret: 'dGVzdA==',
-      };
-      expect(spspInfo).toBeDefined();
-    });
-
-    it('should export SpspRequest type', () => {
-      const request: SpspRequest = {
-        requestId: 'test-123',
-        timestamp: Date.now(),
-      };
-      expect(request).toBeDefined();
-    });
-
-    it('should export SpspResponse type', () => {
-      const response: SpspResponse = {
-        requestId: 'test-123',
-        destinationAccount: 'g.test.user',
-        sharedSecret: 'dGVzdA==',
-      };
-      expect(response).toBeDefined();
     });
   });
 
@@ -136,22 +95,6 @@ describe('@crosstown/core', () => {
       expect(err).toBeInstanceOf(CrosstownError);
       expect(err.name).toBe('ToonError');
       expect(err.code).toBe('TOON_DECODE_ERROR');
-    });
-
-    it('should export ToonRoutingMeta type (compile-time check via usage)', () => {
-      const encoded = encodeEventToToon(testEvent);
-      const meta: ToonRoutingMeta = shallowParseToon(encoded);
-      // Type check: ToonRoutingMeta has the expected shape
-      const _kind: number = meta.kind;
-      const _pubkey: string = meta.pubkey;
-      const _id: string = meta.id;
-      const _sig: string = meta.sig;
-      const _rawBytes: Uint8Array = meta.rawBytes;
-      expect(_kind).toBe(testEvent.kind);
-      expect(_pubkey).toBe(testEvent.pubkey);
-      expect(_id).toBe(testEvent.id);
-      expect(_sig).toBe(testEvent.sig);
-      expect(_rawBytes).toBeInstanceOf(Uint8Array);
     });
 
     it('should support full encode-decode round-trip via package index exports', () => {

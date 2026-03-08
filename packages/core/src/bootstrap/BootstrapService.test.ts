@@ -1,9 +1,8 @@
 /**
- * Tests for BootstrapService — three-phase bootstrap lifecycle.
+ * Tests for BootstrapService — two-phase bootstrap lifecycle.
  *
  * Phase 1: Discover peers via relay kind:10032, register with connector
- * Phase 2: SPSP handshake via ILP (paid packets)
- * Phase 3: Announce own kind:10032 as paid ILP PREPARE
+ * Phase 2: Announce own kind:10032 as paid ILP PREPARE
  *
  * Infrastructure: Real nostr-tools crypto. Mocks only at transport
  * boundaries (WebSocket, SimplePool, connectorAdmin, agentRuntime).
@@ -410,10 +409,10 @@ describe('BootstrapService', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Phase 2: SPSP handshake via ILP
+  // Phase 2: Announce via ILP (peer info announcement)
   // ---------------------------------------------------------------------------
 
-  it('should send paid SPSP via agentRuntimeClient for registered peers', async () => {
+  it('should send paid ILP announcement via agentRuntimeClient for registered peers', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockAgentRuntime();
 
@@ -442,23 +441,23 @@ describe('BootstrapService', () => {
 
     await bootstrapPromise;
 
-    // Phase 2 should send SPSP via ILP
+    // Phase 2 should send announcement via ILP
     expect(runtime.sendIlpPacket).toHaveBeenCalled();
 
-    // Verify the SPSP call used the peer's ILP address as destination
-    const spspCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as
+    // Verify the ILP call used the peer's ILP address as destination
+    const ilpCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as
       | {
           destination: string;
           amount: string;
           data: string;
         }
       | undefined;
-    expect(spspCall?.destination).toBe('g.test.peer');
+    expect(ilpCall?.destination).toBe('g.test.peer');
 
     // Amount should be toonBytes.length * basePricePerByte
     const encodedBytes = toonEncoder.mock.results[0]?.value as Uint8Array;
     const expectedAmount = String(BigInt(encodedBytes.length) * 10n);
-    expect(spspCall?.amount).toBe(expectedAmount);
+    expect(ilpCall?.amount).toBe(expectedAmount);
   });
 
   it('should skip Phase 2 when agentRuntimeClient not configured', async () => {
@@ -478,11 +477,11 @@ describe('BootstrapService', () => {
 
     const results = await bootstrapPromise;
 
-    // Should still succeed, just no SPSP handshake
+    // Should still succeed, just no ILP announcement
     expect(results).toHaveLength(1);
   });
 
-  it('should continue on SPSP reject (non-fatal)', async () => {
+  it('should continue on ILP announce reject (non-fatal)', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockAgentRuntime({
       accepted: false,
@@ -516,18 +515,19 @@ describe('BootstrapService', () => {
 
     const results = await bootstrapPromise;
 
-    // Bootstrap still returns the result (handshake failure is non-fatal)
+    // Bootstrap still returns the result even when ILP send is rejected (non-fatal)
     expect(results).toHaveLength(1);
-    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(
+    // A rejected ILP send triggers announce-failed (settlement failure is non-fatal)
+    expect(events.some((e) => e.type === 'bootstrap:announce-failed')).toBe(
       true
     );
   });
 
   // ---------------------------------------------------------------------------
-  // Phase 3: Announce via ILP
+  // Phase 2: Announce via ILP
   // ---------------------------------------------------------------------------
 
-  it('should announce own kind:10032 as paid ILP PREPARE after handshakes', async () => {
+  it('should announce own kind:10032 as paid ILP PREPARE after registration', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockAgentRuntime();
 
@@ -558,8 +558,8 @@ describe('BootstrapService', () => {
 
     await bootstrapPromise;
 
-    // Phase 3: announce sends a second ILP packet (first was SPSP)
-    expect(runtime.sendIlpPacket.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // Announce phase: sends ILP packet with own kind:10032 info
+    expect(runtime.sendIlpPacket.mock.calls.length).toBeGreaterThanOrEqual(1);
 
     // Verify bootstrap:announced event
     const announced = events.find((e) => e.type === 'bootstrap:announced');
@@ -572,11 +572,12 @@ describe('BootstrapService', () => {
 
   it('should emit bootstrap:announce-failed on announce rejection', async () => {
     const admin = createMockConnectorAdmin();
-    // First call = SPSP (accepted), second call = announce (rejected)
-    const runtime = createMockAgentRuntime();
-    runtime.sendIlpPacket
-      .mockResolvedValueOnce({ accepted: true, fulfillment: 'f1' })
-      .mockResolvedValueOnce({ accepted: false, code: 'F06', message: 'bad' });
+    // Announce ILP send is rejected
+    const runtime = createMockAgentRuntime({
+      accepted: false,
+      code: 'F06',
+      message: 'bad',
+    });
 
     const toonEncoder = vi.fn(
       (_event: NostrEvent) => new Uint8Array([1, 2, 3])

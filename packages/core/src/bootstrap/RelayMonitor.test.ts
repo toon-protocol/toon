@@ -1,6 +1,6 @@
 /**
  * Tests for RelayMonitor - relay subscription, passive discovery,
- * explicit peering via peerWith(), and SPSP handshake orchestration.
+ * explicit peering via peerWith(), and local settlement negotiation.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
@@ -37,14 +37,6 @@ vi.mock('nostr-tools/pool', () => ({
   })),
 }));
 
-// Mock IlpSpspClient
-vi.mock('../spsp/IlpSpspClient.js', () => ({
-  IlpSpspClient: vi.fn().mockImplementation(() => ({
-    requestSpspInfo: vi.fn(),
-  })),
-}));
-
-import { IlpSpspClient } from '../spsp/IlpSpspClient.js';
 import { SimplePool } from 'nostr-tools/pool';
 
 /** Safely invoke capturedOnevent, throwing if not yet captured. */
@@ -74,8 +66,6 @@ describe('RelayMonitor', () => {
   let mockAgentRuntime: AgentRuntimeClient;
   let mockToonEncoder: (event: NostrEvent) => Uint8Array;
   let mockToonDecoder: (bytes: Uint8Array) => NostrEvent;
-  let mockSpspRequestSpspInfo: Mock;
-
   function createMonitor(basePricePerByte?: bigint): RelayMonitor {
     return new RelayMonitor({
       relayUrl: 'ws://localhost:7100',
@@ -138,15 +128,6 @@ describe('RelayMonitor', () => {
     mockToonDecoder = vi.fn<[Uint8Array], NostrEvent>(
       (_bytes) => ({}) as NostrEvent
     );
-
-    // Reset mock IlpSpspClient so requestSpspInfo is fresh
-    mockSpspRequestSpspInfo = vi.fn().mockResolvedValue({
-      destinationAccount: 'g.test.peer.spsp.123',
-      sharedSecret: 'secret123',
-    });
-    (IlpSpspClient as unknown as Mock).mockImplementation(() => ({
-      requestSpspInfo: mockSpspRequestSpspInfo,
-    }));
   });
 
   // --- Discovery-only mode (no admin/runtime needed) ---
@@ -289,7 +270,7 @@ describe('RelayMonitor', () => {
     await monitor.peerWith(peerPubkey);
 
     // addPeer should only be called once for initial registration
-    // (plus possibly once for settlement update, depending on SPSP response)
+    // (plus possibly once for settlement update, depending on local negotiation)
     const initialRegistrations = mockAdmin.addPeer.mock.calls.filter(
       (call: unknown[]) => !(call[0] as { settlement?: unknown }).settlement
     );
@@ -315,51 +296,37 @@ describe('RelayMonitor', () => {
     );
   });
 
-  // --- SPSP handshake via peerWith ---
+  // --- Peer registration and settlement via peerWith ---
 
-  it('peerWith() sends paid SPSP handshake for peer', async () => {
+  it('peerWith() registers peer via connector admin', async () => {
     const monitor = createWiredMonitor();
     monitor.start();
 
     fireEvent(makeValidEvent());
     await monitor.peerWith(peerPubkey);
 
-    expect(mockSpspRequestSpspInfo).toHaveBeenCalledWith(
-      peerPubkey,
-      'g.test.peer',
+    expect(mockAdmin.addPeer).toHaveBeenCalledWith(
       expect.objectContaining({
-        amount: expect.any(String),
-        timeout: 30000,
+        id: `nostr-${peerPubkey.slice(0, 16)}`,
+        url: 'ws://peer:3000',
+        routes: [{ prefix: 'g.test.peer' }],
       })
     );
   });
 
-  it('peerWith() updates registration with channel/settlement info from handshake', async () => {
-    mockSpspRequestSpspInfo.mockResolvedValueOnce({
-      destinationAccount: 'g.test.peer.spsp.123',
-      sharedSecret: 'secret123',
-      settlement: {
-        negotiatedChain: 'evm:base:8453',
-        settlementAddress: '0x1234',
-        channelId: 'channel-001',
-      },
-    });
-
+  it('peerWith() registers peer with basic routing info (settlement via local negotiation)', async () => {
     const monitor = createWiredMonitor();
     monitor.start();
 
     fireEvent(makeValidEvent());
     await monitor.peerWith(peerPubkey);
 
-    // Second call should include settlement info
+    // Peer should be registered with routing info
     expect(mockAdmin.addPeer).toHaveBeenCalledWith(
       expect.objectContaining({
         id: `nostr-${peerPubkey.slice(0, 16)}`,
-        settlement: expect.objectContaining({
-          preference: 'evm:base:8453',
-          evmAddress: '0x1234',
-          channelId: 'channel-001',
-        }),
+        url: 'ws://peer:3000',
+        routes: [{ prefix: 'g.test.peer' }],
       })
     );
   });
@@ -386,23 +353,39 @@ describe('RelayMonitor', () => {
     });
   });
 
-  it('emits bootstrap:channel-opened event after peerWith() handshake with channel', async () => {
-    mockSpspRequestSpspInfo.mockResolvedValueOnce({
-      destinationAccount: 'g.test.peer.spsp.123',
-      sharedSecret: 'secret123',
-      settlement: {
-        negotiatedChain: 'evm:base:8453',
-        settlementAddress: '0x1234',
+  it('emits bootstrap:channel-opened event after peerWith() with channel client and settlement data', async () => {
+    // When a channelClient is set and both peers support settlement chains,
+    // peerWith() negotiates a chain locally and opens a channel unilaterally.
+    const mockChannelClient = {
+      openChannel: vi.fn().mockResolvedValue({
         channelId: 'channel-001',
-      },
-    });
+      }),
+      getChannelState: vi.fn(),
+    };
+
+    const peerInfoWithSettlement: IlpPeerInfo = {
+      ...validPeerInfo,
+      supportedChains: ['evm:base:8453'],
+      settlementAddresses: { 'evm:base:8453': '0x1234' },
+    };
 
     const events: BootstrapEvent[] = [];
-    const monitor = createWiredMonitor();
+    const monitor = new RelayMonitor({
+      relayUrl: 'ws://localhost:7100',
+      secretKey,
+      toonEncoder: mockToonEncoder,
+      toonDecoder: mockToonDecoder,
+      settlementInfo: {
+        supportedChains: ['evm:base:8453'],
+      },
+    });
+    monitor.setConnectorAdmin(mockAdmin);
+    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    monitor.setChannelClient(mockChannelClient);
     monitor.on((event) => events.push(event));
     monitor.start();
 
-    fireEvent(makeValidEvent());
+    fireEvent(makeEvent(peerPubkey, JSON.stringify(peerInfoWithSettlement)));
     await monitor.peerWith(peerPubkey);
 
     const opened = events.find((e) => e.type === 'bootstrap:channel-opened');
@@ -497,28 +480,54 @@ describe('RelayMonitor', () => {
 
   // --- Error handling ---
 
-  it('SPSP handshake failure is non-fatal (peer remains registered, monitoring continues)', async () => {
-    mockSpspRequestSpspInfo.mockRejectedValueOnce(new Error('SPSP timeout'));
+  it('settlement failure is non-fatal (peer remains registered, monitoring continues)', async () => {
+    // When channelClient.openChannel fails, peerWith() should still succeed
+    // with the peer registered -- settlement failure is non-fatal.
+    const mockChannelClient = {
+      openChannel: vi.fn().mockRejectedValue(new Error('Channel open timeout')),
+      getChannelState: vi.fn(),
+    };
+
+    const peerInfoWithSettlement: IlpPeerInfo = {
+      ...validPeerInfo,
+      supportedChains: ['evm:base:8453'],
+      settlementAddresses: { 'evm:base:8453': '0x1234' },
+    };
 
     const events: BootstrapEvent[] = [];
-    const monitor = createWiredMonitor();
+    const monitor = new RelayMonitor({
+      relayUrl: 'ws://localhost:7100',
+      secretKey,
+      toonEncoder: mockToonEncoder,
+      toonDecoder: mockToonDecoder,
+      settlementInfo: {
+        supportedChains: ['evm:base:8453'],
+      },
+    });
+    monitor.setConnectorAdmin(mockAdmin);
+    monitor.setAgentRuntimeClient(mockAgentRuntime);
+    monitor.setChannelClient(mockChannelClient);
     monitor.on((event) => events.push(event));
     monitor.start();
 
-    fireEvent(makeValidEvent(peerPubkey, 1000));
+    fireEvent(
+      makeEvent(peerPubkey, JSON.stringify(peerInfoWithSettlement), 1000)
+    );
     await monitor.peerWith(peerPubkey);
 
     // Peer was still registered
     expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
       true
     );
-    // Handshake failure emitted
-    expect(events.some((e) => e.type === 'bootstrap:handshake-failed')).toBe(
+    // Settlement failure emitted (not fatal)
+    expect(events.some((e) => e.type === 'bootstrap:settlement-failed')).toBe(
       true
     );
 
     // Can still peer with a different peer (monitoring continues)
-    fireEvent(makeValidEvent(peerPubkey2, 1000));
+    fireEvent(
+      makeEvent(peerPubkey2, JSON.stringify(peerInfoWithSettlement), 1000)
+    );
     await monitor.peerWith(peerPubkey2);
 
     const registered = events.filter(

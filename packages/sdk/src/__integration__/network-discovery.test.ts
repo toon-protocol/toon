@@ -390,7 +390,7 @@ describe('Network Discovery and Bootstrap Integration', () => {
   // [P2] node.peerWith(pubkey) initiates manual peering
   // -------------------------------------------------------------------------
 
-  it('[P2] node.peerWith(pubkey) registers peer and initiates SPSP handshake', async () => {
+  it('[P2] node.peerWith(pubkey) registers peer and opens channel', async () => {
     // Arrange
     if (!infraAvailable.all) {
       console.log('Skipping: Full infrastructure not available');

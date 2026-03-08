@@ -4,10 +4,10 @@
  * Handles the initial peer discovery and registration process
  * with known peers to bootstrap into the ILP network.
  *
- * Three-phase bootstrap:
- * 1. Discover: Load peers, query relays for kind:10032, register with connector
- * 2. Handshake: SPSP via ILP (0-amount packets) for settlement negotiation
- * 3. Announce: Publish own kind:10032 as paid ILP PREPARE
+ * Two-phase bootstrap:
+ * 1. Discover & Register: Load peers, query relays for kind:10032,
+ *    register with connector, select chain locally, open channel unilaterally
+ * 2. Announce: Publish own kind:10032 as paid ILP PREPARE
  */
 
 import { SimplePool } from 'nostr-tools/pool';
@@ -18,12 +18,11 @@ import { CrosstownError } from '../errors.js';
 import { GenesisPeerLoader, ArDrivePeerRegistry } from '../discovery/index.js';
 import type { GenesisPeer } from '../discovery/index.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
+import { parseIlpPeerInfo, buildIlpPeerInfoEvent } from '../events/index.js';
 import {
-  parseIlpPeerInfo,
-  buildIlpPeerInfoEvent,
-  buildSpspRequestEvent,
-  parseSpspResponse,
-} from '../events/index.js';
+  negotiateSettlementChain,
+  resolveTokenForChain,
+} from '../settlement/index.js';
 import type { IlpPeerInfo, ConnectorChannelClient } from '../types.js';
 import type {
   KnownPeer,
@@ -54,8 +53,8 @@ export class BootstrapError extends CrosstownError {
  * Phase 1: Load peers from genesis config, ArDrive, and env var.
  *          For each peer, query their relay for kind:10032 (ILP Peer Info).
  *          Register peer via connector admin API.
- * Phase 2: (ILP-first) SPSP handshake via 0-amount ILP packets for settlement.
- * Phase 3: (ILP-first) Announce own kind:10032 as paid ILP PREPARE.
+ *          Select chain locally and open channel unilaterally.
+ * Phase 2: Announce own kind:10032 as paid ILP PREPARE.
  */
 export class BootstrapService {
   private readonly config: Required<BootstrapConfig> & { btpSecret?: string };
@@ -245,7 +244,7 @@ export class BootstrapService {
     const results: BootstrapResult[] = [];
 
     try {
-      // Phase 1: Discover and register
+      // Phase 1: Discover and register (with settlement)
       this.setPhase('discovering');
 
       // Load and merge peers from all sources
@@ -284,29 +283,8 @@ export class BootstrapService {
         }
       }
 
-      // Phase 2: SPSP handshake via ILP (if agentRuntimeClient is configured)
+      // Phase 2: Announce own kind:10032 as paid ILP PREPARE
       if (this.agentRuntimeClient && results.length > 0) {
-        this.setPhase('handshaking');
-
-        for (const result of results) {
-          try {
-            await this.performSpspHandshake(result);
-          } catch (error) {
-            const reason =
-              error instanceof Error ? error.message : 'Unknown error';
-            console.warn(
-              `[Bootstrap] SPSP handshake failed for ${result.registeredPeerId}:`,
-              reason
-            );
-            this.emit({
-              type: 'bootstrap:handshake-failed',
-              peerId: result.registeredPeerId,
-              reason,
-            });
-          }
-        }
-
-        // Phase 3: Announce own kind:10032 as paid ILP PREPARE
         this.setPhase('announcing');
 
         for (const result of results) {
@@ -387,8 +365,102 @@ export class BootstrapService {
       }
     }
 
-    // Step 3: Publish our own kind:10032 to their relay (non-fatal)
-    // Only do direct publish if NOT using ILP-first flow (Phase 3 handles it via ILP)
+    const result: BootstrapResult = {
+      knownPeer,
+      peerInfo,
+      registeredPeerId,
+    };
+
+    // Step 3: Local chain selection + unilateral channel opening during registration
+    if (
+      this.channelClient &&
+      this.settlementInfo?.supportedChains?.length &&
+      peerInfo.supportedChains?.length &&
+      peerInfo.settlementAddresses
+    ) {
+      try {
+        const negotiatedChain = negotiateSettlementChain(
+          this.settlementInfo.supportedChains,
+          peerInfo.supportedChains,
+          this.settlementInfo.preferredTokens,
+          peerInfo.preferredTokens
+        );
+
+        if (negotiatedChain) {
+          const peerAddress = peerInfo.settlementAddresses[negotiatedChain];
+          const tokenAddress = resolveTokenForChain(
+            negotiatedChain,
+            this.settlementInfo.preferredTokens,
+            peerInfo.preferredTokens
+          );
+          const tokenNetwork = peerInfo.tokenNetworks?.[negotiatedChain];
+
+          if (peerAddress) {
+            console.log(
+              `[Bootstrap] Opening channel on ${negotiatedChain} with ${registeredPeerId}...`
+            );
+            const channelResult = await this.channelClient.openChannel({
+              peerId: registeredPeerId,
+              chain: negotiatedChain,
+              token: tokenAddress,
+              tokenNetwork,
+              peerAddress,
+              initialDeposit: '100000',
+              settlementTimeout: 86400,
+            });
+
+            result.channelId = channelResult.channelId;
+            result.negotiatedChain = negotiatedChain;
+            result.settlementAddress = peerAddress;
+
+            console.log(
+              `[Bootstrap] Opened channel ${channelResult.channelId} with ${registeredPeerId}`
+            );
+
+            this.emit({
+              type: 'bootstrap:channel-opened',
+              peerId: registeredPeerId,
+              channelId: channelResult.channelId,
+              negotiatedChain,
+            });
+
+            // Update peer registration with settlement info
+            if (this.connectorAdmin) {
+              await this.connectorAdmin.addPeer({
+                id: registeredPeerId,
+                url: peerInfo.btpEndpoint,
+                authToken: '',
+                routes: [{ prefix: peerInfo.ilpAddress }],
+                settlement: {
+                  preference: negotiatedChain,
+                  ...(peerAddress && { evmAddress: peerAddress }),
+                  ...(tokenAddress && { tokenAddress }),
+                  ...(tokenNetwork && { tokenNetworkAddress: tokenNetwork }),
+                  ...(channelResult.channelId && {
+                    channelId: channelResult.channelId,
+                  }),
+                },
+              });
+            }
+          }
+        }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(
+          `[Bootstrap] Settlement failed for ${registeredPeerId}:`,
+          reason
+        );
+        this.emit({
+          type: 'bootstrap:settlement-failed',
+          peerId: registeredPeerId,
+          reason,
+        });
+        // Non-fatal: peer remains registered without channel
+      }
+    }
+
+    // Step 4: Publish our own kind:10032 to their relay (non-fatal)
+    // Only do direct publish if NOT using ILP-first flow (Phase 2 handles it via ILP)
     if (!this.agentRuntimeClient) {
       try {
         console.log(
@@ -403,197 +475,11 @@ export class BootstrapService {
       }
     }
 
-    return {
-      knownPeer,
-      peerInfo,
-      registeredPeerId,
-    };
+    return result;
   }
 
   /**
-   * Perform SPSP handshake via ILP for a bootstrapped peer (Phase 2).
-   * Creates payment channel BEFORE sending SPSP request so the request can include a signed claim.
-   */
-  private async performSpspHandshake(result: BootstrapResult): Promise<void> {
-    if (!this.agentRuntimeClient || !this.toonEncoder || !this.toonDecoder) {
-      return;
-    }
-
-    // Step 1: Create payment channel FIRST (before SPSP) if we have channel client and peer settlement info
-    let channelId: string | undefined;
-    if (
-      this.channelClient &&
-      result.peerInfo.settlementAddresses &&
-      result.peerInfo.supportedChains?.length
-    ) {
-      // Use the first supported chain and corresponding settlement address
-      const chain = result.peerInfo.supportedChains[0];
-      if (!chain) return;
-      const peerAddress = result.peerInfo.settlementAddresses[chain];
-      const tokenAddress = result.peerInfo.preferredTokens?.[chain];
-      const tokenNetwork = result.peerInfo.tokenNetworks?.[chain];
-
-      if (peerAddress) {
-        try {
-          console.log(
-            `[Bootstrap] Creating payment channel on ${chain} with ${result.registeredPeerId}...`
-          );
-          const channelResult = await this.channelClient.openChannel({
-            peerId: result.registeredPeerId,
-            chain,
-            token: tokenAddress,
-            tokenNetwork,
-            peerAddress,
-            initialDeposit: '100000', // Default initial deposit
-            settlementTimeout: 86400,
-          });
-          channelId = channelResult.channelId;
-          result.channelId = channelId;
-          result.negotiatedChain = chain;
-          result.settlementAddress = peerAddress;
-          console.log(
-            `[Bootstrap] Opened channel ${channelId} with ${result.registeredPeerId}`
-          );
-
-          this.emit({
-            type: 'bootstrap:channel-opened',
-            peerId: result.registeredPeerId,
-            channelId,
-            negotiatedChain: chain,
-          });
-        } catch (error) {
-          console.warn(
-            `[Bootstrap] Failed to open channel with ${result.registeredPeerId}:`,
-            error instanceof Error ? error.message : 'Unknown error'
-          );
-          // Continue without channel - SPSP will be sent without claim
-        }
-      }
-    }
-
-    // Step 2: Build kind:23194 SPSP request event
-    const { event: spspRequestEvent } = buildSpspRequestEvent(
-      result.knownPeer.pubkey,
-      this.secretKey,
-      this.settlementInfo
-    );
-
-    // Step 3: TOON-encode the event
-    const toonBytes = this.toonEncoder(spspRequestEvent);
-    const base64Toon = Buffer.from(toonBytes).toString('base64');
-
-    // Step 4: Calculate payment for SPSP request (base price per byte * TOON byte length)
-    const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
-
-    // Step 5: Get signed claim if we have channel and claim signer
-    let claim: unknown;
-    if (channelId && this.claimSigner) {
-      try {
-        claim = await this.claimSigner(channelId, BigInt(amount));
-        console.log(
-          `[Bootstrap] Created signed claim for channel ${channelId}`
-        );
-      } catch (error) {
-        console.warn(
-          `[Bootstrap] Failed to create signed claim:`,
-          error instanceof Error ? error.message : 'Unknown error'
-        );
-        // Continue without claim
-      }
-    }
-
-    // Step 6: Send SPSP via ILP (with claim if available)
-    let ilpResult;
-    if (claim && this.agentRuntimeClient.sendIlpPacketWithClaim) {
-      console.log(`[Bootstrap] Sending SPSP with signed claim...`);
-      ilpResult = await this.agentRuntimeClient.sendIlpPacketWithClaim(
-        {
-          destination: result.peerInfo.ilpAddress,
-          amount,
-          data: base64Toon,
-          timeout: this.config.queryTimeout,
-        },
-        claim
-      );
-    } else {
-      console.log(
-        `[Bootstrap] Sending SPSP without claim (channel or signer not available)...`
-      );
-      ilpResult = await this.agentRuntimeClient.sendIlpPacket({
-        destination: result.peerInfo.ilpAddress,
-        amount,
-        data: base64Toon,
-        timeout: this.config.queryTimeout,
-      });
-    }
-
-    if (!ilpResult.accepted) {
-      throw new BootstrapError(
-        `SPSP handshake rejected: ${ilpResult.code} ${ilpResult.message}`
-      );
-    }
-
-    // Step 7: Decode response data (base64 -> TOON -> Nostr event -> parseSpspResponse)
-    if (ilpResult.data) {
-      try {
-        const responseBytes = Uint8Array.from(
-          Buffer.from(ilpResult.data, 'base64')
-        );
-        const responseEvent = this.toonDecoder(responseBytes);
-        const spspResponse = parseSpspResponse(
-          responseEvent,
-          this.secretKey,
-          result.knownPeer.pubkey
-        );
-
-        // Update result with settlement info from response (if not already set from peer info)
-        // The responder might provide a different channel or settlement address
-        if (spspResponse.channelId && !result.channelId) {
-          result.channelId = spspResponse.channelId;
-        }
-        if (spspResponse.negotiatedChain && !result.negotiatedChain) {
-          result.negotiatedChain = spspResponse.negotiatedChain;
-        }
-        if (spspResponse.settlementAddress && !result.settlementAddress) {
-          result.settlementAddress = spspResponse.settlementAddress;
-        }
-
-        // Update peer registration with settlement config if we have channel info
-        if (result.channelId && this.connectorAdmin) {
-          await this.connectorAdmin.addPeer({
-            id: result.registeredPeerId,
-            url: result.peerInfo.btpEndpoint,
-            authToken: '',
-            routes: [{ prefix: result.peerInfo.ilpAddress }],
-            settlement: {
-              preference:
-                result.negotiatedChain || spspResponse.negotiatedChain || 'evm',
-              ...(result.settlementAddress && {
-                evmAddress: result.settlementAddress,
-              }),
-              ...(spspResponse.tokenAddress && {
-                tokenAddress: spspResponse.tokenAddress,
-              }),
-              ...(spspResponse.tokenNetworkAddress && {
-                tokenNetworkAddress: spspResponse.tokenNetworkAddress,
-              }),
-              ...(result.channelId && {
-                channelId: result.channelId,
-              }),
-            },
-          });
-        }
-      } catch (error) {
-        throw new BootstrapError(
-          `Failed to parse SPSP response: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          error instanceof Error ? error : undefined
-        );
-      }
-    }
-  }
-
-  /**
-   * Announce own kind:10032 as paid ILP PREPARE (Phase 3).
+   * Announce own kind:10032 as paid ILP PREPARE (Phase 2).
    */
   private async announceViaIlp(result: BootstrapResult): Promise<void> {
     if (!this.agentRuntimeClient || !this.toonEncoder) {
@@ -680,17 +566,24 @@ export class BootstrapService {
       });
 
       ws.on('message', (data: Buffer | string) => {
-        const msg = JSON.parse(data.toString());
+        let msg: unknown[];
+        try {
+          msg = JSON.parse(data.toString()) as unknown[];
+        } catch {
+          console.warn('[Bootstrap] Received malformed JSON from relay');
+          return;
+        }
         console.log(`[Bootstrap] Received message type: ${msg[0]}`);
 
         if (msg[0] === 'EVENT' && msg[1] === subId) {
-          let event = msg[2];
+          let event: Record<string, unknown> | undefined;
+          const rawEvent = msg[2];
 
           // Handle TOON format events (string) by parsing them
-          if (typeof event === 'string') {
+          if (typeof rawEvent === 'string') {
             try {
               // Simple TOON parser for bootstrap events
-              const lines = event.trim().split('\n');
+              const lines = rawEvent.trim().split('\n');
               const parsed: Record<string, unknown> = {};
               for (const line of lines) {
                 const colonIndex = line.indexOf(':');
@@ -715,11 +608,13 @@ export class BootstrapService {
               console.warn(`[Bootstrap] Failed to parse TOON event:`, error);
               return;
             }
+          } else if (typeof rawEvent === 'object' && rawEvent !== null) {
+            event = rawEvent as Record<string, unknown>;
           }
 
-          if (event && event.id) {
+          if (event && typeof event['id'] === 'string') {
             console.log(
-              `[Bootstrap] Received event: ${event.id.slice(0, 16)}...`
+              `[Bootstrap] Received event: ${(event['id'] as string).slice(0, 16)}...`
             );
             events.push(event);
           } else {

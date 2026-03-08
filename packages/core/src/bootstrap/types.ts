@@ -4,7 +4,6 @@
 
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { IlpPeerInfo } from '../types.js';
-import type { SpspRequestSettlementInfo } from '../events/builders.js';
 
 /** Regular expression for validating 64-character lowercase hex pubkeys */
 export const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
@@ -45,9 +44,9 @@ export interface BootstrapResult {
   peerInfo: IlpPeerInfo;
   /** The ID used when registering with the connector (e.g., "nostr-aabb11cc22dd33ee") */
   registeredPeerId: string;
-  /** Channel ID from SPSP FULFILL */
+  /** Channel ID from unilateral channel opening */
   channelId?: string;
-  /** Negotiated chain from settlement negotiation */
+  /** Negotiated chain from local settlement negotiation */
   negotiatedChain?: string;
   /** Peer's settlement address */
   settlementAddress?: string;
@@ -80,7 +79,7 @@ export interface ConnectorAdminClient {
 
   /**
    * Remove a peer from the connector via the admin API.
-   * Optional — not all callers will implement peer removal.
+   * Optional -- not all callers will implement peer removal.
    * @param peerId - The peer ID to remove
    */
   removePeer?(peerId: string): Promise<void>;
@@ -88,11 +87,11 @@ export interface ConnectorAdminClient {
 
 /**
  * Bootstrap phase states.
+ * Two-phase flow: discovering -> registering -> announcing -> ready | failed
  */
 export type BootstrapPhase =
   | 'discovering'
   | 'registering'
-  | 'handshaking'
   | 'announcing'
   | 'ready'
   | 'failed';
@@ -118,7 +117,7 @@ export type BootstrapEvent =
       channelId: string;
       negotiatedChain: string;
     }
-  | { type: 'bootstrap:handshake-failed'; peerId: string; reason: string }
+  | { type: 'bootstrap:settlement-failed'; peerId: string; reason: string }
   | {
       type: 'bootstrap:announced';
       peerId: string;
@@ -184,6 +183,20 @@ export interface AgentRuntimeClient {
 }
 
 /**
+ * Own settlement configuration for local chain selection during registration.
+ */
+export interface SettlementConfig {
+  /** Chain identifiers this node supports */
+  supportedChains?: string[];
+  /** Maps chain identifier to this node's settlement address */
+  settlementAddresses?: Record<string, string>;
+  /** Maps chain identifier to this node's preferred token contract address */
+  preferredTokens?: Record<string, string>;
+  /** Maps chain identifier to TokenNetwork contract address (EVM only) */
+  tokenNetworks?: Record<string, string>;
+}
+
+/**
  * Base configuration for the bootstrap service.
  */
 export interface BootstrapConfig {
@@ -203,15 +216,15 @@ export interface BootstrapConfig {
 export interface BootstrapServiceConfig extends BootstrapConfig {
   /** URL for the agent-runtime POST /ilp/send endpoint */
   agentRuntimeUrl?: string;
-  /** Own settlement preferences for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
+  /** Own settlement preferences for settlement during peer registration */
+  settlementInfo?: SettlementConfig;
   /** This node's ILP address (for building ILP PREPARE destinations) */
   ownIlpAddress?: string;
   /** DI callback for TOON encoding (avoids circular dep) */
   toonEncoder?: (event: NostrEvent) => Uint8Array;
   /** DI callback for TOON decoding (avoids circular dep) */
   toonDecoder?: (bytes: Uint8Array) => NostrEvent;
-  /** Static BTP secret for initial peer registration (before SPSP negotiation) */
+  /** Static BTP secret for initial peer registration (before settlement) */
   btpSecret?: string;
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
@@ -223,7 +236,7 @@ export interface BootstrapServiceConfig extends BootstrapConfig {
 export interface RelayMonitorConfig {
   /** Relay URL to monitor for kind:10032 events */
   relayUrl: string;
-  /** Nostr secret key for SPSP requests */
+  /** Nostr secret key for signing events */
   secretKey: Uint8Array;
   /** DI callback for TOON encoding (avoids circular dep) */
   toonEncoder: (event: NostrEvent) => Uint8Array;
@@ -231,8 +244,8 @@ export interface RelayMonitorConfig {
   toonDecoder: (bytes: Uint8Array) => NostrEvent;
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
-  /** Own settlement preferences for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
-  /** SPSP handshake timeout in milliseconds (default: 30000) */
+  /** Own settlement preferences for settlement during peer registration */
+  settlementInfo?: SettlementConfig;
+  /** Settlement timeout in milliseconds (default: 30000) */
   defaultTimeout?: number;
 }

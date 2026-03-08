@@ -20,8 +20,7 @@ import type {
   BootstrapResult,
   BootstrapEventListener,
 } from '@crosstown/core';
-import type { SpspRequestSettlementInfo } from '@crosstown/core';
-import type { SettlementNegotiationConfig } from '@crosstown/core';
+import type { SettlementConfig } from '@crosstown/core';
 import { createCrosstownNode } from '@crosstown/core';
 import {
   shallowParseToon,
@@ -70,12 +69,10 @@ export interface NodeConfig {
   knownPeers?: KnownPeer[];
   /** Relay WebSocket URL */
   relayUrl?: string;
-  /** Settlement info for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
+  /** Settlement info for peer registration */
+  settlementInfo?: SettlementConfig;
   /** Enable ArDrive peer lookup */
   ardriveEnabled?: boolean;
-  /** Settlement negotiation config for payment channels */
-  settlementNegotiationConfig?: SettlementNegotiationConfig;
   /** Per-kind pricing overrides */
   kindPricing?: Record<number, bigint>;
   /** Config-based handler registration (alternative to post-creation .on()) */
@@ -129,7 +126,7 @@ export interface ServiceNode {
   start(): Promise<StartResult>;
   /** Stop the node: unsubscribe relay monitor, clean up lifecycle state */
   stop(): Promise<void>;
-  /** Initiate peering with a discovered peer (register + SPSP handshake) */
+  /** Initiate peering with a discovered peer (register + settlement) */
   peerWith(pubkey: string): Promise<void>;
   /**
    * Publish a Nostr event to a remote peer via the embedded connector.
@@ -343,7 +340,6 @@ export function createNode(config: NodeConfig): ServiceNode {
     settlementInfo: config.settlementInfo,
     basePricePerByte: config.basePricePerByte,
     ardriveEnabled: config.ardriveEnabled,
-    settlementNegotiationConfig: config.settlementNegotiationConfig,
   });
 
   // 10. Track SDK-level lifecycle state

@@ -48,9 +48,9 @@ describe('Pricing Validator', () => {
     const validator = createPricingValidator({
       basePricePerByte: 10n,
       ownPubkey: 'ff'.repeat(32),
-      kindPricing: { 23194: 0n }, // SPSP requests are free
+      kindPricing: { 30023: 0n }, // Custom kind override: free
     });
-    const meta = createMockMeta({ kind: 23194, rawBytes: new Uint8Array(200) });
+    const meta = createMockMeta({ kind: 30023, rawBytes: new Uint8Array(200) });
     const amount = 0n;
 
     // Act

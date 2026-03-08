@@ -2,19 +2,18 @@
  * Crosstown Node composition API.
  *
  * Provides createCrosstownNode() — a single composition function that wires
- * ConnectorNode ↔ BLS ↔ BootstrapService ↔ RelayMonitor ↔ SPSP into one object
+ * ConnectorNode ↔ BLS ↔ BootstrapService ↔ RelayMonitor into one object
  * with start() / stop() lifecycle, enabling zero-latency embedded mode without
  * manually wiring each component.
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
+import type { IlpPeerInfo, ConnectorChannelClient } from './types.js';
 import type {
-  IlpPeerInfo,
-  ConnectorChannelClient,
-  SettlementNegotiationConfig,
-} from './types.js';
-import type { SpspRequestSettlementInfo } from './events/builders.js';
-import type { KnownPeer, BootstrapResult } from './bootstrap/types.js';
+  KnownPeer,
+  BootstrapResult,
+  SettlementConfig,
+} from './bootstrap/types.js';
 import type { Subscription } from './types.js';
 import type {
   SendPacketParams,
@@ -55,7 +54,7 @@ export interface HandlePacketAcceptResponse {
   accept: true;
   /** Base64-encoded fulfillment (SHA-256 of event.id) */
   fulfillment: string;
-  /** Base64-encoded response data (e.g., TOON-encoded SPSP response for relay back in ILP FULFILL) */
+  /** Base64-encoded response data (e.g., TOON-encoded response for relay back in ILP FULFILL) */
   data?: string;
   metadata?: Record<string, unknown>;
 }
@@ -83,10 +82,9 @@ export type HandlePacketResponse =
  * Callback invoked by the connector for incoming ILP packets.
  *
  * **NOTE:** This is a **function** (not a BusinessLogicServer instance) because
- * SPSP handling logic (kind:23194 → settlement negotiation, encrypted response
- * generation, channel opening) currently lives in the caller's entrypoint code,
- * not in BusinessLogicServer. The caller provides the full handler that knows
- * how to process both regular events and SPSP requests.
+ * packet handling logic lives in the caller's entrypoint code, not in
+ * BusinessLogicServer. The caller provides the full handler that knows how to
+ * process incoming events.
  */
 export type PacketHandler = (
   request: HandlePacketRequest
@@ -153,7 +151,7 @@ export interface CrosstownNodeConfig {
   /**
    * Callback for incoming ILP packets.
    *
-   * **NOTE:** Provided as a **function** (not a BLS instance) because SPSP
+   * **NOTE:** Provided as a **function** (not a BLS instance) because packet
    * handling logic lives in the caller's entrypoint code.
    */
   handlePacket: PacketHandler;
@@ -175,8 +173,8 @@ export interface CrosstownNodeConfig {
   relayUrl?: string;
   /** Initial bootstrap peers (default: []) */
   knownPeers?: KnownPeer[];
-  /** Optional settlement preferences for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
+  /** Optional settlement preferences for peer registration */
+  settlementInfo?: SettlementConfig;
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
   /** Enable ArDrive peer lookup (default: true) */
@@ -187,13 +185,6 @@ export interface CrosstownNodeConfig {
   queryTimeout?: number;
   /** Optional extra peers JSON for bootstrap */
   additionalPeersJson?: string;
-  /**
-   * Optional settlement negotiation config for opening payment channels
-   * during SPSP handshakes. When provided along with a connector that has
-   * openChannel()/getChannelState() methods, a DirectChannelClient is created
-   * and exposed on the node.
-   */
-  settlementNegotiationConfig?: SettlementNegotiationConfig;
 }
 
 /**
@@ -246,7 +237,7 @@ export interface CrosstownNode {
   /**
    * Initiate peering with a discovered peer.
    * The peer must have been discovered by the RelayMonitor first.
-   * Registers the peer with the connector and performs an SPSP handshake.
+   * Registers the peer with the connector and attempts settlement.
    */
   peerWith(pubkey: string): Promise<void>;
 }
@@ -331,6 +322,9 @@ export function createCrosstownNode(
   // Wire clients to bootstrap service
   bootstrapService.setAgentRuntimeClient(directRuntimeClient);
   bootstrapService.setConnectorAdmin(directAdminClient);
+  if (channelClient) {
+    bootstrapService.setChannelClient(channelClient);
+  }
 
   // Create RelayMonitor with mapped config
   const relayMonitor = new RelayMonitor({
@@ -345,6 +339,9 @@ export function createCrosstownNode(
   // Wire clients to relay monitor
   relayMonitor.setAgentRuntimeClient(directRuntimeClient);
   relayMonitor.setConnectorAdmin(directAdminClient);
+  if (channelClient) {
+    relayMonitor.setChannelClient(channelClient);
+  }
 
   // Track lifecycle state
   let started = false;

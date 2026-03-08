@@ -1,5 +1,5 @@
 /**
- * Bootstrap module - peer discovery, registration, and ILP-first handshake.
+ * Bootstrap module - peer discovery, registration, and settlement negotiation.
  */
 
 // Types
@@ -16,6 +16,7 @@ export type {
   IlpSendResult,
   RelayMonitorConfig,
   DiscoveredPeer,
+  SettlementConfig,
 } from './types.js';
 
 // Service and errors

@@ -1,9 +1,9 @@
 /**
- * Direct BLS HTTP client for bootstrap SPSP handshakes.
+ * Direct BLS HTTP client for bootstrap operations.
  *
  * Sends ILP packets directly to a peer's BLS HTTP endpoint, bypassing
- * connector routing. This is necessary for bootstrap because SPSP
- * handshakes must happen BEFORE BTP connections are established.
+ * connector routing. This is necessary for bootstrap because peer
+ * announcements must happen BEFORE BTP connections are established.
  *
  * After bootstrap completes and payment channels are open, normal ILP
  * routing through connectors can be used.
@@ -21,7 +21,7 @@ export interface DirectBlsClientConfig {
 /**
  * Creates a runtime client that sends packets directly to a peer's BLS.
  *
- * Use this ONLY for bootstrap SPSP handshakes. After bootstrap, use
+ * Use this ONLY for bootstrap operations. After bootstrap, use
  * the HttpRuntimeClient to send through connectors.
  *
  * @example
