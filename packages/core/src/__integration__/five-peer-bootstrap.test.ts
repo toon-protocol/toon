@@ -25,7 +25,7 @@ import type { CrosstownNode } from '../compose.js';
 import type {
   SendPacketParams,
   SendPacketResult,
-} from '../bootstrap/direct-runtime-client.js';
+} from '../bootstrap/direct-ilp-client.js';
 import type { RegisterPeerParams } from '../bootstrap/direct-connector-admin.js';
 import type { BootstrapEvent, SettlementConfig } from '../bootstrap/types.js';
 import type { IlpPeerInfo } from '../types.js';

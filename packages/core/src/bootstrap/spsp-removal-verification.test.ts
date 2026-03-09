@@ -23,7 +23,7 @@ import type { NostrEvent } from 'nostr-tools/pure';
 import { BootstrapService } from './BootstrapService.js';
 import type {
   ConnectorAdminClient,
-  AgentRuntimeClient,
+  IlpClient,
   BootstrapEvent,
   BootstrapPhase,
   IlpSendResult,
@@ -117,9 +117,9 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
   };
 }
 
-function createMockAgentRuntime(
+function createMockIlpClient(
   result: Partial<IlpSendResult> = {}
-): AgentRuntimeClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
+): IlpClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
   return {
     sendIlpPacket: vi.fn().mockResolvedValue({
       accepted: true,
@@ -722,7 +722,7 @@ describe('Story 2.7: SPSP Removal Verification', () => {
     it('channel opening happens during registration (no separate handshaking phase)', async () => {
       const admin = createMockConnectorAdmin();
       const channelClient = createMockChannelClient('channel-reg');
-      const runtime = createMockAgentRuntime();
+      const runtime = createMockIlpClient();
       const toonEncoder = vi.fn(
         (_event: NostrEvent) => new Uint8Array([1, 2, 3])
       );
@@ -745,7 +745,7 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       );
       service.setConnectorAdmin(admin);
       service.setChannelClient(channelClient);
-      service.setAgentRuntimeClient(runtime);
+      service.setIlpClient(runtime);
       service.on((event) => events.push(event));
 
       const bootstrapPromise = service.bootstrap();

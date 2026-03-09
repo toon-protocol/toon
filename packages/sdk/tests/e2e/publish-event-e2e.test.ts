@@ -13,7 +13,7 @@
  * in core/__integration__/five-peer-bootstrap.test.ts.
  *
  * **What this validates:**
- * - AC#1: TOON-encode, price, base64, send via runtimeClient.sendIlpPacket()
+ * - AC#1: TOON-encode, price, base64, send via ilpClient.sendIlpPacket()
  * - AC#4: PublishEventResult success/failure shapes in realistic scenarios
  * - Full data flow: sender publishEvent -> receiver handler -> event decoded
  * - Cross-node ILP routing with correct amount pricing

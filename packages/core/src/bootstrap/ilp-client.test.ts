@@ -1,5 +1,5 @@
 /**
- * Tests for createHttpRuntimeClient — HTTP-based AgentRuntimeClient.
+ * Tests for createHttpIlpClient — HTTP-based ILP client.
  *
  * Mocks fetch at the transport boundary. Tests the request shaping,
  * response normalization, and error handling.
@@ -7,9 +7,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  createHttpIlpClient,
   createHttpRuntimeClient,
   createAgentRuntimeClient,
-} from './agent-runtime-client.js';
+} from './ilp-client.js';
 import { BootstrapError } from './BootstrapService.js';
 
 // ============================================================================
@@ -32,7 +33,7 @@ function createFetchResponse(
 // Tests
 // ============================================================================
 
-describe('createHttpRuntimeClient', () => {
+describe('createHttpIlpClient', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
   });
@@ -41,16 +42,17 @@ describe('createHttpRuntimeClient', () => {
     vi.restoreAllMocks();
   });
 
-  it('should export createAgentRuntimeClient as backward-compatible alias', () => {
-    expect(createAgentRuntimeClient).toBe(createHttpRuntimeClient);
+  it('should export deprecated aliases', () => {
+    expect(createAgentRuntimeClient).toBe(createHttpIlpClient);
+    expect(createHttpRuntimeClient).toBe(createHttpIlpClient);
   });
 
   it('should throw BootstrapError for invalid baseUrl', () => {
-    expect(() => createHttpRuntimeClient('not-a-url')).toThrow(BootstrapError);
+    expect(() => createHttpIlpClient('not-a-url')).toThrow(BootstrapError);
   });
 
   it('should create client for valid baseUrl', () => {
-    const client = createHttpRuntimeClient('http://localhost:3000');
+    const client = createHttpIlpClient('http://localhost:3000');
     expect(client).toBeDefined();
     expect(client.sendIlpPacket).toBeInstanceOf(Function);
   });
@@ -64,7 +66,7 @@ describe('createHttpRuntimeClient', () => {
         );
       vi.stubGlobal('fetch', mockFetch);
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       await client.sendIlpPacket({
         destination: 'g.test.peer',
         amount: '1000',
@@ -97,7 +99,7 @@ describe('createHttpRuntimeClient', () => {
         )
       );
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       const result = await client.sendIlpPacket({
         destination: 'g.test.peer',
         amount: '1000',
@@ -121,7 +123,7 @@ describe('createHttpRuntimeClient', () => {
         )
       );
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       const result = await client.sendIlpPacket({
         destination: 'g.test.peer',
         amount: '1000',
@@ -139,7 +141,7 @@ describe('createHttpRuntimeClient', () => {
         vi.fn().mockResolvedValue(createFetchResponse({}, 500))
       );
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       await expect(
         client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' })
       ).rejects.toThrow(BootstrapError);
@@ -151,13 +153,13 @@ describe('createHttpRuntimeClient', () => {
         vi.fn().mockRejectedValue(new Error('ECONNREFUSED'))
       );
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       await expect(
         client.sendIlpPacket({ destination: 'g.test', amount: '0', data: '' })
       ).rejects.toThrow(BootstrapError);
     });
 
-    // Field name normalization: agent-runtime may return `fulfilled` or `accepted`
+    // Field name normalization: connector may return `fulfilled` or `accepted`
     describe('field name compatibility', () => {
       it('should normalize { fulfilled: true } to accepted === true', async () => {
         vi.stubGlobal(
@@ -169,7 +171,7 @@ describe('createHttpRuntimeClient', () => {
             )
         );
 
-        const client = createHttpRuntimeClient('http://localhost:3000');
+        const client = createHttpIlpClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
           destination: 'g.test',
           amount: '0',
@@ -185,7 +187,7 @@ describe('createHttpRuntimeClient', () => {
           vi.fn().mockResolvedValue(createFetchResponse({ fulfilled: false }))
         );
 
-        const client = createHttpRuntimeClient('http://localhost:3000');
+        const client = createHttpIlpClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
           destination: 'g.test',
           amount: '0',
@@ -201,7 +203,7 @@ describe('createHttpRuntimeClient', () => {
           vi.fn().mockResolvedValue(createFetchResponse({}))
         );
 
-        const client = createHttpRuntimeClient('http://localhost:3000');
+        const client = createHttpIlpClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
           destination: 'g.test',
           amount: '0',
@@ -221,7 +223,7 @@ describe('createHttpRuntimeClient', () => {
             )
         );
 
-        const client = createHttpRuntimeClient('http://localhost:3000');
+        const client = createHttpIlpClient('http://localhost:3000');
         const result = await client.sendIlpPacket({
           destination: 'g.test',
           amount: '0',
@@ -238,7 +240,7 @@ describe('createHttpRuntimeClient', () => {
         .mockResolvedValue(createFetchResponse({ accepted: true }));
       vi.stubGlobal('fetch', mockFetch);
 
-      const client = createHttpRuntimeClient('http://localhost:3000');
+      const client = createHttpIlpClient('http://localhost:3000');
       await client.sendIlpPacket({
         destination: 'g.test',
         amount: '0',
@@ -256,7 +258,7 @@ describe('createHttpRuntimeClient', () => {
         .mockResolvedValue(createFetchResponse({ accepted: true }));
       vi.stubGlobal('fetch', mockFetch);
 
-      const client = createHttpRuntimeClient('http://localhost:3000/');
+      const client = createHttpIlpClient('http://localhost:3000/');
       await client.sendIlpPacket({
         destination: 'g.test',
         amount: '0',

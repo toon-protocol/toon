@@ -5,7 +5,7 @@
  * Phase 2: Announce own kind:10032 as paid ILP PREPARE
  *
  * Infrastructure: Real nostr-tools crypto. Mocks only at transport
- * boundaries (WebSocket, SimplePool, connectorAdmin, agentRuntime).
+ * boundaries (WebSocket, SimplePool, connectorAdmin, ilpClient).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -14,7 +14,7 @@ import type { NostrEvent } from 'nostr-tools/pure';
 import { BootstrapService, BootstrapError } from './BootstrapService.js';
 import type {
   ConnectorAdminClient,
-  AgentRuntimeClient,
+  IlpClient,
   BootstrapEvent,
   IlpSendResult,
   KnownPeer,
@@ -98,9 +98,9 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
   };
 }
 
-function createMockAgentRuntime(
+function createMockIlpClient(
   result: Partial<IlpSendResult> = {}
-): AgentRuntimeClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
+): IlpClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
   return {
     sendIlpPacket: vi.fn().mockResolvedValue({
       accepted: true,
@@ -358,7 +358,7 @@ describe('BootstrapService', () => {
       .filter((e) => e.type === 'bootstrap:phase')
       .map((e) => (e as { phase: string }).phase);
 
-    // Without agentRuntimeClient: discovering → registering → ready
+    // Without ilpClient: discovering → registering → ready
     expect(phases).toContain('discovering');
     expect(phases).toContain('registering');
     expect(phases).toContain('ready');
@@ -412,9 +412,9 @@ describe('BootstrapService', () => {
   // Phase 2: Announce via ILP (peer info announcement)
   // ---------------------------------------------------------------------------
 
-  it('should send paid ILP announcement via agentRuntimeClient for registered peers', async () => {
+  it('should send paid ILP announcement via ilpClient for registered peers', async () => {
     const admin = createMockConnectorAdmin();
-    const runtime = createMockAgentRuntime();
+    const runtime = createMockIlpClient();
 
     const toonEncoder = vi.fn(
       (_event: NostrEvent) => new Uint8Array([1, 2, 3])
@@ -433,7 +433,7 @@ describe('BootstrapService', () => {
       ownIlpInfo
     );
     service.setConnectorAdmin(admin);
-    service.setAgentRuntimeClient(runtime);
+    service.setIlpClient(runtime);
 
     const bootstrapPromise = service.bootstrap();
     await vi.waitFor(() => expect(capturedWs).not.toBeNull());
@@ -460,7 +460,7 @@ describe('BootstrapService', () => {
     expect(ilpCall?.amount).toBe(expectedAmount);
   });
 
-  it('should skip Phase 2 when agentRuntimeClient not configured', async () => {
+  it('should skip Phase 2 when ilpClient not configured', async () => {
     const admin = createMockConnectorAdmin();
 
     const service = new BootstrapService(
@@ -469,7 +469,7 @@ describe('BootstrapService', () => {
       ownIlpInfo
     );
     service.setConnectorAdmin(admin);
-    // No agentRuntimeClient set
+    // No ilpClient set
 
     const bootstrapPromise = service.bootstrap();
     await vi.waitFor(() => expect(capturedWs).not.toBeNull());
@@ -483,7 +483,7 @@ describe('BootstrapService', () => {
 
   it('should continue on ILP announce reject (non-fatal)', async () => {
     const admin = createMockConnectorAdmin();
-    const runtime = createMockAgentRuntime({
+    const runtime = createMockIlpClient({
       accepted: false,
       code: 'F04',
       message: 'Insufficient amount',
@@ -506,7 +506,7 @@ describe('BootstrapService', () => {
       ownIlpInfo
     );
     service.setConnectorAdmin(admin);
-    service.setAgentRuntimeClient(runtime);
+    service.setIlpClient(runtime);
     service.on((event) => events.push(event));
 
     const bootstrapPromise = service.bootstrap();
@@ -529,7 +529,7 @@ describe('BootstrapService', () => {
 
   it('should announce own kind:10032 as paid ILP PREPARE after registration', async () => {
     const admin = createMockConnectorAdmin();
-    const runtime = createMockAgentRuntime();
+    const runtime = createMockIlpClient();
 
     const toonEncoder = vi.fn(
       (_event: NostrEvent) => new Uint8Array([1, 2, 3])
@@ -549,7 +549,7 @@ describe('BootstrapService', () => {
       ownIlpInfo
     );
     service.setConnectorAdmin(admin);
-    service.setAgentRuntimeClient(runtime);
+    service.setIlpClient(runtime);
     service.on((event) => events.push(event));
 
     const bootstrapPromise = service.bootstrap();
@@ -573,7 +573,7 @@ describe('BootstrapService', () => {
   it('should emit bootstrap:announce-failed on announce rejection', async () => {
     const admin = createMockConnectorAdmin();
     // Announce ILP send is rejected
-    const runtime = createMockAgentRuntime({
+    const runtime = createMockIlpClient({
       accepted: false,
       code: 'F06',
       message: 'bad',
@@ -596,7 +596,7 @@ describe('BootstrapService', () => {
       ownIlpInfo
     );
     service.setConnectorAdmin(admin);
-    service.setAgentRuntimeClient(runtime);
+    service.setIlpClient(runtime);
     service.on((event) => events.push(event));
 
     const bootstrapPromise = service.bootstrap();

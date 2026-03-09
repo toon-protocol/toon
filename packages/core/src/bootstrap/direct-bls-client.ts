@@ -9,7 +9,7 @@
  * routing through connectors can be used.
  */
 
-import type { AgentRuntimeClient, IlpSendResult } from './types.js';
+import type { IlpClient, IlpSendResult } from './types.js';
 
 export interface DirectBlsClientConfig {
   /** BLS HTTP endpoint (e.g., 'http://crosstown-peer1:3100') */
@@ -39,7 +39,7 @@ export interface DirectBlsClientConfig {
  */
 export function createDirectBlsClient(
   config: DirectBlsClientConfig
-): AgentRuntimeClient {
+): IlpClient {
   const baseUrl = config.blsUrl.replace(/\/$/, '');
   const timeout = config.timeout ?? 30000;
 

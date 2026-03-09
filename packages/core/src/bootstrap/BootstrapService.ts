@@ -33,7 +33,7 @@ import type {
   BootstrapPhase,
   BootstrapEvent,
   BootstrapEventListener,
-  AgentRuntimeClient,
+  IlpClient,
 } from './types.js';
 
 /**
@@ -50,11 +50,11 @@ export class BootstrapError extends CrosstownError {
  * Service for bootstrapping into the ILP network via known Nostr peers.
  *
  * The bootstrap process:
- * Phase 1: Load peers from genesis config, ArDrive, and env var.
+ * Phase 1 (Discover & Register): Load peers from config, ArDrive, and env var.
  *          For each peer, query their relay for kind:10032 (ILP Peer Info).
  *          Register peer via connector admin API.
  *          Select chain locally and open channel unilaterally.
- * Phase 2: Announce own kind:10032 as paid ILP PREPARE.
+ * Phase 2 (Announce): Publish own kind:10032 as paid ILP PREPARE.
  */
 export class BootstrapService {
   private readonly config: Required<BootstrapConfig> & { btpSecret?: string };
@@ -67,7 +67,7 @@ export class BootstrapService {
   private claimSigner?: (channelId: string, amount: bigint) => Promise<unknown>;
 
   // ILP-first flow additions
-  private readonly agentRuntimeClient?: AgentRuntimeClient;
+  private readonly ilpClient?: IlpClient;
   private readonly settlementInfo?: BootstrapServiceConfig['settlementInfo'];
   private readonly ownIlpAddress?: string;
   private readonly toonEncoder?: BootstrapServiceConfig['toonEncoder'];
@@ -112,14 +112,21 @@ export class BootstrapService {
   }
 
   /**
-   * Set the agent-runtime client for sending ILP packets.
+   * Set the ILP client for sending packets via the connector.
    * Kept separate from constructor for backward compatibility with existing code
    * that creates the client after construction.
    */
-  setAgentRuntimeClient(client: AgentRuntimeClient): void {
+  setIlpClient(client: IlpClient): void {
     (
-      this as unknown as { agentRuntimeClient?: AgentRuntimeClient }
-    ).agentRuntimeClient = client;
+      this as unknown as { ilpClient?: IlpClient }
+    ).ilpClient = client;
+  }
+
+  /**
+   * @deprecated Use setIlpClient instead
+   */
+  setAgentRuntimeClient(client: IlpClient): void {
+    this.setIlpClient(client);
   }
 
   /**
@@ -284,7 +291,7 @@ export class BootstrapService {
       }
 
       // Phase 2: Announce own kind:10032 as paid ILP PREPARE
-      if (this.agentRuntimeClient && results.length > 0) {
+      if (this.ilpClient && results.length > 0) {
         this.setPhase('announcing');
 
         for (const result of results) {
@@ -461,7 +468,7 @@ export class BootstrapService {
 
     // Step 4: Publish our own kind:10032 to their relay (non-fatal)
     // Only do direct publish if NOT using ILP-first flow (Phase 2 handles it via ILP)
-    if (!this.agentRuntimeClient) {
+    if (!this.ilpClient) {
       try {
         console.log(
           `[Bootstrap] Publishing our ILP info to ${knownPeer.relayUrl}...`
@@ -482,7 +489,7 @@ export class BootstrapService {
    * Announce own kind:10032 as paid ILP PREPARE (Phase 2).
    */
   private async announceViaIlp(result: BootstrapResult): Promise<void> {
-    if (!this.agentRuntimeClient || !this.toonEncoder) {
+    if (!this.ilpClient || !this.toonEncoder) {
       return;
     }
 
@@ -497,7 +504,7 @@ export class BootstrapService {
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
     // Send announce via ILP (through connector routing)
-    const ilpResult = await this.agentRuntimeClient.sendIlpPacket({
+    const ilpResult = await this.ilpClient.sendIlpPacket({
       destination: result.peerInfo.ilpAddress,
       amount,
       data: base64Toon,

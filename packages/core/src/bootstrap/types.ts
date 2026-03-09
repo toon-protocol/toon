@@ -54,12 +54,12 @@ export interface BootstrapResult {
 
 /**
  * Callback interface for connector Admin API operations.
- * Matches the agent-runtime admin API shape: POST /admin/peers
+ * Matches the connector admin API shape: POST /admin/peers
  */
 export interface ConnectorAdminClient {
   /**
    * Add a peer to the connector via the admin API.
-   * @param config - Peer configuration matching the agent-runtime API shape
+   * @param config - Peer configuration matching the connector admin API shape
    */
   addPeer(config: {
     id: string;
@@ -144,9 +144,9 @@ export type BootstrapEvent =
 export type BootstrapEventListener = (event: BootstrapEvent) => void;
 
 /**
- * Result of sending an ILP packet via agent-runtime POST /ilp/send.
- * Note: agent-runtime may return either `accepted` or `fulfilled` as the
- * success indicator. AgentRuntimeClient normalizes to `accepted`.
+ * Result of sending an ILP packet via the connector.
+ * The connector may return either `accepted` or `fulfilled` as the
+ * success indicator. IlpClient normalizes to `accepted`.
  */
 export interface IlpSendResult {
   accepted: boolean;
@@ -157,9 +157,9 @@ export interface IlpSendResult {
 }
 
 /**
- * Client interface for sending ILP packets via the agent-runtime.
+ * Client interface for sending ILP packets via the connector.
  */
-export interface AgentRuntimeClient {
+export interface IlpClient {
   sendIlpPacket(params: {
     destination: string;
     amount: string;
@@ -181,6 +181,11 @@ export interface AgentRuntimeClient {
     claim: unknown // EVMClaimMessage type from client package
   ): Promise<IlpSendResult>;
 }
+
+/**
+ * @deprecated Use IlpClient instead
+ */
+export type AgentRuntimeClient = IlpClient;
 
 /**
  * Own settlement configuration for local chain selection during registration.
@@ -214,8 +219,6 @@ export interface BootstrapConfig {
  * Extended configuration for the bootstrap service with ILP-first flow support.
  */
 export interface BootstrapServiceConfig extends BootstrapConfig {
-  /** URL for the agent-runtime POST /ilp/send endpoint */
-  agentRuntimeUrl?: string;
   /** Own settlement preferences for settlement during peer registration */
   settlementInfo?: SettlementConfig;
   /** This node's ILP address (for building ILP PREPARE destinations) */

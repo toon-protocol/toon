@@ -1,10 +1,10 @@
 /**
- * Tests for createDirectRuntimeClient (direct / in-process ILP client).
+ * Tests for createDirectIlpClient (direct / in-process ILP client).
  */
 
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi } from 'vitest';
-import { createDirectRuntimeClient } from './direct-runtime-client.js';
+import { createDirectIlpClient } from './direct-ilp-client.js';
 import type {
   ConnectorNodeLike,
   SendPacketParams,
@@ -23,13 +23,13 @@ function mockConnector(
   return { sendPacket };
 }
 
-describe('createDirectRuntimeClient', () => {
+describe('createDirectIlpClient', () => {
   it('should create a client with sendIlpPacket function', () => {
     const connector = mockConnector({
       type: 'fulfill',
       fulfillment: new Uint8Array(32),
     });
-    const client = createDirectRuntimeClient(connector);
+    const client = createDirectIlpClient(connector);
     expect(client).toBeDefined();
     expect(client.sendIlpPacket).toBeInstanceOf(Function);
   });
@@ -41,7 +41,7 @@ describe('createDirectRuntimeClient', () => {
         fulfillment: new Uint8Array(32),
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '50000',
@@ -62,7 +62,7 @@ describe('createDirectRuntimeClient', () => {
       const testData = Buffer.from('hello world');
       const base64Data = testData.toString('base64');
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '100',
@@ -80,7 +80,7 @@ describe('createDirectRuntimeClient', () => {
         fulfillment: new Uint8Array(32),
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       await client.sendIlpPacket({
         destination: 'g.hub.alice',
         amount: '0',
@@ -99,7 +99,7 @@ describe('createDirectRuntimeClient', () => {
         fulfillment: fulfillmentBytes,
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '100',
@@ -119,7 +119,7 @@ describe('createDirectRuntimeClient', () => {
         message: 'Insufficient amount',
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '0',
@@ -139,7 +139,7 @@ describe('createDirectRuntimeClient', () => {
         data: responseData,
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '100',
@@ -159,7 +159,7 @@ describe('createDirectRuntimeClient', () => {
         data: responseData,
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '0',
@@ -176,7 +176,7 @@ describe('createDirectRuntimeClient', () => {
         fulfillment: new Uint8Array(32),
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '100',
@@ -193,7 +193,7 @@ describe('createDirectRuntimeClient', () => {
         message: 'Insufficient',
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
       const result = await client.sendIlpPacket({
         destination: 'g.peer1',
         amount: '0',
@@ -209,7 +209,7 @@ describe('createDirectRuntimeClient', () => {
         new Error('Connector crashed')
       );
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
 
       await expect(
         client.sendIlpPacket({
@@ -234,7 +234,7 @@ describe('createDirectRuntimeClient', () => {
         fulfillment: new Uint8Array(32),
       });
 
-      const client = createDirectRuntimeClient(connector);
+      const client = createDirectIlpClient(connector);
 
       await expect(
         client.sendIlpPacket({
@@ -257,7 +257,7 @@ describe('createDirectRuntimeClient', () => {
           fulfillment: new Uint8Array(32),
         });
 
-        const client = createDirectRuntimeClient(connector, { toonDecoder });
+        const client = createDirectIlpClient(connector, { toonDecoder });
         await client.sendIlpPacket({
           destination: 'g.peer1',
           amount: '100',
@@ -283,7 +283,7 @@ describe('createDirectRuntimeClient', () => {
           fulfillment: new Uint8Array(32),
         });
 
-        const client = createDirectRuntimeClient(connector);
+        const client = createDirectIlpClient(connector);
         await client.sendIlpPacket({
           destination: 'g.peer1',
           amount: '100',
@@ -305,7 +305,7 @@ describe('createDirectRuntimeClient', () => {
           fulfillment: new Uint8Array(32),
         });
 
-        const client = createDirectRuntimeClient(connector, { toonDecoder });
+        const client = createDirectIlpClient(connector, { toonDecoder });
 
         await expect(
           client.sendIlpPacket({

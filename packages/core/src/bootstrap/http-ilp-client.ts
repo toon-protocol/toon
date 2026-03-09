@@ -1,33 +1,33 @@
 /**
- * HTTP-based client for sending ILP packets via connector runtime API.
+ * HTTP-based client for sending ILP packets via the connector API.
  *
  * Calls the connector's packet handling endpoint over HTTP.
  */
 
 import { BootstrapError } from './BootstrapService.js';
-import type { AgentRuntimeClient, IlpSendResult } from './types.js';
+import type { IlpClient, IlpSendResult } from './types.js';
 
 /**
- * Creates an AgentRuntimeClient that sends ILP packets via HTTP.
+ * Creates an IlpClient that sends ILP packets via HTTP.
  *
- * @param runtimeUrl - Base URL of the connector runtime (e.g., "http://connector:8080")
- * @returns An AgentRuntimeClient instance
+ * @param connectorUrl - Base URL of the connector (e.g., "http://connector:8080")
+ * @returns An IlpClient instance
  *
  * @example
  * ```typescript
- * const runtimeClient = createHttpRuntimeClient('http://localhost:8081');
+ * const ilpClient = createHttpIlpClient('http://localhost:8081');
  *
- * const result = await runtimeClient.sendIlpPacket({
+ * const result = await ilpClient.sendIlpPacket({
  *   destination: 'g.crosstown.peer2',
  *   amount: '1000',
  *   data: base64EncodedToon,
  * });
  * ```
  */
-export function createHttpRuntimeClient(
-  runtimeUrl: string
-): AgentRuntimeClient {
-  const baseUrl = runtimeUrl.replace(/\/$/, '');
+export function createHttpIlpClient(
+  connectorUrl: string
+): IlpClient {
+  const baseUrl = connectorUrl.replace(/\/$/, '');
 
   return {
     async sendIlpPacket(params: {

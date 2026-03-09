@@ -127,10 +127,10 @@ describe('createCrosstownNode', () => {
     await expect(node.stop()).resolves.toBeUndefined();
   });
 
-  it('direct runtime client is wired correctly to bootstrapService', () => {
+  it('ILP client is wired correctly to bootstrapService', () => {
     const setClientSpy = vi.spyOn(
       BootstrapService.prototype,
-      'setAgentRuntimeClient'
+      'setIlpClient'
     );
 
     createCrosstownNode(baseConfig);

@@ -17,16 +17,16 @@ import type {
 import type {
   SendPacketParams,
   SendPacketResult,
-} from './bootstrap/direct-runtime-client.js';
+} from './bootstrap/direct-ilp-client.js';
 import type { RegisterPeerParams } from './bootstrap/direct-connector-admin.js';
-import type { AgentRuntimeClient } from './bootstrap/types.js';
+import type { IlpClient } from './bootstrap/types.js';
 import {
   BootstrapService,
   BootstrapError,
 } from './bootstrap/BootstrapService.js';
 import { createDiscoveryTracker } from './bootstrap/discovery-tracker.js';
 import type { DiscoveryTracker } from './bootstrap/discovery-tracker.js';
-import { createDirectRuntimeClient } from './bootstrap/direct-runtime-client.js';
+import { createDirectIlpClient } from './bootstrap/direct-ilp-client.js';
 import { createDirectConnectorAdmin } from './bootstrap/direct-connector-admin.js';
 import { createDirectChannelClient } from './bootstrap/direct-channel-client.js';
 
@@ -98,7 +98,7 @@ export type PacketHandler = (
  * 2. ConnectorAdminLike (registerPeer, removePeer) — for peer management
  * 3. setPacketHandler(handler) — for registering the incoming packet callback
  *
- * This structural interface allows @agent-runtime/connector's ConnectorNode to
+ * This structural interface allows @crosstown/connector's ConnectorNode to
  * be passed directly without importing it as a dependency.
  */
 export interface EmbeddableConnectorLike {
@@ -230,10 +230,10 @@ export interface CrosstownNode {
    */
   readonly channelClient: ConnectorChannelClient | null;
   /**
-   * Read-only access to the direct runtime client for sending ILP packets.
+   * Read-only access to the ILP client for sending packets.
    * Used by ServiceNode.publishEvent() to send outbound events.
    */
-  readonly runtimeClient: AgentRuntimeClient;
+  readonly ilpClient: IlpClient;
   /**
    * Initiate peering with a discovered peer.
    * The peer must have been discovered by the discovery tracker first.
@@ -255,7 +255,7 @@ export interface CrosstownNode {
  *
  * @example
  * ```typescript
- * import { ConnectorNode } from '@agent-runtime/connector';
+ * import { ConnectorNode } from '@crosstown/connector';
  * import { createCrosstownNode } from '@crosstown/core/compose';
  * import { encodeEvent, decodeEvent } from '@crosstown/relay';
  *
@@ -286,7 +286,7 @@ export function createCrosstownNode(
   config: CrosstownNodeConfig
 ): CrosstownNode {
   // Create direct clients for zero-latency embedded mode
-  const directRuntimeClient = createDirectRuntimeClient(config.connector, {
+  const directIlpClient = createDirectIlpClient(config.connector, {
     toonDecoder: config.toonDecoder,
   });
 
@@ -320,7 +320,7 @@ export function createCrosstownNode(
   );
 
   // Wire clients to bootstrap service
-  bootstrapService.setAgentRuntimeClient(directRuntimeClient);
+  bootstrapService.setIlpClient(directIlpClient);
   bootstrapService.setConnectorAdmin(directAdminClient);
   if (channelClient) {
     bootstrapService.setChannelClient(channelClient);
@@ -345,7 +345,7 @@ export function createCrosstownNode(
     bootstrapService,
     discoveryTracker,
     channelClient,
-    runtimeClient: directRuntimeClient,
+    ilpClient: directIlpClient,
 
     peerWith(pubkey: string): Promise<void> {
       return discoveryTracker.peerWith(pubkey);

@@ -490,8 +490,8 @@ export function createNode(config: NodeConfig): ServiceNode {
         // Convert to base64
         const base64Data = Buffer.from(toonData).toString('base64');
 
-        // Send via runtimeClient
-        const result = await crosstownNode.runtimeClient.sendIlpPacket({
+        // Send via ILP client
+        const result = await crosstownNode.ilpClient.sendIlpPacket({
           destination: options.destination,
           amount: String(amount),
           data: base64Data,

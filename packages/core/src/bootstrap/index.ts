@@ -12,6 +12,7 @@ export type {
   BootstrapPhase,
   BootstrapEvent,
   BootstrapEventListener,
+  IlpClient,
   AgentRuntimeClient,
   IlpSendResult,
   DiscoveredPeer,
@@ -28,18 +29,22 @@ export {
   type DiscoveryTrackerConfig,
 } from './discovery-tracker.js';
 
-// Agent-runtime client factories
+// ILP client factories
 export {
+  createHttpIlpClient,
   createHttpRuntimeClient,
   createAgentRuntimeClient,
-} from './agent-runtime-client.js';
-export { createDirectRuntimeClient } from './direct-runtime-client.js';
+} from './ilp-client.js';
+export {
+  createDirectIlpClient,
+  createDirectRuntimeClient,
+} from './direct-ilp-client.js';
 export type {
   ConnectorNodeLike,
   SendPacketParams,
   SendPacketResult,
   DirectRuntimeClientConfig,
-} from './direct-runtime-client.js';
+} from './direct-ilp-client.js';
 
 // Connector admin client factories
 export { createDirectConnectorAdmin } from './direct-connector-admin.js';
@@ -54,7 +59,7 @@ export type { ConnectorChannelLike } from './direct-channel-client.js';
 
 // HTTP-based connector clients (for deployed connectors)
 export { createHttpConnectorAdmin } from './http-connector-admin.js';
-export { createHttpRuntimeClient as createHttpRuntimeClientV2 } from './http-runtime-client.js';
+export { createHttpIlpClient as createHttpRuntimeClientV2 } from './http-ilp-client.js';
 export { createHttpChannelClient } from './http-channel-client.js';
 
 // Direct BLS client (for bootstrap only - bypasses connector routing)
