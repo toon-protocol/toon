@@ -53,6 +53,8 @@ export interface NodeConfig {
   connector: EmbeddableConnectorLike;
   /** ILP address (default: 'g.crosstown.local') */
   ilpAddress?: string;
+  /** BTP endpoint URL advertised in kind:10032 announcements */
+  btpEndpoint?: string;
   /** Asset code (default: 'USD') */
   assetCode?: string;
   /** Asset scale (default: 6) */
@@ -342,7 +344,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     secretKey: config.secretKey,
     ilpInfo: {
       ilpAddress: config.ilpAddress ?? 'g.crosstown.local',
-      btpEndpoint: '',
+      btpEndpoint: config.btpEndpoint ?? '',
       assetCode: config.assetCode ?? 'USD',
       assetScale: config.assetScale ?? 6,
     },
