@@ -1,7 +1,7 @@
 {
   "name": "@crosstown/core",
   "version": "1.1.1",
-  "description": "Core library for Nostr-based ILP peer discovery and SPSP",
+  "description": "Core library for Nostr-based ILP peer discovery and settlement",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,7 +34,7 @@
     "nostr",
     "interledger",
     "ilp",
-    "spsp"
+    "settlement"
   ],
   "license": "MIT",
   "repository": {
@@ -55,7 +55,7 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@crosstown/connector": ">=1.2.0"
+    "@crosstown/connector": ">=1.6.0"
   },
   "peerDependenciesMeta": {
     "@crosstown/connector": {
@@ -63,7 +63,6 @@
     }
   },
   "devDependencies": {
-    "@crosstown/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.10",
     "tsup": "^8.0.0",

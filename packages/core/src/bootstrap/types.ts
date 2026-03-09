@@ -4,7 +4,6 @@
 
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { IlpPeerInfo } from '../types.js';
-import type { SpspRequestSettlementInfo } from '../events/builders.js';
 
 /** Regular expression for validating 64-character lowercase hex pubkeys */
 export const PUBKEY_REGEX = /^[0-9a-f]{64}$/;
@@ -45,9 +44,9 @@ export interface BootstrapResult {
   peerInfo: IlpPeerInfo;
   /** The ID used when registering with the connector (e.g., "nostr-aabb11cc22dd33ee") */
   registeredPeerId: string;
-  /** Channel ID from SPSP FULFILL */
+  /** Channel ID from unilateral channel opening */
   channelId?: string;
-  /** Negotiated chain from settlement negotiation */
+  /** Negotiated chain from local settlement negotiation */
   negotiatedChain?: string;
   /** Peer's settlement address */
   settlementAddress?: string;
@@ -55,12 +54,12 @@ export interface BootstrapResult {
 
 /**
  * Callback interface for connector Admin API operations.
- * Matches the agent-runtime admin API shape: POST /admin/peers
+ * Matches the connector admin API shape: POST /admin/peers
  */
 export interface ConnectorAdminClient {
   /**
    * Add a peer to the connector via the admin API.
-   * @param config - Peer configuration matching the agent-runtime API shape
+   * @param config - Peer configuration matching the connector admin API shape
    */
   addPeer(config: {
     id: string;
@@ -80,7 +79,7 @@ export interface ConnectorAdminClient {
 
   /**
    * Remove a peer from the connector via the admin API.
-   * Optional — not all callers will implement peer removal.
+   * Optional -- not all callers will implement peer removal.
    * @param peerId - The peer ID to remove
    */
   removePeer?(peerId: string): Promise<void>;
@@ -88,11 +87,11 @@ export interface ConnectorAdminClient {
 
 /**
  * Bootstrap phase states.
+ * Two-phase flow: discovering -> registering -> announcing -> ready | failed
  */
 export type BootstrapPhase =
   | 'discovering'
   | 'registering'
-  | 'handshaking'
   | 'announcing'
   | 'ready'
   | 'failed';
@@ -118,7 +117,7 @@ export type BootstrapEvent =
       channelId: string;
       negotiatedChain: string;
     }
-  | { type: 'bootstrap:handshake-failed'; peerId: string; reason: string }
+  | { type: 'bootstrap:settlement-failed'; peerId: string; reason: string }
   | {
       type: 'bootstrap:announced';
       peerId: string;
@@ -145,9 +144,9 @@ export type BootstrapEvent =
 export type BootstrapEventListener = (event: BootstrapEvent) => void;
 
 /**
- * Result of sending an ILP packet via agent-runtime POST /ilp/send.
- * Note: agent-runtime may return either `accepted` or `fulfilled` as the
- * success indicator. AgentRuntimeClient normalizes to `accepted`.
+ * Result of sending an ILP packet via the connector.
+ * The connector may return either `accepted` or `fulfilled` as the
+ * success indicator. IlpClient normalizes to `accepted`.
  */
 export interface IlpSendResult {
   accepted: boolean;
@@ -158,9 +157,9 @@ export interface IlpSendResult {
 }
 
 /**
- * Client interface for sending ILP packets via the agent-runtime.
+ * Client interface for sending ILP packets via the connector.
  */
-export interface AgentRuntimeClient {
+export interface IlpClient {
   sendIlpPacket(params: {
     destination: string;
     amount: string;
@@ -184,6 +183,25 @@ export interface AgentRuntimeClient {
 }
 
 /**
+ * @deprecated Use IlpClient instead
+ */
+export type AgentRuntimeClient = IlpClient;
+
+/**
+ * Own settlement configuration for local chain selection during registration.
+ */
+export interface SettlementConfig {
+  /** Chain identifiers this node supports */
+  supportedChains?: string[];
+  /** Maps chain identifier to this node's settlement address */
+  settlementAddresses?: Record<string, string>;
+  /** Maps chain identifier to this node's preferred token contract address */
+  preferredTokens?: Record<string, string>;
+  /** Maps chain identifier to TokenNetwork contract address (EVM only) */
+  tokenNetworks?: Record<string, string>;
+}
+
+/**
  * Base configuration for the bootstrap service.
  */
 export interface BootstrapConfig {
@@ -201,38 +219,17 @@ export interface BootstrapConfig {
  * Extended configuration for the bootstrap service with ILP-first flow support.
  */
 export interface BootstrapServiceConfig extends BootstrapConfig {
-  /** URL for the agent-runtime POST /ilp/send endpoint */
-  agentRuntimeUrl?: string;
-  /** Own settlement preferences for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
+  /** Own settlement preferences for settlement during peer registration */
+  settlementInfo?: SettlementConfig;
   /** This node's ILP address (for building ILP PREPARE destinations) */
   ownIlpAddress?: string;
   /** DI callback for TOON encoding (avoids circular dep) */
   toonEncoder?: (event: NostrEvent) => Uint8Array;
   /** DI callback for TOON decoding (avoids circular dep) */
   toonDecoder?: (bytes: Uint8Array) => NostrEvent;
-  /** Static BTP secret for initial peer registration (before SPSP negotiation) */
+  /** Static BTP secret for initial peer registration (before settlement) */
   btpSecret?: string;
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
 }
 
-/**
- * Configuration for the RelayMonitor service.
- */
-export interface RelayMonitorConfig {
-  /** Relay URL to monitor for kind:10032 events */
-  relayUrl: string;
-  /** Nostr secret key for SPSP requests */
-  secretKey: Uint8Array;
-  /** DI callback for TOON encoding (avoids circular dep) */
-  toonEncoder: (event: NostrEvent) => Uint8Array;
-  /** DI callback for TOON decoding (avoids circular dep) */
-  toonDecoder: (bytes: Uint8Array) => NostrEvent;
-  /** Base price per byte for ILP packet pricing (default: 10n) */
-  basePricePerByte?: bigint;
-  /** Own settlement preferences for SPSP handshakes */
-  settlementInfo?: SpspRequestSettlementInfo;
-  /** SPSP handshake timeout in milliseconds (default: 30000) */
-  defaultTimeout?: number;
-}

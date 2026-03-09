@@ -1,6 +1,6 @@
 {
   "name": "@crosstown/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Crosstown SDK for building ILP-gated Nostr services",
   "type": "module",
   "main": "./dist/index.js",
@@ -20,6 +20,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:e2e:docker": "vitest run --config vitest.e2e.config.ts -- tests/e2e/docker-publish-event-e2e.test.ts",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -51,7 +53,7 @@
     "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
-    "@crosstown/connector": ">=1.2.0"
+    "@crosstown/connector": ">=1.6.0"
   },
   "peerDependenciesMeta": {
     "@crosstown/connector": {
@@ -59,10 +61,14 @@
     }
   },
   "devDependencies": {
+    "@crosstown/connector": "^1.6.0",
     "@crosstown/relay": "workspace:*",
     "@types/node": "^20.0.0",
+    "@types/ws": "^8.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
+    "viem": "^2.0.0",
+    "vitest": "^1.0.0",
+    "ws": "^8.0.0"
   }
 }

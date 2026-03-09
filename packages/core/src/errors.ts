@@ -37,27 +37,3 @@ export class PeerDiscoveryError extends CrosstownError {
     this.name = 'PeerDiscoveryError';
   }
 }
-
-/**
- * Error thrown when SPSP operations fail.
- * Used for invalid pubkeys or relay failures during SPSP queries.
- */
-export class SpspError extends CrosstownError {
-  constructor(message: string, cause?: Error) {
-    super(message, 'SPSP_FAILED', cause);
-    this.name = 'SpspError';
-  }
-}
-
-/**
- * Error thrown when an SPSP request times out waiting for a response.
- */
-export class SpspTimeoutError extends CrosstownError {
-  public readonly recipientPubkey: string;
-
-  constructor(message: string, recipientPubkey: string, cause?: Error) {
-    super(message, 'SPSP_TIMEOUT', cause);
-    this.name = 'SpspTimeoutError';
-    this.recipientPubkey = recipientPubkey;
-  }
-}

@@ -1,14 +1,14 @@
 /**
  * Direct (in-process) client for sending ILP packets via a ConnectorNode.
  *
- * Unlike the HTTP-based createAgentRuntimeClient(), this factory wraps a
- * ConnectorNode's sendPacket() method as an AgentRuntimeClient, enabling
+ * Unlike the HTTP-based createHttpIlpClient(), this factory wraps a
+ * ConnectorNode's sendPacket() method as an IlpClient, enabling
  * zero-latency embedded mode without network overhead.
  */
 
 import { createHash } from 'node:crypto';
 import { BootstrapError } from './BootstrapService.js';
-import type { AgentRuntimeClient, IlpSendResult } from './types.js';
+import type { IlpClient, IlpSendResult } from './types.js';
 
 /**
  * Parameters accepted by ConnectorNode.sendPacket().
@@ -32,16 +32,22 @@ export interface SendPacketParams {
 
 /**
  * Result returned by ConnectorNode.sendPacket().
+ *
+ * Accepts both string discriminants ('fulfill'/'reject') for backward
+ * compatibility with test mocks, and numeric PacketType enum values
+ * (13 = FULFILL, 14 = REJECT) used by @crosstown/connector@1.6.0+.
  */
 export type SendPacketResult =
-  | { type: 'fulfill'; fulfillment: Uint8Array; data?: Uint8Array }
-  | { type: 'reject'; code: string; message: string; data?: Uint8Array };
+  | { type: 'fulfill'; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | { type: 13; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | { type: 'reject'; code: string; message: string; data?: Uint8Array | Buffer }
+  | { type: 14; code: string; message: string; data?: Uint8Array | Buffer };
 
 /**
  * Structural interface matching ConnectorNode's sendPacket() method.
  *
- * Consumers pass an `@agent-runtime/connector` ConnectorNode instance without
- * crosstown needing to import `@agent-runtime/connector` as a dependency.
+ * Consumers pass a `@crosstown/connector` ConnectorNode instance without
+ * needing to import `@crosstown/connector` as a dependency.
  * TypeScript's structural type system handles compatibility automatically.
  */
 export interface ConnectorNodeLike {
@@ -70,17 +76,17 @@ export interface DirectRuntimeClientConfig {
 }
 
 /**
- * Creates an AgentRuntimeClient that sends ILP packets by calling
+ * Creates an IlpClient that sends ILP packets by calling
  * `connector.sendPacket()` directly (no HTTP).
  *
  * @param connector - A ConnectorNode-like object with a sendPacket() method
  * @param config - Optional configuration (e.g., toonDecoder for condition computation)
- * @returns An AgentRuntimeClient instance
+ * @returns An IlpClient instance
  */
-export function createDirectRuntimeClient(
+export function createDirectIlpClient(
   connector: ConnectorNodeLike,
   config?: DirectRuntimeClientConfig
-): AgentRuntimeClient {
+): IlpClient {
   return {
     async sendIlpPacket(params: {
       destination: string;
@@ -106,15 +112,19 @@ export function createDirectRuntimeClient(
         }
 
         // Call connector.sendPacket()
+        // expiresAt is required by ConnectorNode.sendPacket() even though the
+        // interface marks it optional. Default to 30 seconds from now.
         const result = await connector.sendPacket({
           destination: params.destination,
           amount,
           data,
           executionCondition,
+          expiresAt: new Date(Date.now() + 30000),
         });
 
         // Map result to IlpSendResult
-        if (result.type === 'fulfill') {
+        // ConnectorNode returns PacketType enum (13=FULFILL, 14=REJECT)
+        if (result.type === 'fulfill' || result.type === 13) {
           return {
             accepted: true,
             fulfillment: Buffer.from(result.fulfillment).toString('base64'),
@@ -145,3 +155,8 @@ export function createDirectRuntimeClient(
     },
   };
 }
+
+/**
+ * @deprecated Use createDirectIlpClient instead
+ */
+export const createDirectRuntimeClient = createDirectIlpClient;

@@ -1,23 +1,23 @@
 /**
- * HTTP client for the agent-runtime POST /ilp/send endpoint.
+ * HTTP client for sending ILP packets via the connector's POST /ilp/send endpoint.
  */
 
 import { BootstrapError } from './BootstrapService.js';
-import type { AgentRuntimeClient, IlpSendResult } from './types.js';
+import type { IlpClient, IlpSendResult } from './types.js';
 
 /**
- * Creates an HTTP-based AgentRuntimeClient that sends ILP packets via POST /ilp/send.
+ * Creates an HTTP-based IlpClient that sends ILP packets via POST /ilp/send.
  *
- * @param baseUrl - Base URL of the agent-runtime (e.g., "http://localhost:3000")
- * @returns An AgentRuntimeClient instance
+ * @param baseUrl - Base URL of the connector (e.g., "http://localhost:3000")
+ * @returns An IlpClient instance
  * @throws BootstrapError if baseUrl is not a valid URL
  */
-export function createHttpRuntimeClient(baseUrl: string): AgentRuntimeClient {
+export function createHttpIlpClient(baseUrl: string): IlpClient {
   // Validate baseUrl is a valid URL
   try {
     new URL(baseUrl);
   } catch {
-    throw new BootstrapError(`Invalid agent-runtime base URL: ${baseUrl}`);
+    throw new BootstrapError(`Invalid connector base URL: ${baseUrl}`);
   }
 
   // Normalize: remove trailing slash
@@ -52,7 +52,7 @@ export function createHttpRuntimeClient(baseUrl: string): AgentRuntimeClient {
       if (!response.ok) {
         const text = await response.text().catch(() => 'Unknown error');
         throw new BootstrapError(
-          `Agent-runtime error (${response.status}): ${text}`
+          `Connector error (${response.status}): ${text}`
         );
       }
 
@@ -69,7 +69,11 @@ export function createHttpRuntimeClient(baseUrl: string): AgentRuntimeClient {
 }
 
 /**
- * Backward-compatible alias for createHttpRuntimeClient.
- * @deprecated Use createHttpRuntimeClient instead
+ * @deprecated Use createHttpIlpClient instead
  */
-export const createAgentRuntimeClient = createHttpRuntimeClient;
+export const createHttpRuntimeClient = createHttpIlpClient;
+
+/**
+ * @deprecated Use createHttpIlpClient instead
+ */
+export const createAgentRuntimeClient = createHttpIlpClient;

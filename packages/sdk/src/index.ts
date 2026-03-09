@@ -56,12 +56,14 @@ export type {
 // Event storage handler (stub)
 export { createEventStorageHandler } from './event-storage-handler.js';
 
-// SPSP handshake handler (stub)
-export { createSpspHandshakeHandler } from './spsp-handshake-handler.js';
-
 // Node composition
 export { createNode } from './create-node.js';
-export type { NodeConfig, ServiceNode, StartResult } from './create-node.js';
+export type {
+  NodeConfig,
+  ServiceNode,
+  StartResult,
+  PublishEventResult,
+} from './create-node.js';
 
 // Re-export bootstrap types for lifecycle event listeners
 export type { BootstrapEvent, BootstrapEventListener } from '@crosstown/core';

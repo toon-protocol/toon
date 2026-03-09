@@ -109,9 +109,9 @@ const createIlpPeerInfo = (): NostrEvent => ({
 });
 
 /**
- * Create a kind:10047 SPSP Info event.
+ * Create a kind:10047 event for TOON round-trip testing.
  */
-const createSpspInfo = (): NostrEvent => ({
+const createKind10047Event = (): NostrEvent => ({
   id: 'dd'.repeat(32),
   pubkey: 'ee'.repeat(32),
   kind: 10047,
@@ -164,7 +164,7 @@ describe('TOON Encoding', () => {
     });
 
     it('should encode ILP event kind 10047', () => {
-      const event = createSpspInfo();
+      const event = createKind10047Event();
       const encoded = encodeEventToToon(event);
       expect(encoded).toBeInstanceOf(Uint8Array);
       expect(encoded.length).toBeGreaterThan(0);
@@ -279,7 +279,7 @@ describe('TOON Encoding', () => {
     });
 
     it('should decode ILP event kind 10047', () => {
-      const event = createSpspInfo();
+      const event = createKind10047Event();
       const encoded = encodeEventToToon(event);
       const decoded = decodeEventFromToon(encoded);
       expect(decoded).toEqual(event);
@@ -386,8 +386,8 @@ describe('TOON Encoding', () => {
       expect(decoded).toEqual(event);
     });
 
-    it('should round-trip kind:10047 (SPSP Info) event', () => {
-      const event = createSpspInfo();
+    it('should round-trip kind:10047 event', () => {
+      const event = createKind10047Event();
       const encoded = encodeEventToToon(event);
       const decoded = decodeEventFromToon(encoded);
       expect(decoded).toEqual(event);
@@ -464,7 +464,7 @@ describe('TOON Encoding', () => {
         createFollowList(),
         createReactionEvent(),
         createIlpPeerInfo(),
-        createSpspInfo(),
+        createKind10047Event(),
       ];
 
       for (const event of events) {
@@ -535,7 +535,7 @@ describe('TOON Encoding', () => {
         createFollowList(), // kind:3
         createReactionEvent(), // kind:7
         createIlpPeerInfo(), // kind:10032
-        createSpspInfo(), // kind:10047
+        createKind10047Event(), // kind:10047
       ];
 
       for (const event of events) {

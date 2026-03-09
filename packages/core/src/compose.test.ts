@@ -61,13 +61,13 @@ describe('createCrosstownNode', () => {
     };
   });
 
-  it('returns an object with start, stop, bootstrapService, relayMonitor', () => {
+  it('returns an object with start, stop, bootstrapService, discoveryTracker', () => {
     const node = createCrosstownNode(baseConfig);
 
     expect(node).toHaveProperty('start');
     expect(node).toHaveProperty('stop');
     expect(node).toHaveProperty('bootstrapService');
-    expect(node).toHaveProperty('relayMonitor');
+    expect(node).toHaveProperty('discoveryTracker');
     expect(typeof node.start).toBe('function');
     expect(typeof node.stop).toBe('function');
   });
@@ -113,21 +113,6 @@ describe('createCrosstownNode', () => {
     await expect(node.start()).rejects.toThrow('CrosstownNode already started');
   });
 
-  it('stop() unsubscribes the relay monitor subscription', async () => {
-    const node = createCrosstownNode(baseConfig);
-
-    // Spy on relayMonitor.start to capture the returned subscription
-    const unsubscribeSpy = vi.fn();
-    vi.spyOn(node.relayMonitor, 'start').mockReturnValue({
-      unsubscribe: unsubscribeSpy,
-    });
-
-    await node.start();
-    await node.stop();
-
-    expect(unsubscribeSpy).toHaveBeenCalledTimes(1);
-  });
-
   it('stop() is safe to call when not started (no-op)', async () => {
     const node = createCrosstownNode(baseConfig);
 
@@ -135,10 +120,17 @@ describe('createCrosstownNode', () => {
     await expect(node.stop()).resolves.toBeUndefined();
   });
 
-  it('direct runtime client is wired correctly to bootstrapService', () => {
+  it('stop() completes without error after start()', async () => {
+    const node = createCrosstownNode(baseConfig);
+
+    await node.start();
+    await expect(node.stop()).resolves.toBeUndefined();
+  });
+
+  it('ILP client is wired correctly to bootstrapService', () => {
     const setClientSpy = vi.spyOn(
       BootstrapService.prototype,
-      'setAgentRuntimeClient'
+      'setIlpClient'
     );
 
     createCrosstownNode(baseConfig);
@@ -170,17 +162,19 @@ describe('createCrosstownNode', () => {
     setAdminSpy.mockRestore();
   });
 
-  it('start() passes bootstrapped peer pubkeys as excludePubkeys to relayMonitor.start()', async () => {
+  it('start() calls addExcludedPubkeys on discoveryTracker with bootstrapped peer pubkeys', async () => {
     const node = createCrosstownNode(baseConfig);
 
-    // Spy on relayMonitor.start to check the excludePubkeys parameter
-    const startSpy = vi.spyOn(node.relayMonitor, 'start');
+    const addExcludedSpy = vi.spyOn(
+      node.discoveryTracker,
+      'addExcludedPubkeys'
+    );
 
     await node.start();
 
     // Should be called with empty array since no peers were bootstrapped
-    expect(startSpy).toHaveBeenCalledTimes(1);
-    expect(startSpy).toHaveBeenCalledWith([]);
+    expect(addExcludedSpy).toHaveBeenCalledTimes(1);
+    expect(addExcludedSpy).toHaveBeenCalledWith([]);
   });
 
   it('handles bootstrap errors gracefully (wraps in BootstrapError)', async () => {
@@ -204,18 +198,18 @@ describe('createCrosstownNode', () => {
     const node = createCrosstownNode(baseConfig);
 
     const bootstrapListener = vi.fn();
-    const relayListener = vi.fn();
+    const discoveryListener = vi.fn();
 
     // Attach listeners before start
     node.bootstrapService.on(bootstrapListener);
-    node.relayMonitor.on(relayListener);
+    node.discoveryTracker.on(discoveryListener);
 
     await node.start();
 
     // Listeners should be registered (we can't verify they're called without
     // triggering events, but we can verify they don't throw)
     expect(bootstrapListener).toBeDefined();
-    expect(relayListener).toBeDefined();
+    expect(discoveryListener).toBeDefined();
   });
 
   it('uses default values for optional config parameters', async () => {
@@ -258,7 +252,7 @@ describe('createCrosstownNode', () => {
     expect(node.bootstrapService).toBeDefined();
   });
 
-  it('passes through config parameters to RelayMonitor', () => {
+  it('passes through config parameters to discoveryTracker', () => {
     const customConfig: CrosstownNodeConfig = {
       ...baseConfig,
       relayUrl: 'ws://custom-relay:7300',
@@ -269,7 +263,7 @@ describe('createCrosstownNode', () => {
 
     // Verify node is created successfully with custom config
     expect(node).toBeDefined();
-    expect(node.relayMonitor).toBeDefined();
+    expect(node.discoveryTracker).toBeDefined();
   });
 
   it('channelClient is null when connector lacks openChannel/getChannelState', () => {

@@ -1,7 +1,7 @@
 /**
  * Pure functions for settlement chain negotiation.
- * No I/O or side effects — used by NostrSpspServer to determine
- * the best matching settlement chain and token for a peering handshake.
+ * No I/O or side effects — used during peer registration to determine
+ * the best matching settlement chain and token.
  */
 
 /**
