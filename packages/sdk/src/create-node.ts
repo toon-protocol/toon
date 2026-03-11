@@ -5,9 +5,18 @@
  *   shallow TOON parse -> Schnorr signature verification -> pricing validation -> handler dispatch
  *
  * Provides start() / stop() lifecycle management by delegating to
- * the core CrosstownNode composition.
+ * the core CrosstownNode composition (embedded mode) or manual HTTP
+ * composition (standalone mode).
+ *
+ * ## Deployment Modes
+ *
+ * - **Embedded** (`connector`): Pass an EmbeddableConnectorLike directly.
+ *   Zero-latency packet delivery via direct function calls.
+ * - **Standalone** (`connectorUrl` + `handlerPort`): Connect to an external
+ *   connector via HTTP. The SDK starts an HTTP server to receive packets.
  */
 
+import { createServer, type Server as HttpServer } from 'node:http';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type {
   EmbeddableConnectorLike,
@@ -21,7 +30,20 @@ import type {
   BootstrapEventListener,
 } from '@crosstown/core';
 import type { SettlementConfig } from '@crosstown/core';
-import { createCrosstownNode } from '@crosstown/core';
+import {
+  createCrosstownNode,
+  BootstrapService,
+  createDiscoveryTracker,
+  createHttpIlpClient,
+  createHttpConnectorAdmin,
+  createHttpChannelClient,
+  ILP_PEER_INFO_KIND,
+} from '@crosstown/core';
+import type {
+  IlpClient,
+  ConnectorAdminClient,
+  DiscoveryTracker,
+} from '@crosstown/core';
 import {
   shallowParseToon,
   decodeEventFromToon,
@@ -45,12 +67,36 @@ const MAX_PAYLOAD_BASE64_LENGTH = 1_048_576;
 
 /**
  * Configuration for creating a ServiceNode via createNode().
+ *
+ * Supports two deployment modes:
+ * - **Embedded** (`connector`): Pass an EmbeddableConnectorLike directly for
+ *   zero-latency packet delivery.
+ * - **Standalone** (`connectorUrl` + `handlerPort`): Connect to an external
+ *   connector via HTTP. The SDK starts an HTTP server to receive packets.
+ *
+ * Provide `connector` OR (`connectorUrl` + `handlerPort`), not both.
  */
 export interface NodeConfig {
   /** 32-byte secp256k1 secret key */
   secretKey: Uint8Array;
-  /** Embedded connector instance */
-  connector: EmbeddableConnectorLike;
+
+  // --- Connector (exactly one mode required) ---
+
+  /** Embedded connector instance for zero-latency mode. */
+  connector?: EmbeddableConnectorLike;
+  /**
+   * External connector admin URL for standalone mode (e.g., "http://localhost:8081").
+   * Must be provided with `handlerPort`.
+   */
+  connectorUrl?: string;
+  /**
+   * Port for the HTTP server that receives ILP packets from the external connector.
+   * Must be provided with `connectorUrl`.
+   */
+  handlerPort?: number;
+
+  // --- Network ---
+
   /** ILP address (default: 'g.crosstown.local') */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
@@ -114,9 +160,9 @@ export interface ServiceNode {
   readonly pubkey: string;
   /** EVM address derived from the same secp256k1 key */
   readonly evmAddress: string;
-  /** Pass-through to the underlying connector */
-  readonly connector: EmbeddableConnectorLike;
-  /** Channel client (null if connector lacks channel support) */
+  /** Pass-through to the underlying connector (null in standalone mode) */
+  readonly connector: EmbeddableConnectorLike | null;
+  /** Channel client (null if connector lacks channel support or in standalone mode) */
   readonly channelClient: ConnectorChannelClient | null;
   /** Register a handler for a specific event kind (builder pattern) */
   on(kind: number, handler: Handler): ServiceNode;
@@ -156,9 +202,36 @@ export interface ServiceNode {
  *   3. Pricing validation (reject with F04 if underpaid)
  *   4. Handler dispatch (route to kind-specific or default handler)
  *
+ * Supports two deployment modes:
+ * - **Embedded** (`connector`): Uses createCrosstownNode for zero-latency
+ *   packet delivery via direct function calls.
+ * - **Standalone** (`connectorUrl` + `handlerPort`): Starts an HTTP server
+ *   to receive packets and uses HTTP clients for the connector API.
+ *
  * Handlers can be registered via config or post-creation .on()/.onDefault().
  */
 export function createNode(config: NodeConfig): ServiceNode {
+  // 0. Validate connector mode
+  const hasConnector = config.connector !== undefined;
+  const hasConnectorUrl = config.connectorUrl !== undefined;
+
+  if (hasConnector && hasConnectorUrl) {
+    throw new NodeError(
+      'NodeConfig: provide either connector or connectorUrl, not both'
+    );
+  }
+  if (!hasConnector && !hasConnectorUrl) {
+    throw new NodeError(
+      'NodeConfig: one of connector or connectorUrl is required'
+    );
+  }
+  if (hasConnectorUrl && config.handlerPort === undefined) {
+    throw new NodeError(
+      'NodeConfig: handlerPort is required when using connectorUrl (standalone mode)'
+    );
+  }
+  const embeddedMode = hasConnector;
+
   // 1. Derive identity from secretKey
   let identity;
   try {
@@ -213,6 +286,9 @@ export function createNode(config: NodeConfig): ServiceNode {
     const bytes = Buffer.from(toon, 'base64');
     return decoder(bytes);
   };
+
+  // Mutable ref so the packet handler closure can access the tracker after it's created.
+  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } = {};
 
   // 8. Build the pipelined packet handler (Option A: directly on HandlePacketRequest)
   const pipelinedHandler = async (
@@ -318,7 +394,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       const result = await registry.dispatch(ctx);
 
       // Feed accepted kind:10032 events to discovery tracker for peer discovery.
-      // Uses late-binding reference since crosstownNode is created after this handler.
+      // Uses late-binding reference since the tracker is created after this handler.
       if (result.accept && meta.kind === 10032 && trackerRef.current) {
         const decoded = ctx.decode();
         if (decoded) {
@@ -335,30 +411,180 @@ export function createNode(config: NodeConfig): ServiceNode {
     }
   };
 
-  // 9. Create CrosstownNode from @crosstown/core for bootstrap/relay monitor lifecycle
-  // Mutable ref so the packet handler closure can access the tracker after it's created.
-  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } = {};
-  const crosstownNode = createCrosstownNode({
-    connector: config.connector,
-    handlePacket: pipelinedHandler,
-    secretKey: config.secretKey,
-    ilpInfo: {
-      ilpAddress: config.ilpAddress ?? 'g.crosstown.local',
-      btpEndpoint: config.btpEndpoint ?? '',
-      assetCode: config.assetCode ?? 'USD',
-      assetScale: config.assetScale ?? 6,
-    },
-    toonEncoder: encoder,
-    toonDecoder: decoder,
-    relayUrl: config.relayUrl,
-    knownPeers: config.knownPeers,
-    settlementInfo: config.settlementInfo,
-    basePricePerByte: config.basePricePerByte,
-    ardriveEnabled: config.ardriveEnabled,
-  });
+  // ILP info shared between both modes
+  const ilpInfo = {
+    ilpAddress: config.ilpAddress ?? 'g.crosstown.local',
+    btpEndpoint: config.btpEndpoint ?? '',
+    assetCode: config.assetCode ?? 'USD',
+    assetScale: config.assetScale ?? 6,
+  };
 
-  // Wire discovery tracker for late-binding in the packet handler
-  trackerRef.current = crosstownNode.discoveryTracker;
+  // 9. Branch: embedded mode vs standalone mode
+  let ilpClient: IlpClient;
+  let adminClient: ConnectorAdminClient;
+  let channelClient: ConnectorChannelClient | null = null;
+  let bootstrapServiceInstance: BootstrapService;
+  let discoveryTrackerInstance: DiscoveryTracker;
+  let httpServer: HttpServer | null = null;
+
+  // Lifecycle delegates (start/stop differ per mode)
+  let doStart: () => Promise<{
+    bootstrapResults: BootstrapResult[];
+    peerCount: number;
+    channelCount: number;
+  }>;
+  let doStop: () => Promise<void>;
+
+  if (embeddedMode) {
+    // --- EMBEDDED MODE: delegate to createCrosstownNode ---
+    const crosstownNode = createCrosstownNode({
+      connector: config.connector!,
+      handlePacket: pipelinedHandler,
+      secretKey: config.secretKey,
+      ilpInfo,
+      toonEncoder: encoder,
+      toonDecoder: decoder,
+      relayUrl: config.relayUrl,
+      knownPeers: config.knownPeers,
+      settlementInfo: config.settlementInfo,
+      basePricePerByte: config.basePricePerByte,
+      ardriveEnabled: config.ardriveEnabled,
+    });
+
+    ilpClient = crosstownNode.ilpClient;
+    channelClient = crosstownNode.channelClient;
+    bootstrapServiceInstance = crosstownNode.bootstrapService;
+    discoveryTrackerInstance = crosstownNode.discoveryTracker;
+    adminClient = { addPeer: () => Promise.resolve(), removePeer: () => Promise.resolve() };
+
+    trackerRef.current = discoveryTrackerInstance;
+
+    doStart = async () => crosstownNode.start();
+    doStop = async () => crosstownNode.stop();
+  } else {
+    // --- STANDALONE MODE: manual composition with HTTP clients ---
+    const connectorUrl = config.connectorUrl!;
+    const handlerPort = config.handlerPort!;
+
+    ilpClient = createHttpIlpClient(connectorUrl);
+    adminClient = createHttpConnectorAdmin(connectorUrl, '');
+
+    // Channel client via HTTP if settlement is configured
+    if (config.settlementInfo) {
+      channelClient = createHttpChannelClient(connectorUrl);
+    }
+
+    // Create BootstrapService
+    bootstrapServiceInstance = new BootstrapService(
+      {
+        knownPeers: config.knownPeers ?? [],
+        ardriveEnabled: config.ardriveEnabled ?? false,
+        defaultRelayUrl: config.relayUrl ?? '',
+        settlementInfo: config.settlementInfo,
+        ownIlpAddress: ilpInfo.ilpAddress,
+        toonEncoder: encoder,
+        toonDecoder: decoder,
+        basePricePerByte: config.basePricePerByte ?? 10n,
+      },
+      config.secretKey,
+      ilpInfo
+    );
+
+    bootstrapServiceInstance.setIlpClient(ilpClient);
+    bootstrapServiceInstance.setConnectorAdmin(adminClient);
+    if (channelClient) {
+      bootstrapServiceInstance.setChannelClient(channelClient);
+    }
+
+    // Create DiscoveryTracker
+    discoveryTrackerInstance = createDiscoveryTracker({
+      secretKey: config.secretKey,
+      settlementInfo: config.settlementInfo,
+    });
+    discoveryTrackerInstance.setConnectorAdmin(adminClient);
+    if (channelClient) {
+      discoveryTrackerInstance.setChannelClient(channelClient);
+    }
+
+    trackerRef.current = discoveryTrackerInstance;
+
+    doStart = async () => {
+      // Start HTTP server for receiving ILP packets
+      httpServer = createServer(async (req, res) => {
+        if (req.method === 'GET' && req.url === '/health') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ status: 'healthy', pubkey }));
+          return;
+        }
+
+        if (req.method === 'POST' && req.url === '/handle-packet') {
+          let body = '';
+          req.on('data', (chunk: Buffer) => {
+            body += chunk.toString();
+          });
+          req.on('end', async () => {
+            try {
+              const request = JSON.parse(body) as HandlePacketRequest;
+              if (!request.amount || !request.destination || !request.data) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(
+                  JSON.stringify({
+                    accept: false,
+                    code: 'F00',
+                    message: 'Missing required fields',
+                  })
+                );
+                return;
+              }
+              const result = await pipelinedHandler(request);
+              res.writeHead(result.accept ? 200 : 400, {
+                'Content-Type': 'application/json',
+              });
+              res.end(JSON.stringify(result));
+            } catch (err: unknown) {
+              console.error('[SDK] handle-packet error:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  accept: false,
+                  code: 'T00',
+                  message: 'Internal server error',
+                })
+              );
+            }
+          });
+          return;
+        }
+
+        res.writeHead(404);
+        res.end();
+      });
+
+      await new Promise<void>((resolve) => {
+        httpServer!.listen(handlerPort, () => resolve());
+      });
+
+      // Run bootstrap
+      const results = await bootstrapServiceInstance.bootstrap();
+      const bootstrapPeerPubkeys = results.map((r) => r.knownPeer.pubkey);
+      discoveryTrackerInstance.addExcludedPubkeys(bootstrapPeerPubkeys);
+
+      return {
+        bootstrapResults: results,
+        peerCount: results.length,
+        channelCount: results.filter((r) => r.channelId).length,
+      };
+    };
+
+    doStop = async () => {
+      if (httpServer) {
+        await new Promise<void>((resolve) => {
+          httpServer!.close(() => resolve());
+        });
+        httpServer = null;
+      }
+    };
+  }
 
   // 10. Track SDK-level lifecycle state
   let started = false;
@@ -372,10 +598,10 @@ export function createNode(config: NodeConfig): ServiceNode {
       return evmAddress;
     },
     get connector() {
-      return config.connector;
+      return config.connector ?? null;
     },
     get channelClient() {
-      return crosstownNode.channelClient;
+      return channelClient;
     },
 
     on(
@@ -393,8 +619,8 @@ export function createNode(config: NodeConfig): ServiceNode {
       } else if (kindOrEvent === 'bootstrap') {
         // Lifecycle event listener -- forward to bootstrapService AND discoveryTracker
         const listener = handlerOrListener as BootstrapEventListener;
-        crosstownNode.bootstrapService.on(listener);
-        crosstownNode.discoveryTracker.on(listener);
+        bootstrapServiceInstance.on(listener);
+        discoveryTrackerInstance.on(listener);
       } else {
         // Sanitize event name to prevent log injection via control characters
         // eslint-disable-next-line no-control-regex
@@ -417,7 +643,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       }
 
       try {
-        const result = await crosstownNode.start();
+        const result = await doStart();
         started = true;
         return {
           peerCount: result.peerCount,
@@ -440,7 +666,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         return; // No-op if not started
       }
 
-      await crosstownNode.stop();
+      await doStop();
       started = false;
     },
 
@@ -460,7 +686,7 @@ export function createNode(config: NodeConfig): ServiceNode {
           'Invalid pubkey: expected a 64-character lowercase hex string'
         );
       }
-      return crosstownNode.peerWith(targetPubkey);
+      return discoveryTrackerInstance.peerWith(targetPubkey);
     },
 
     async publishEvent(
@@ -493,7 +719,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         const base64Data = Buffer.from(toonData).toString('base64');
 
         // Send via ILP client
-        const result = await crosstownNode.ilpClient.sendIlpPacket({
+        const result = await ilpClient.sendIlpPacket({
           destination: options.destination,
           amount: String(amount),
           data: base64Data,
