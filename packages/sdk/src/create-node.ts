@@ -37,7 +37,6 @@ import {
   createHttpIlpClient,
   createHttpConnectorAdmin,
   createHttpChannelClient,
-  ILP_PEER_INFO_KIND,
 } from '@crosstown/core';
 import type {
   IlpClient,
@@ -438,7 +437,7 @@ export function createNode(config: NodeConfig): ServiceNode {
   if (embeddedMode) {
     // --- EMBEDDED MODE: delegate to createCrosstownNode ---
     const crosstownNode = createCrosstownNode({
-      connector: config.connector!,
+      connector: config.connector as NonNullable<typeof config.connector>,
       handlePacket: pipelinedHandler,
       secretKey: config.secretKey,
       ilpInfo,
@@ -463,8 +462,8 @@ export function createNode(config: NodeConfig): ServiceNode {
     doStop = async () => crosstownNode.stop();
   } else {
     // --- STANDALONE MODE: manual composition with HTTP clients ---
-    const connectorUrl = config.connectorUrl!;
-    const handlerPort = config.handlerPort!;
+    const connectorUrl = config.connectorUrl as string;
+    const handlerPort = config.handlerPort as number;
 
     ilpClient = createHttpIlpClient(connectorUrl);
     adminClient = createHttpConnectorAdmin(connectorUrl, '');
@@ -561,7 +560,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       });
 
       await new Promise<void>((resolve) => {
-        httpServer!.listen(handlerPort, () => resolve());
+        httpServer?.listen(handlerPort, () => resolve());
       });
 
       // Run bootstrap
@@ -577,9 +576,10 @@ export function createNode(config: NodeConfig): ServiceNode {
     };
 
     doStop = async () => {
-      if (httpServer) {
+      const server = httpServer;
+      if (server) {
         await new Promise<void>((resolve) => {
-          httpServer!.close(() => resolve());
+          server.close(() => resolve());
         });
         httpServer = null;
       }
