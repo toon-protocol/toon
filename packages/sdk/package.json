@@ -1,6 +1,6 @@
 {
   "name": "@crosstown/sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Crosstown SDK for building ILP-gated Nostr services",
   "type": "module",
   "main": "./dist/index.js",
@@ -61,7 +61,7 @@
     }
   },
   "devDependencies": {
-    "@crosstown/connector": "^1.7.0",
+    "@crosstown/connector": "^1.7.1",
     "@crosstown/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
