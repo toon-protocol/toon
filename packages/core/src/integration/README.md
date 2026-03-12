@@ -10,7 +10,7 @@ Before running integration tests, you need to have the following services runnin
 
 ```bash
 # From repository root
-docker compose up -d
+docker compose -p crosstown-genesis -f docker-compose-genesis.yml up -d
 ```
 
 This starts:
@@ -23,41 +23,18 @@ This starts:
 
 ### 2. Peer Nodes
 
-#### Peer 1
+Deploy peer nodes using the deploy script:
 
 ```bash
-docker compose -p crosstown-peer1 -f docker-compose-peer1.yml up -d
+# From repository root — deploys N peer nodes with auto-funding and bootstrap
+./deploy-peers.sh 3
 ```
 
-Services:
-
-- BLS: `http://localhost:3110`
-- Relay: `ws://localhost:7110`
-- Connector: `http://localhost:3010` (API), `http://localhost:8091` (Admin)
-
-#### Peer 2
+Alternatively, for SDK E2E tests with a controlled 2-peer setup:
 
 ```bash
-docker compose -p crosstown-peer2 -f docker-compose-peer2.yml up -d
+./scripts/sdk-e2e-infra.sh up
 ```
-
-Services:
-
-- BLS: `http://localhost:3120`
-- Relay: `ws://localhost:7120`
-- Connector: `http://localhost:3020` (API), `http://localhost:8101` (Admin)
-
-#### Peer 3
-
-```bash
-docker compose -p crosstown-peer3 -f docker-compose-peer3.yml up -d
-```
-
-Services:
-
-- BLS: `http://localhost:3130`
-- Relay: `ws://localhost:7130`
-- Connector: `http://localhost:3030` (API), `http://localhost:8111` (Admin)
 
 ### 3. Wait for Bootstrap
 
@@ -104,20 +81,6 @@ pnpm vitest --config vitest.integration.config.ts
 
 ## Available Integration Tests
 
-### `crosstown-spsp-integration.test.ts`
-
-Tests the SPSP handshake flow:
-
-- Peer discovery via Nostr (kind:10032 events)
-- SPSP parameter negotiation
-- Payment channel creation
-- Routing table updates
-
-**Prerequisites:**
-
-- Genesis node running
-- Docker services (Anvil, Connector, Relay)
-
 ### `multi-hop-relay-sync.test.ts`
 
 Tests complete relay network functionality:
@@ -143,13 +106,13 @@ Tests complete relay network functionality:
 
 ### Connection Refused
 
-- Services may still be starting up - wait 15 seconds after `docker compose up`
+- Services may still be starting up — wait 15 seconds after starting infrastructure
 - Check container logs: `docker logs <container-name>`
 
 ### Event Not Found
 
 - Verify BLS is accepting packets: Check `/handle-packet` endpoint
-- Check relay WebSocket is accessible: `curl http://localhost:7100/health`
+- Check relay WebSocket is accessible: `wscat -c ws://localhost:7100`
 - Ensure TOON encoding/decoding is working correctly
 
 ### Payment Rejected
@@ -164,19 +127,17 @@ Stop all services:
 
 ```bash
 # Genesis
-docker compose down
+docker compose -p crosstown-genesis -f docker-compose-genesis.yml down
 
-# Peers
-docker compose -p crosstown-peer1 -f docker-compose-peer1.yml down
-docker compose -p crosstown-peer2 -f docker-compose-peer2.yml down
-docker compose -p crosstown-peer3 -f docker-compose-peer3.yml down
+# Peers (if using deploy-peers.sh)
+# Stop individual peer stacks as needed
+
+# SDK E2E infrastructure
+./scripts/sdk-e2e-infra.sh down
 ```
 
 Remove volumes (clears all data):
 
 ```bash
-docker compose down -v
-docker compose -p crosstown-peer1 -f docker-compose-peer1.yml down -v
-docker compose -p crosstown-peer2 -f docker-compose-peer2.yml down -v
-docker compose -p crosstown-peer3 -f docker-compose-peer3.yml down -v
+docker compose -p crosstown-genesis -f docker-compose-genesis.yml down -v
 ```
