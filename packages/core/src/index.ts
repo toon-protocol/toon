@@ -134,6 +134,13 @@ export {
   type ChainName,
 } from './chain/chain-config.js';
 
+// x402 protocol support (shared ILP PREPARE construction)
+export {
+  buildIlpPrepare,
+  type BuildIlpPrepareParams,
+  type IlpPreparePacket,
+} from './x402/index.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed
