@@ -37,6 +37,7 @@ import {
   createHttpIlpClient,
   createHttpConnectorAdmin,
   createHttpChannelClient,
+  resolveChainConfig,
 } from '@crosstown/core';
 import type {
   IlpClient,
@@ -78,6 +79,9 @@ const MAX_PAYLOAD_BASE64_LENGTH = 1_048_576;
 export interface NodeConfig {
   /** 32-byte secp256k1 secret key */
   secretKey: Uint8Array;
+
+  /** Chain preset name (default: 'anvil'). See resolveChainConfig(). */
+  chain?: string;
 
   // --- Connector (exactly one mode required) ---
 
@@ -236,6 +240,27 @@ export function createNode(config: NodeConfig): ServiceNode {
     );
   }
   const embeddedMode = hasConnector;
+
+  // 0b. Resolve chain config and auto-populate settlementInfo if not set
+  const chainConfig = resolveChainConfig(config.chain);
+  let effectiveSettlementInfo = config.settlementInfo;
+  if (!effectiveSettlementInfo) {
+    const chainKey = `evm:base:${chainConfig.chainId}`;
+    const supportedChains = [chainKey];
+    const preferredTokens: Record<string, string> = {
+      [chainKey]: chainConfig.usdcAddress,
+    };
+    const tokenNetworks: Record<string, string> | undefined =
+      chainConfig.tokenNetworkAddress
+        ? { [chainKey]: chainConfig.tokenNetworkAddress }
+        : undefined;
+
+    effectiveSettlementInfo = {
+      supportedChains,
+      preferredTokens,
+      ...(tokenNetworks && { tokenNetworks }),
+    };
+  }
 
   // 1. Derive identity from secretKey
   let identity;
@@ -452,7 +477,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       toonDecoder: decoder,
       relayUrl: config.relayUrl,
       knownPeers: config.knownPeers,
-      settlementInfo: config.settlementInfo,
+      settlementInfo: effectiveSettlementInfo,
       basePricePerByte: config.basePricePerByte,
       ardriveEnabled: config.ardriveEnabled,
     });
@@ -479,7 +504,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     adminClient = createHttpConnectorAdmin(connectorUrl, '');
 
     // Channel client via HTTP if settlement is configured
-    if (config.settlementInfo) {
+    if (effectiveSettlementInfo) {
       channelClient = createHttpChannelClient(connectorUrl);
     }
 
@@ -489,7 +514,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         knownPeers: config.knownPeers ?? [],
         ardriveEnabled: config.ardriveEnabled ?? false,
         defaultRelayUrl: config.relayUrl ?? '',
-        settlementInfo: config.settlementInfo,
+        settlementInfo: effectiveSettlementInfo,
         ownIlpAddress: ilpInfo.ilpAddress,
         toonEncoder: encoder,
         toonDecoder: decoder,
@@ -508,7 +533,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     // Create DiscoveryTracker
     discoveryTrackerInstance = createDiscoveryTracker({
       secretKey: config.secretKey,
-      settlementInfo: config.settlementInfo,
+      settlementInfo: effectiveSettlementInfo,
     });
     discoveryTrackerInstance.setConnectorAdmin(adminClient);
     if (channelClient) {
@@ -534,7 +559,14 @@ export function createNode(config: NodeConfig): ServiceNode {
           req.on('end', async () => {
             try {
               const request = JSON.parse(body) as HandlePacketRequest;
-              if (!request.amount || !request.destination || !request.data) {
+              if (
+                request.amount === undefined ||
+                request.amount === null ||
+                request.destination === undefined ||
+                request.destination === null ||
+                request.data === undefined ||
+                request.data === null
+              ) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(
                   JSON.stringify({

@@ -125,6 +125,15 @@ export {
   type MockUsdcConfig,
 } from './chain/usdc.js';
 
+// Chain presets and multi-environment configuration
+export {
+  resolveChainConfig,
+  buildEip712Domain,
+  CHAIN_PRESETS,
+  type ChainPreset,
+  type ChainName,
+} from './chain/chain-config.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed
