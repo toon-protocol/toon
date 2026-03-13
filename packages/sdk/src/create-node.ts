@@ -287,7 +287,8 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // Mutable ref so the packet handler closure can access the tracker after it's created.
-  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } = {};
+  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } =
+    {};
 
   // 8. Build the pipelined packet handler (Option A: directly on HandlePacketRequest)
   const pipelinedHandler = async (
@@ -454,7 +455,10 @@ export function createNode(config: NodeConfig): ServiceNode {
     channelClient = crosstownNode.channelClient;
     bootstrapServiceInstance = crosstownNode.bootstrapService;
     discoveryTrackerInstance = crosstownNode.discoveryTracker;
-    adminClient = { addPeer: () => Promise.resolve(), removePeer: () => Promise.resolve() };
+    adminClient = {
+      addPeer: () => Promise.resolve(),
+      removePeer: () => Promise.resolve(),
+    };
 
     trackerRef.current = discoveryTrackerInstance;
 

@@ -9,10 +9,7 @@ import type { NostrEvent } from 'nostr-tools/pure';
 import { createDiscoveryTracker } from './discovery-tracker.js';
 import type { DiscoveryTracker } from './discovery-tracker.js';
 import { BootstrapError } from './BootstrapService.js';
-import type {
-  ConnectorAdminClient,
-  BootstrapEvent,
-} from './types.js';
+import type { ConnectorAdminClient, BootstrapEvent } from './types.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import type { IlpPeerInfo } from '../types.js';
 
@@ -146,9 +143,9 @@ describe('createDiscoveryTracker', () => {
     tracker.processEvent(makeEvent(peerPubkey, '', 1001));
 
     await vi.waitFor(() => {
-      expect(
-        events.some((e) => e.type === 'bootstrap:peer-deregistered')
-      ).toBe(true);
+      expect(events.some((e) => e.type === 'bootstrap:peer-deregistered')).toBe(
+        true
+      );
     });
 
     expect(mockAdmin.removePeer).toHaveBeenCalledWith(
@@ -223,8 +220,7 @@ describe('createDiscoveryTracker', () => {
     await tracker.peerWith(peerPubkey);
 
     const initialRegistrations = mockAdmin.addPeer.mock.calls.filter(
-      (call: unknown[]) =>
-        !(call[0] as { settlement?: unknown }).settlement
+      (call: unknown[]) => !(call[0] as { settlement?: unknown }).settlement
     );
     expect(initialRegistrations).toHaveLength(1);
   });
@@ -245,9 +241,7 @@ describe('createDiscoveryTracker', () => {
 
     tracker.processEvent(makeValidEvent());
 
-    await expect(tracker.peerWith(peerPubkey)).rejects.toThrow(
-      BootstrapError
-    );
+    await expect(tracker.peerWith(peerPubkey)).rejects.toThrow(BootstrapError);
     await expect(tracker.peerWith(peerPubkey)).rejects.toThrow(
       'connectorAdmin must be set'
     );
@@ -283,9 +277,7 @@ describe('createDiscoveryTracker', () => {
     );
     await tracker.peerWith(peerPubkey);
 
-    const opened = events.find(
-      (e) => e.type === 'bootstrap:channel-opened'
-    );
+    const opened = events.find((e) => e.type === 'bootstrap:channel-opened');
     expect(opened).toEqual({
       type: 'bootstrap:channel-opened',
       peerId: `nostr-${peerPubkey.slice(0, 16)}`,
@@ -296,9 +288,7 @@ describe('createDiscoveryTracker', () => {
 
   it('settlement failure is non-fatal', async () => {
     const mockChannelClient = {
-      openChannel: vi
-        .fn()
-        .mockRejectedValue(new Error('Channel open timeout')),
+      openChannel: vi.fn().mockRejectedValue(new Error('Channel open timeout')),
       getChannelState: vi.fn(),
     };
 
@@ -320,28 +310,20 @@ describe('createDiscoveryTracker', () => {
     tracker.on((event) => events.push(event));
 
     tracker.processEvent(
-      makeEvent(
-        peerPubkey,
-        JSON.stringify(peerInfoWithSettlement),
-        1000
-      )
+      makeEvent(peerPubkey, JSON.stringify(peerInfoWithSettlement), 1000)
     );
     await tracker.peerWith(peerPubkey);
 
-    expect(
-      events.some((e) => e.type === 'bootstrap:peer-registered')
-    ).toBe(true);
-    expect(
-      events.some((e) => e.type === 'bootstrap:settlement-failed')
-    ).toBe(true);
+    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      true
+    );
+    expect(events.some((e) => e.type === 'bootstrap:settlement-failed')).toBe(
+      true
+    );
 
     // Can still peer with another peer
     tracker.processEvent(
-      makeEvent(
-        peerPubkey2,
-        JSON.stringify(peerInfoWithSettlement),
-        1000
-      )
+      makeEvent(peerPubkey2, JSON.stringify(peerInfoWithSettlement), 1000)
     );
     await tracker.peerWith(peerPubkey2);
 

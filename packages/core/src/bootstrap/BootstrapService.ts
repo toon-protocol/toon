@@ -117,9 +117,7 @@ export class BootstrapService {
    * that creates the client after construction.
    */
   setIlpClient(client: IlpClient): void {
-    (
-      this as unknown as { ilpClient?: IlpClient }
-    ).ilpClient = client;
+    (this as unknown as { ilpClient?: IlpClient }).ilpClient = client;
   }
 
   /**

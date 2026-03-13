@@ -51,7 +51,7 @@
     "@toon-format/toon": "^1.1.0",
     "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
-    "simple-git": "^3.31.1",
+    "simple-git": "^3.32.3",
     "ws": "^8.18.0"
   },
   "peerDependencies": {

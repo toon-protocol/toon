@@ -128,10 +128,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('ILP client is wired correctly to bootstrapService', () => {
-    const setClientSpy = vi.spyOn(
-      BootstrapService.prototype,
-      'setIlpClient'
-    );
+    const setClientSpy = vi.spyOn(BootstrapService.prototype, 'setIlpClient');
 
     createCrosstownNode(baseConfig);
 

@@ -81,7 +81,6 @@ import { BusinessLogicServer } from '@crosstown/bls';
 const bls = new BusinessLogicServer(
   {
     basePricePerByte: 10n,
-    spspMinPrice: 0n,
 
     // NIP-34 integration
     onNIP34Event: async (event) => {

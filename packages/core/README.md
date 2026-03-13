@@ -1,6 +1,6 @@
 # @crosstown/core
 
-Core library for Nostr-based ILP peer discovery and SPSP.
+Core library for Nostr-based ILP peer discovery, bootstrap, and settlement negotiation.
 
 ## Install
 
@@ -13,10 +13,10 @@ npm install @crosstown/core
 ```ts
 import {
   NostrPeerDiscovery,
-  NostrSpspClient,
-  NostrSpspServer,
-  SocialTrustManager,
   BootstrapService,
+  SocialPeerDiscovery,
+  parseIlpPeerInfo,
+  buildIlpPeerInfoEvent,
 } from '@crosstown/core';
 ```
 

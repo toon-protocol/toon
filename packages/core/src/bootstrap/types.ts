@@ -232,4 +232,3 @@ export interface BootstrapServiceConfig extends BootstrapConfig {
   /** Base price per byte for ILP packet pricing (default: 10n) */
   basePricePerByte?: bigint;
 }
-
