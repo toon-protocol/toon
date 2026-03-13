@@ -115,6 +115,16 @@ export {
   type ToonRoutingMeta,
 } from './toon/index.js';
 
+// Chain configuration
+export {
+  MOCK_USDC_ADDRESS,
+  USDC_DECIMALS,
+  USDC_SYMBOL,
+  USDC_NAME,
+  MOCK_USDC_CONFIG,
+  type MockUsdcConfig,
+} from './chain/usdc.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed

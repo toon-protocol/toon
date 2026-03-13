@@ -78,7 +78,7 @@ const PEER2_BLS_URL = 'http://localhost:19110';
 
 // Contracts (deterministic Anvil deployment)
 const TOKEN_ADDRESS =
-  '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const;
+  '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const; // Mock USDC (Anvil)
 const TOKEN_NETWORK_ADDRESS =
   '0xCafac3dD18aC6c6e92c921884f9E4176737C052c' as const;
 const REGISTRY_ADDRESS =

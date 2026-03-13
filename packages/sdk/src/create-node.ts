@@ -104,7 +104,13 @@ export interface NodeConfig {
   assetCode?: string;
   /** Asset scale (default: 6) */
   assetScale?: number;
-  /** Base price per byte for pricing validation (default: 10n) */
+  /**
+   * Base price per byte for pricing validation (default: 10n).
+   *
+   * Amounts are in USDC micro-units (6 decimals) for production.
+   * Default 10n = 10 micro-USDC per byte = $0.00001/byte.
+   * A 1KB event costs 10,240 micro-USDC = ~$0.01.
+   */
   basePricePerByte?: bigint;
   /** Dev mode skips signature verification (default: false) */
   devMode?: boolean;
