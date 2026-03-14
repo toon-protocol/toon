@@ -412,12 +412,12 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
   // T-4.1-01 [P1]: docker-compose-oyster.yml defines correct services, ports,
   //                  images
   // ---------------------------------------------------------------------------
-  // Will fail because docker-compose-oyster.yml does not exist yet.
-  // When created, it must define 3 services (relay, connector, attestation)
-  // with correct port mappings matching the Crosstown endpoint spec.
+  // Corrected from original ATDD stub: 2 services (crosstown, attestation-server),
+  // NOT 3 (relay, connector, attestation). The connector is external, not managed
+  // by this compose file. Ports: BLS 3100, Relay 7100, Attestation 1300.
+  // This stub remains skipped as the GREEN tests are in oyster-config.test.ts.
   it.skip('docker-compose-oyster.yml defines correct services, ports, and images (T-4.1-01)', async () => {
     // Arrange — read and parse docker-compose-oyster.yml
-    // The YAML file does not exist yet, so this test cannot run.
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
     const yaml = await import('yaml');
@@ -429,19 +429,20 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Assert — required services exist
+    // Assert — exactly 2 services (connector is external)
     const serviceNames = Object.keys(compose.services);
-    expect(serviceNames).toContain('relay');
-    expect(serviceNames).toContain('connector');
-    expect(serviceNames).toContain('attestation');
+    expect(serviceNames).toHaveLength(2);
+    expect(serviceNames).toContain('crosstown');
+    expect(serviceNames).toContain('attestation-server');
 
-    // Assert — relay service exposes port 7100
-    const relayPorts = compose.services.relay.ports;
-    expect(relayPorts).toContainEqual(expect.stringContaining('7100'));
+    // Assert — crosstown service exposes BLS port 3100 and Relay port 7100
+    const crosstownPorts = compose.services.crosstown.ports;
+    expect(crosstownPorts).toContainEqual(expect.stringContaining('3100'));
+    expect(crosstownPorts).toContainEqual(expect.stringContaining('7100'));
 
-    // Assert — connector service exposes port 8080
-    const connectorPorts = compose.services.connector.ports;
-    expect(connectorPorts).toContainEqual(expect.stringContaining('8080'));
+    // Assert — attestation-server exposes port 1300
+    const attestationPorts = compose.services['attestation-server'].ports;
+    expect(attestationPorts).toContainEqual(expect.stringContaining('1300'));
 
     // Assert — all services have image defined
     for (const name of serviceNames) {
@@ -453,14 +454,14 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
 
   // ---------------------------------------------------------------------------
   // T-4.1-02 [P1]: supervisord.conf defines correct process priorities
-  //                  (relay=10, connector=20, attestation=30)
+  //                  (crosstown=10, attestation=20)
   // ---------------------------------------------------------------------------
-  // Will fail because docker/supervisord.conf does not exist yet.
-  // Process priorities per Pattern 16 ensure correct startup order:
-  // relay first (owns the port), then connector, then attestation server.
-  it.skip('supervisord.conf defines correct process priorities per Pattern 16 (T-4.1-02)', async () => {
+  // Corrected from original ATDD stub: 2 programs (crosstown=10, attestation=20),
+  // NOT 3 (relay=10, connector=20, attestation=30). The connector is external.
+  // The crosstown program runs the full node (BLS + Relay + Bootstrap).
+  // This stub remains skipped as the GREEN tests are in oyster-config.test.ts.
+  it.skip('supervisord.conf defines correct process priorities (T-4.1-02)', async () => {
     // Arrange — read supervisord.conf
-    // The file does not exist yet, so this test cannot run.
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
 
@@ -471,32 +472,29 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     const confContent = await fs.readFile(confPath, 'utf-8');
 
     // Act — parse priority values from each [program:*] section
-    const relayPriorityMatch = confContent.match(
-      /\[program:relay\][\s\S]*?priority=(\d+)/
-    );
-    const connectorPriorityMatch = confContent.match(
-      /\[program:connector\][\s\S]*?priority=(\d+)/
+    const crosstownPriorityMatch = confContent.match(
+      /\[program:crosstown\][\s\S]*?priority=(\d+)/
     );
     const attestationPriorityMatch = confContent.match(
       /\[program:attestation\][\s\S]*?priority=(\d+)/
     );
 
-    // Assert — priorities match Pattern 16 specification
-    expect(relayPriorityMatch).not.toBeNull();
-    expect(connectorPriorityMatch).not.toBeNull();
+    // Assert — exactly 2 programs (connector is external)
+    const programMatches = confContent.match(/\[program:(\w+)\]/g) || [];
+    expect(programMatches).toHaveLength(2);
+
+    // Assert — priorities correct
+    expect(crosstownPriorityMatch).not.toBeNull();
     expect(attestationPriorityMatch).not.toBeNull();
 
-    const relayPriority = Number(relayPriorityMatch![1]);
-    const connectorPriority = Number(connectorPriorityMatch![1]);
+    const crosstownPriority = Number(crosstownPriorityMatch![1]);
     const attestationPriority = Number(attestationPriorityMatch![1]);
 
-    expect(relayPriority).toBe(10);
-    expect(connectorPriority).toBe(20);
-    expect(attestationPriority).toBe(30);
+    expect(crosstownPriority).toBe(10);
+    expect(attestationPriority).toBe(20);
 
-    // Assert — relay starts first (lowest priority number)
-    expect(relayPriority).toBeLessThan(connectorPriority);
-    expect(connectorPriority).toBeLessThan(attestationPriority);
+    // Assert — crosstown starts first (lower priority number)
+    expect(crosstownPriority).toBeLessThan(attestationPriority);
   });
 
   // ---------------------------------------------------------------------------
@@ -540,57 +538,50 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // T-4.1-04 [P1]: Oyster CVM deployment — all 3 processes running and healthy
+  // T-4.1-04 [P1]: Oyster CVM deployment — both processes running and healthy
   // ---------------------------------------------------------------------------
-  // Will fail because the Oyster CVM image and supervisord stack do not exist yet.
-  // This E2E test verifies that when the Oyster CVM container is running, all 3
-  // supervisord-managed processes (relay, connector, attestation) respond to
-  // health checks with a healthy status.
+  // Corrected from original ATDD stub: 2 processes (crosstown on 3100+7100,
+  // attestation on 1300), NOT 3. The connector is external.
   //
   // NOTE: This test requires a running Oyster CVM testnet (the full Docker image
-  // built from docker-compose-oyster.yml with supervisord managing all processes).
+  // built from docker-compose-oyster.yml with supervisord managing both processes).
   // It will remain skipped until the CVM image is buildable and a testnet
   // environment is available in CI. Deferred to integration/E2E phase.
-  it.skip('Oyster CVM deployment — all 3 processes running and healthy (T-4.1-04)', async () => {
+  it.skip('Oyster CVM deployment — both processes running and healthy (T-4.1-04)', async () => {
     // Arrange — mock health check functions for each supervisord process.
     // In a real E2E run these would hit the actual container endpoints.
-    const mockRelayHealth = vi.fn().mockResolvedValue({
-      process: 'relay',
+    // crosstown process owns both BLS (3100) and Relay (7100)
+    const mockCrosstownHealth = vi.fn().mockResolvedValue({
+      process: 'crosstown',
       status: 'healthy',
-      port: 7100,
-    });
-    const mockConnectorHealth = vi.fn().mockResolvedValue({
-      process: 'connector',
-      status: 'healthy',
-      port: 8080,
+      blsPort: 3100,
+      relayPort: 7100,
     });
     const mockAttestationHealth = vi.fn().mockResolvedValue({
       process: 'attestation',
       status: 'healthy',
-      port: 3100,
+      port: 1300,
     });
 
-    // Act — query health for all 3 processes
-    const [relayHealth, connectorHealth, attestationHealth] = await Promise.all(
-      [mockRelayHealth(), mockConnectorHealth(), mockAttestationHealth()]
-    );
+    // Act — query health for both processes
+    const [crosstownHealth, attestationHealth] = await Promise.all([
+      mockCrosstownHealth(),
+      mockAttestationHealth(),
+    ]);
 
-    // Assert — each process is running and healthy
-    expect(relayHealth.process).toBe('relay');
-    expect(relayHealth.status).toBe('healthy');
-    expect(relayHealth.port).toBe(7100);
+    // Assert — crosstown process is running (BLS + Relay)
+    expect(crosstownHealth.process).toBe('crosstown');
+    expect(crosstownHealth.status).toBe('healthy');
+    expect(crosstownHealth.blsPort).toBe(3100);
+    expect(crosstownHealth.relayPort).toBe(7100);
 
-    expect(connectorHealth.process).toBe('connector');
-    expect(connectorHealth.status).toBe('healthy');
-    expect(connectorHealth.port).toBe(8080);
-
+    // Assert — attestation server is running on port 1300
     expect(attestationHealth.process).toBe('attestation');
     expect(attestationHealth.status).toBe('healthy');
-    expect(attestationHealth.port).toBe(3100);
+    expect(attestationHealth.port).toBe(1300);
 
-    // Assert — all 3 health checks were called exactly once
-    expect(mockRelayHealth).toHaveBeenCalledTimes(1);
-    expect(mockConnectorHealth).toHaveBeenCalledTimes(1);
+    // Assert — both health checks were called exactly once
+    expect(mockCrosstownHealth).toHaveBeenCalledTimes(1);
     expect(mockAttestationHealth).toHaveBeenCalledTimes(1);
   });
 });
