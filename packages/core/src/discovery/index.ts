@@ -11,3 +11,11 @@ export {
   type SocialDiscoveryEvent,
   type SocialDiscoveryEventListener,
 } from './SocialPeerDiscovery.js';
+export {
+  SeedRelayDiscovery,
+  publishSeedRelayEntry,
+  type SeedRelayDiscoveryConfig,
+  type SeedRelayDiscoveryResult,
+  type SeedRelayEntry,
+  type PublishSeedRelayConfig,
+} from './seed-relay-discovery.js';

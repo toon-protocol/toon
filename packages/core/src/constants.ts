@@ -9,3 +9,11 @@
  * Replaceable event containing connector's ILP address, BTP endpoint, and settlement info.
  */
 export const ILP_PEER_INFO_KIND = 10032;
+
+/**
+ * Seed Relay List (kind 10036)
+ * Replaceable event containing a list of relay nodes that serve as bootstrap
+ * entry points for new network participants. Published to public Nostr relays.
+ * NIP-16 replaceable: relays store only the latest event per pubkey + kind.
+ */
+export const SEED_RELAY_LIST_KIND = 10036;

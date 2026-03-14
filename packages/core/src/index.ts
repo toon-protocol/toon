@@ -7,7 +7,7 @@
 export const VERSION = '0.1.0';
 
 // Event kind constants
-export { ILP_PEER_INFO_KIND } from './constants.js';
+export { ILP_PEER_INFO_KIND, SEED_RELAY_LIST_KIND } from './constants.js';
 
 // TypeScript interfaces
 export type {
@@ -31,6 +31,9 @@ export {
   parseIlpPeerInfo,
   validateChainId,
   buildIlpPeerInfoEvent,
+  buildSeedRelayListEvent,
+  parseSeedRelayList,
+  type SeedRelayEntry,
 } from './events/index.js';
 
 // Peer discovery
@@ -43,6 +46,11 @@ export {
   type SocialPeerDiscoveryConfig,
   type SocialDiscoveryEvent,
   type SocialDiscoveryEventListener,
+  SeedRelayDiscovery,
+  publishSeedRelayEntry,
+  type SeedRelayDiscoveryConfig,
+  type SeedRelayDiscoveryResult,
+  type PublishSeedRelayConfig,
 } from './discovery/index.js';
 
 // Settlement utilities
