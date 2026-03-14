@@ -7,7 +7,11 @@
 export const VERSION = '0.1.0';
 
 // Event kind constants
-export { ILP_PEER_INFO_KIND, SEED_RELAY_LIST_KIND } from './constants.js';
+export {
+  ILP_PEER_INFO_KIND,
+  SERVICE_DISCOVERY_KIND,
+  SEED_RELAY_LIST_KIND,
+} from './constants.js';
 
 // TypeScript interfaces
 export type {
@@ -34,6 +38,9 @@ export {
   buildSeedRelayListEvent,
   parseSeedRelayList,
   type SeedRelayEntry,
+  buildServiceDiscoveryEvent,
+  parseServiceDiscovery,
+  type ServiceDiscoveryContent,
 } from './events/index.js';
 
 // Peer discovery

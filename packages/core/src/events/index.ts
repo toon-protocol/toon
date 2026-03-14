@@ -9,3 +9,9 @@ export {
   parseSeedRelayList,
   type SeedRelayEntry,
 } from './seed-relay.js';
+export {
+  buildServiceDiscoveryEvent,
+  parseServiceDiscovery,
+  SERVICE_DISCOVERY_KIND,
+  type ServiceDiscoveryContent,
+} from './service-discovery.js';

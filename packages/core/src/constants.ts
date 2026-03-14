@@ -11,6 +11,15 @@
 export const ILP_PEER_INFO_KIND = 10032;
 
 /**
+ * Service Discovery (kind 10035)
+ * Replaceable event advertising a node's capabilities, pricing, and endpoints.
+ * Published to the local relay and optionally to peers so that clients and
+ * agents can programmatically discover available services.
+ * NIP-16 replaceable: relays store only the latest event per pubkey + kind.
+ */
+export const SERVICE_DISCOVERY_KIND = 10035;
+
+/**
  * Seed Relay List (kind 10036)
  * Replaceable event containing a list of relay nodes that serve as bootstrap
  * entry points for new network participants. Published to public Nostr relays.
