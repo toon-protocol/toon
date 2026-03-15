@@ -175,6 +175,22 @@ export {
   type DeriveFromKmsSeedOptions,
 } from './identity/index.js';
 
+// Nix reproducible builds (TEE deployment)
+export {
+  NixBuilder,
+  type NixBuildResult,
+  type NixBuilderConfig,
+  verifyPcrReproducibility,
+  readDockerfileNix,
+  analyzeDockerfileForNonDeterminism,
+  PcrReproducibilityError,
+  type PcrReproducibilityResult,
+  type VerifyOptions,
+  type DeterminismReport,
+  type Violation,
+  type ForbiddenPattern,
+} from './build/index.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed
