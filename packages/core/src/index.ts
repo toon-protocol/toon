@@ -167,6 +167,14 @@ export {
   type IlpPreparePacket,
 } from './x402/index.js';
 
+// KMS Identity (TEE enclave-bound key derivation)
+export {
+  deriveFromKmsSeed,
+  KmsIdentityError,
+  type KmsKeypair,
+  type DeriveFromKmsSeedOptions,
+} from './identity/index.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed
