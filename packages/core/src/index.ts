@@ -109,6 +109,11 @@ export {
   createHttpConnectorAdmin,
   createHttpRuntimeClientV2,
   createHttpChannelClient,
+  AttestationVerifier,
+  AttestationState,
+  type VerificationResult,
+  type PeerDescriptor,
+  type AttestationVerifierConfig,
 } from './bootstrap/index.js';
 
 // Compose - embedded connector orchestration
