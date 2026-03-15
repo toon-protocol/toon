@@ -26,3 +26,14 @@ export const SERVICE_DISCOVERY_KIND = 10035;
  * NIP-16 replaceable: relays store only the latest event per pubkey + kind.
  */
 export const SEED_RELAY_LIST_KIND = 10036;
+
+/**
+ * TEE Attestation (kind 10033)
+ * NIP-16 replaceable event containing TEE attestation data: PCR values,
+ * enclave image hash, and attestation documents from the TEE platform.
+ * Published by nodes running in a Trusted Execution Environment (e.g.,
+ * Marlin Oyster CVM / AWS Nitro Enclaves). Relays store only the latest
+ * event per pubkey + kind. No `d` tag needed -- NIP-16 replaces by
+ * pubkey + kind alone (unlike NIP-33 parameterized replaceable events).
+ */
+export const TEE_ATTESTATION_KIND = 10033;

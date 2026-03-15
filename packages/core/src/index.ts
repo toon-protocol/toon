@@ -11,11 +11,13 @@ export {
   ILP_PEER_INFO_KIND,
   SERVICE_DISCOVERY_KIND,
   SEED_RELAY_LIST_KIND,
+  TEE_ATTESTATION_KIND,
 } from './constants.js';
 
 // TypeScript interfaces
 export type {
   IlpPeerInfo,
+  TeeAttestation,
   Subscription,
   OpenChannelParams,
   OpenChannelResult,
@@ -41,6 +43,10 @@ export {
   buildServiceDiscoveryEvent,
   parseServiceDiscovery,
   type ServiceDiscoveryContent,
+  buildAttestationEvent,
+  parseAttestation,
+  type AttestationEventOptions,
+  type ParsedAttestation,
 } from './events/index.js';
 
 // Peer discovery

@@ -15,3 +15,11 @@ export {
   SERVICE_DISCOVERY_KIND,
   type ServiceDiscoveryContent,
 } from './service-discovery.js';
+export {
+  buildAttestationEvent,
+  parseAttestation,
+  TEE_ATTESTATION_KIND,
+  type AttestationEventOptions,
+  type ParsedAttestation,
+  type TeeAttestation,
+} from './attestation.js';
