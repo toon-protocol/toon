@@ -2,20 +2,16 @@
  * Tests for attestation-first seed relay bootstrap (Story 4.6)
  * and Oyster CVM packaging validation (Story 4.1).
  *
- * TDD RED PHASE — all tests use `it.skip()` because the implementation
- * modules (AttestationBootstrap, AttestationVerifier) do not exist yet.
+ * Story 4.6: GREEN PHASE -- AttestationBootstrap implementation exists.
+ *   T-4.6-01 through T-4.6-13, T-4.6-06b, T-4.6-06c, T-4.6-09b are active and passing.
+ *   T-4.6-07 through T-4.6-13 added to fill AC coverage gaps.
+ *   T-4.6-06b (top-level barrel export), T-4.6-06c (off() method),
+ *   T-4.6-09b (verifier.verify() throw) added during test review.
  *
- * Story 4.6: Attestation-First Seed Relay Bootstrap
- *   Seed relays are verified via kind:10033 attestation events BEFORE their
- *   kind:10032 peer lists are trusted. This prevents seed relay list poisoning
- *   (R-E4-004) where malicious kind:10036 events point to non-attested nodes.
+ * Story 4.1: Oyster CVM Packaging -- RED PHASE (remains skipped).
+ *   GREEN tests are in oyster-config.test.ts (Story 4.1 was completed separately).
  *
- * Story 4.1: Oyster CVM Packaging
- *   Config validation for docker-compose-oyster.yml and supervisord.conf.
- *   Ensures correct services, ports, process priorities per Pattern 16.
- *
- * Cross-cutting risk T-RISK-02:
- *   Payment channels remain open when attestation degrades to unattested.
+ * Cross-cutting risk T-RISK-02: remains skipped (deferred to integration).
  *   "Trust degrades; money doesn't." (Decision 12)
  */
 
@@ -23,16 +19,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
-// These modules don't exist yet — TDD red phase.
-// Imports will cause compile errors until implementation is created.
-// Uncomment when implementing the green phase:
-// import { AttestationBootstrap } from './AttestationBootstrap.js';
-// import {
-//   AttestationVerifier,
-//   AttestationState,
-// } from './AttestationVerifier.js';
-// import type { TeeAttestation } from '../types.js';
-// import { TEE_ATTESTATION_KIND } from '../constants.js';
+// GREEN phase: AttestationBootstrap implementation exists
+import { AttestationBootstrap } from './AttestationBootstrap.js';
 
 // ============================================================================
 // Factories
@@ -79,35 +67,6 @@ function createValidAttestationEvent(): NostrEvent {
 }
 
 /**
- * Creates an attestation event with an expired expiry tag.
- * Useful for testing stale/expired attestation handling.
- */
-function _createExpiredAttestationEvent(): NostrEvent {
-  const secretKey = generateSecretKey();
-  return {
-    id: '1'.repeat(64),
-    pubkey: getPublicKey(secretKey),
-    kind: 10033,
-    content: JSON.stringify({
-      enclave: 'aws-nitro',
-      pcr0: 'a'.repeat(96),
-      pcr1: 'b'.repeat(96),
-      pcr2: 'c'.repeat(96),
-      attestationDoc: 'expired-attestation-doc',
-      version: '1.0.0',
-    }),
-    tags: [
-      ['relay', 'wss://seed2.crosstown.example'],
-      ['chain', '42161'],
-      // Expired 1 hour ago
-      ['expiry', String(Math.floor(Date.now() / 1000) - 3600)],
-    ],
-    created_at: Math.floor(Date.now() / 1000) - 7200,
-    sig: '1'.repeat(128),
-  };
-}
-
-/**
  * Creates a valid kind:10032 ILP peer info event (used after attestation verification).
  */
 function createPeerInfoEvent(relayPubkey: string): NostrEvent {
@@ -117,7 +76,7 @@ function createPeerInfoEvent(relayPubkey: string): NostrEvent {
     kind: 10032,
     content: JSON.stringify({
       ilpAddress: 'g.test.peer',
-      btpEndpoint: 'ws://peer:3000',
+      btpEndpoint: 'wss://peer:3000',
       assetCode: 'USD',
       assetScale: 6,
     }),
@@ -148,12 +107,10 @@ function createMockVerifier(
 
 describe('AttestationBootstrap (Story 4.6)', () => {
   let secretKey: Uint8Array;
-  let _pubkey: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
     secretKey = generateSecretKey();
-    _pubkey = getPublicKey(secretKey);
   });
 
   afterEach(() => {
@@ -164,11 +121,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
   // T-4.6-01 [P0]: Seed relay bootstrap verifies kind:10033 before trusting
   //                  peer list
   // ---------------------------------------------------------------------------
-  // Will fail because AttestationBootstrap does not exist yet.
-  // When implemented, AttestationBootstrap must query each seed relay for its
-  // kind:10033 attestation event and verify it BEFORE subscribing to that
-  // relay's kind:10032 peer info events.
-  it.skip('verifies kind:10033 attestation before trusting seed relay peer list (T-4.6-01)', async () => {
+  it('verifies kind:10033 attestation before trusting seed relay peer list (T-4.6-01)', async () => {
     // Arrange
     const seedRelays = createSeedRelayList();
     const mockVerifier = createMockVerifier('valid');
@@ -186,7 +139,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     });
 
     // Act
-    await bootstrap.bootstrap();
+    const result = await bootstrap.bootstrap();
 
     // Assert — attestation must be queried BEFORE peer subscription
     const attestationCallOrder =
@@ -198,16 +151,14 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     expect(mockSubscribePeers).toHaveBeenCalledWith(
       'wss://seed1.crosstown.example'
     );
+    expect(result.mode).toBe('attested');
   });
 
   // ---------------------------------------------------------------------------
   // T-4.6-02 [P0]: Seed relay with invalid/missing attestation — fallback to
   //                  next seed relay
   // ---------------------------------------------------------------------------
-  // Will fail because AttestationBootstrap does not exist yet.
-  // When implemented, if the first seed relay has no valid attestation, the
-  // bootstrap flow must try the next seed relay in the list without crashing.
-  it.skip('falls back to next seed relay when first has invalid attestation (T-4.6-02)', async () => {
+  it('falls back to next seed relay when first has invalid attestation (T-4.6-02)', async () => {
     // Arrange
     const seedRelays = createSeedRelayList();
     const validEvent = createValidAttestationEvent();
@@ -230,7 +181,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     });
 
     // Act
-    await bootstrap.bootstrap();
+    const result = await bootstrap.bootstrap();
 
     // Assert — should have tried both seed relays
     expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
@@ -246,16 +197,17 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     expect(mockSubscribePeers).toHaveBeenCalledWith(
       'wss://seed2.crosstown.example'
     );
+
+    // Fallback succeeded — mode is attested via second relay
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
   });
 
   // ---------------------------------------------------------------------------
   // T-4.6-03 [P1]: Seed relay with valid attestation — proceed to kind:10032
   //                  peer discovery
   // ---------------------------------------------------------------------------
-  // Will fail because AttestationBootstrap does not exist yet.
-  // Happy path: attestation is valid, so proceed directly to subscribing
-  // for kind:10032 peer info events on the seed relay.
-  it.skip('proceeds to kind:10032 peer discovery when attestation is valid (T-4.6-03)', async () => {
+  it('proceeds to kind:10032 peer discovery when attestation is valid (T-4.6-03)', async () => {
     // Arrange
     const seedRelays = ['wss://seed1.crosstown.example'];
     const validEvent = createValidAttestationEvent();
@@ -283,17 +235,15 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     );
     expect(result.discoveredPeers).toHaveLength(1);
     expect(result.attestedSeedRelay).toBe('wss://seed1.crosstown.example');
+    // AC #3: result must include mode: 'attested'
+    expect(result.mode).toBe('attested');
   });
 
   // ---------------------------------------------------------------------------
   // T-4.6-04 [P1]: All seed relays unattested — node starts but logs warning,
   //                  no fatal crash
   // ---------------------------------------------------------------------------
-  // Will fail because AttestationBootstrap does not exist yet.
-  // Graceful degradation: if every seed relay in the list lacks valid
-  // attestation, the node must still start (degraded mode) and log a warning
-  // rather than crashing.
-  it.skip('starts in degraded mode when all seed relays are unattested (T-4.6-04)', async () => {
+  it('starts in degraded mode when all seed relays are unattested (T-4.6-04)', async () => {
     // Arrange
     const seedRelays = createSeedRelayList();
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
@@ -337,13 +287,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
   // T-4.6-05 [P1]: Full bootstrap:
   //   kind:10036 -> connect seed -> verify kind:10033 -> subscribe kind:10032
   // ---------------------------------------------------------------------------
-  // Will fail because AttestationBootstrap does not exist yet.
-  // Integration test of the complete attestation-first bootstrap flow:
-  // 1. Read seed relay list from kind:10036 event
-  // 2. Connect to the first seed relay
-  // 3. Query and verify its kind:10033 attestation
-  // 4. If valid, subscribe to kind:10032 peer info events
-  it.skip('completes full attestation-first bootstrap flow (T-4.6-05)', async () => {
+  it('completes full attestation-first bootstrap flow (T-4.6-05)', async () => {
     // Arrange
     const seedRelays = createSeedRelayList();
     const validAttestation = createValidAttestationEvent();
@@ -400,6 +344,431 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     const discoveredIdx = eventTypes.indexOf('attestation:peers-discovered');
     expect(connectedIdx).toBeLessThan(verifiedIdx);
     expect(verifiedIdx).toBeLessThan(discoveredIdx);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-06 [P1]: Barrel exports — AttestationBootstrap importable from
+  //   bootstrap/index.ts and top-level core index.ts (AC #6)
+  // ---------------------------------------------------------------------------
+  it('exports AttestationBootstrap from bootstrap barrel (T-4.6-06)', async () => {
+    // Arrange & Act — import from bootstrap barrel index
+    const barrel = await import('./index.js');
+
+    // Assert — class is exported and matches direct import
+    expect(barrel.AttestationBootstrap).toBeDefined();
+    expect(barrel.AttestationBootstrap).toBe(AttestationBootstrap);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-06b [P1]: Top-level barrel re-export — AttestationBootstrap
+  //   importable from @crosstown/core (AC #6)
+  // ---------------------------------------------------------------------------
+  it('re-exports AttestationBootstrap from top-level core barrel (T-4.6-06b)', async () => {
+    // Arrange & Act — import from top-level core index
+    const coreBarrel = await import('../index.js');
+
+    // Assert — class is exported and matches direct import
+    expect(coreBarrel.AttestationBootstrap).toBeDefined();
+    expect(coreBarrel.AttestationBootstrap).toBe(AttestationBootstrap);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-06c [P1]: off() method unregisters listeners
+  // ---------------------------------------------------------------------------
+  it('off() unregisters event listener (T-4.6-06c)', async () => {
+    // Arrange
+    const seedRelays = ['wss://seed1.crosstown.example'];
+    const validEvent = createValidAttestationEvent();
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(validEvent);
+    const mockVerifier = createMockVerifier('valid');
+    const mockSubscribePeers = vi.fn().mockResolvedValue([]);
+
+    const events: { type: string }[] = [];
+    const listener = (event: { type: string }) => events.push(event);
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    bootstrap.on(listener);
+    bootstrap.off(listener);
+
+    // Act
+    await bootstrap.bootstrap();
+
+    // Assert — no events captured because listener was removed
+    expect(events).toHaveLength(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-07 [P0]: queryAttestation throwing an error triggers fallback
+  //   (AC #2: "queryAttestation throws an error ... falls back to next")
+  // ---------------------------------------------------------------------------
+  it('falls back to next seed relay when queryAttestation throws an error (T-4.6-07)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const validEvent = createValidAttestationEvent();
+
+    // First relay throws, second returns valid
+    const mockQueryAttestation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Connection refused'))
+      .mockResolvedValueOnce(validEvent);
+
+    const mockVerifier = createMockVerifier('valid');
+    const mockSubscribePeers = vi.fn().mockResolvedValue([]);
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act — must NOT throw
+    const result = await bootstrap.bootstrap();
+
+    // Assert — fell back to second relay
+    expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
+    expect(mockQueryAttestation).toHaveBeenCalledWith(
+      'wss://seed1.crosstown.example'
+    );
+    expect(mockQueryAttestation).toHaveBeenCalledWith(
+      'wss://seed2.crosstown.example'
+    );
+
+    // Only the second relay should have been subscribed to
+    expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
+    expect(mockSubscribePeers).toHaveBeenCalledWith(
+      'wss://seed2.crosstown.example'
+    );
+
+    // Result is attested (second relay succeeded)
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-08 [P0]: Verification returning false triggers fallback to next relay
+  //   (AC #2: "fails verification ... falls back to next seed relay")
+  // ---------------------------------------------------------------------------
+  it('falls back to next seed relay when verification returns false (T-4.6-08)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const attestationEvent1 = createValidAttestationEvent();
+    const attestationEvent2 = createValidAttestationEvent();
+
+    const mockQueryAttestation = vi
+      .fn()
+      .mockResolvedValueOnce(attestationEvent1)
+      .mockResolvedValueOnce(attestationEvent2);
+
+    // Verifier rejects first, accepts second
+    const mockVerifier = {
+      verify: vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true),
+      getState: vi.fn(),
+    };
+
+    const mockSubscribePeers = vi.fn().mockResolvedValue([]);
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act
+    const result = await bootstrap.bootstrap();
+
+    // Assert — first relay failed verification, fell back to second
+    expect(mockVerifier.verify).toHaveBeenCalledTimes(2);
+    expect(mockVerifier.verify).toHaveBeenCalledWith(attestationEvent1);
+    expect(mockVerifier.verify).toHaveBeenCalledWith(attestationEvent2);
+
+    // Only the second relay was subscribed to
+    expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
+    expect(mockSubscribePeers).toHaveBeenCalledWith(
+      'wss://seed2.crosstown.example'
+    );
+
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-09 [P1]: subscribePeers throwing an error is handled gracefully
+  //   (AC #2: callback errors caught, treated as failure, fall back)
+  // ---------------------------------------------------------------------------
+  it('falls back to next seed relay when subscribePeers throws an error (T-4.6-09)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const validEvent = createValidAttestationEvent();
+    const peerInfoEvent = createPeerInfoEvent(validEvent.pubkey);
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(validEvent);
+    const mockVerifier = createMockVerifier('valid');
+
+    // First relay's subscribePeers throws, second succeeds
+    const mockSubscribePeers = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('WebSocket timeout'))
+      .mockResolvedValueOnce([peerInfoEvent]);
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act — must NOT throw
+    const result = await bootstrap.bootstrap();
+
+    // Assert — fell back to second relay after subscribePeers failed on first
+    expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
+    expect(mockSubscribePeers).toHaveBeenCalledTimes(2);
+
+    // Second relay succeeded
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.discoveredPeers).toHaveLength(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-09b [P1]: verifier.verify() throwing an error triggers fallback
+  //   (AC #2: callback errors caught, treated as failure, fall back)
+  // ---------------------------------------------------------------------------
+  it('falls back to next seed relay when verifier.verify() throws (T-4.6-09b)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const attestationEvent = createValidAttestationEvent();
+    const peerInfoEvent = createPeerInfoEvent(attestationEvent.pubkey);
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(attestationEvent);
+    const mockSubscribePeers = vi.fn().mockResolvedValue([peerInfoEvent]);
+
+    // Verifier throws on first call, succeeds on second
+    const mockVerifier = {
+      verify: vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error('Verification engine unavailable');
+        })
+        .mockResolvedValueOnce(true),
+      getState: vi.fn(),
+    };
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act — must NOT throw
+    const result = await bootstrap.bootstrap();
+
+    // Assert — first relay failed due to verifier throw, fell back to second
+    expect(mockVerifier.verify).toHaveBeenCalledTimes(2);
+    expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
+
+    // Only the second relay should have subscribePeers called
+    expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
+    expect(mockSubscribePeers).toHaveBeenCalledWith(
+      'wss://seed2.crosstown.example'
+    );
+
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.discoveredPeers).toHaveLength(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-10 [P1]: Degraded mode emits attestation:degraded event
+  //   (AC #4: degraded mode lifecycle event + verification-failed events)
+  // ---------------------------------------------------------------------------
+  it('emits attestation:degraded and verification-failed events when all relays fail (T-4.6-10)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(null);
+    const mockVerifier = createMockVerifier('missing');
+    const mockSubscribePeers = vi.fn().mockResolvedValue([]);
+
+    const events: { type: string; [key: string]: unknown }[] = [];
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    bootstrap.on((event) => events.push(event));
+
+    // Act
+    await bootstrap.bootstrap();
+
+    // Assert — verification-failed emitted for each relay
+    const failedEvents = events.filter(
+      (e) => e.type === 'attestation:verification-failed'
+    );
+    expect(failedEvents).toHaveLength(3);
+    expect(failedEvents[0]!['relayUrl']).toBe('wss://seed1.crosstown.example');
+    expect(failedEvents[1]!['relayUrl']).toBe('wss://seed2.crosstown.example');
+    expect(failedEvents[2]!['relayUrl']).toBe('wss://seed3.crosstown.example');
+
+    // Assert — seed-connected emitted for each relay
+    const connectedEvents = events.filter(
+      (e) => e.type === 'attestation:seed-connected'
+    );
+    expect(connectedEvents).toHaveLength(3);
+
+    // Assert — attestation:degraded emitted exactly once at the end
+    const degradedEvents = events.filter(
+      (e) => e.type === 'attestation:degraded'
+    );
+    expect(degradedEvents).toHaveLength(1);
+    expect(degradedEvents[0]!['triedCount']).toBe(3);
+
+    // Assert — no verified or peers-discovered events
+    const verifiedEvents = events.filter(
+      (e) => e.type === 'attestation:verified'
+    );
+    expect(verifiedEvents).toHaveLength(0);
+
+    const discoveredEvents = events.filter(
+      (e) => e.type === 'attestation:peers-discovered'
+    );
+    expect(discoveredEvents).toHaveLength(0);
+
+    warnSpy.mockRestore();
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-11 [P1]: Verifier returning VerificationResult { valid: true }
+  //   works correctly (normalization from VerificationResult to boolean)
+  // ---------------------------------------------------------------------------
+  it('handles VerificationResult object from verifier (T-4.6-11)', async () => {
+    // Arrange
+    const seedRelays = ['wss://seed1.crosstown.example'];
+    const validEvent = createValidAttestationEvent();
+    const peerInfoEvent = createPeerInfoEvent(validEvent.pubkey);
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(validEvent);
+    const mockSubscribePeers = vi.fn().mockResolvedValue([peerInfoEvent]);
+
+    // Verifier returns VerificationResult { valid: true } (real verifier shape)
+    const mockVerifier = {
+      verify: vi.fn().mockReturnValue({ valid: true, reason: undefined }),
+      getState: vi.fn(),
+    };
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act
+    const result = await bootstrap.bootstrap();
+
+    // Assert — VerificationResult.valid was normalized correctly
+    expect(result.mode).toBe('attested');
+    expect(result.attestedSeedRelay).toBe('wss://seed1.crosstown.example');
+    expect(result.discoveredPeers).toHaveLength(1);
+    expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-12 [P1]: Verifier returning VerificationResult { valid: false }
+  //   triggers fallback (normalization from VerificationResult to boolean)
+  // ---------------------------------------------------------------------------
+  it('falls back when VerificationResult has valid: false (T-4.6-12)', async () => {
+    // Arrange
+    const seedRelays = createSeedRelayList();
+    const attestationEvent = createValidAttestationEvent();
+
+    const mockQueryAttestation = vi.fn().mockResolvedValue(attestationEvent);
+    const mockSubscribePeers = vi.fn().mockResolvedValue([]);
+
+    // Verifier returns VerificationResult { valid: false } for all relays
+    const mockVerifier = {
+      verify: vi.fn().mockReturnValue({ valid: false, reason: 'PCR mismatch' }),
+      getState: vi.fn(),
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays,
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act
+    const result = await bootstrap.bootstrap();
+
+    // Assert — all relays failed, degraded mode
+    expect(result.mode).toBe('degraded');
+    expect(result.attestedSeedRelay).toBeUndefined();
+    expect(result.discoveredPeers).toEqual([]);
+    expect(mockSubscribePeers).not.toHaveBeenCalled();
+    expect(mockVerifier.verify).toHaveBeenCalledTimes(3);
+
+    warnSpy.mockRestore();
+  });
+
+  // ---------------------------------------------------------------------------
+  // T-4.6-13 [P1]: Empty seed relay list results in degraded mode
+  //   (edge case: no relays to try)
+  // ---------------------------------------------------------------------------
+  it('returns degraded mode when seed relay list is empty (T-4.6-13)', async () => {
+    // Arrange
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(vi.fn());
+
+    const mockQueryAttestation = vi.fn();
+    const mockVerifier = createMockVerifier('valid');
+    const mockSubscribePeers = vi.fn();
+
+    const bootstrap = new AttestationBootstrap({
+      seedRelays: [],
+      secretKey,
+      verifier: mockVerifier,
+      queryAttestation: mockQueryAttestation,
+      subscribePeers: mockSubscribePeers,
+    });
+
+    // Act
+    const result = await bootstrap.bootstrap();
+
+    // Assert — degraded with no attempts
+    expect(result.mode).toBe('degraded');
+    expect(result.attestedSeedRelay).toBeUndefined();
+    expect(result.discoveredPeers).toEqual([]);
+    expect(mockQueryAttestation).not.toHaveBeenCalled();
+    expect(mockSubscribePeers).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('No attested seed relays found')
+    );
+
+    warnSpy.mockRestore();
   });
 });
 

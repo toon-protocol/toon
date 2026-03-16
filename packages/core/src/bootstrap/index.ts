@@ -76,3 +76,12 @@ export {
   type PeerDescriptor,
   type AttestationVerifierConfig,
 } from './AttestationVerifier.js';
+
+// Attestation-first bootstrap (Story 4.6)
+export {
+  AttestationBootstrap,
+  type AttestationBootstrapConfig,
+  type AttestationBootstrapResult,
+  type AttestationBootstrapEvent,
+  type AttestationBootstrapEventListener,
+} from './AttestationBootstrap.js';

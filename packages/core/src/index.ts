@@ -114,6 +114,11 @@ export {
   type VerificationResult,
   type PeerDescriptor,
   type AttestationVerifierConfig,
+  AttestationBootstrap,
+  type AttestationBootstrapConfig,
+  type AttestationBootstrapResult,
+  type AttestationBootstrapEvent,
+  type AttestationBootstrapEventListener,
 } from './bootstrap/index.js';
 
 // Compose - embedded connector orchestration
