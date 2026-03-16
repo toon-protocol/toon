@@ -38,6 +38,7 @@ import {
   createHttpConnectorAdmin,
   createHttpChannelClient,
   resolveChainConfig,
+  buildIlpPrepare,
 } from '@crosstown/core';
 import type {
   IlpClient,
@@ -757,15 +758,17 @@ export function createNode(config: NodeConfig): ServiceNode {
         const amount =
           (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
 
-        // Convert to base64
-        const base64Data = Buffer.from(toonData).toString('base64');
+        // Build ILP PREPARE packet using shared construction (packet equivalence
+        // with x402 rail -- the destination relay cannot distinguish between
+        // packets sent via publishEvent() and the x402 /publish endpoint).
+        const packet = buildIlpPrepare({
+          destination: options.destination,
+          amount,
+          data: toonData,
+        });
 
         // Send via ILP client
-        const result = await ilpClient.sendIlpPacket({
-          destination: options.destination,
-          amount: String(amount),
-          data: base64Data,
-        });
+        const result = await ilpClient.sendIlpPacket(packet);
 
         // Map IlpSendResult to PublishEventResult
         if (result.accepted) {

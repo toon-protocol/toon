@@ -9,13 +9,21 @@
  * repo. This contract serves as the mock USDC for payment channel testing.
  *
  * **On-chain decimal discrepancy (Anvil only):**
- * The on-chain mock contract on Anvil still uses 18 decimals (inherited
+ * The legacy on-chain mock contract on Anvil uses 18 decimals (inherited
  * from the original ERC-20 deploy script in the connector repo). The
  * constants below reflect production USDC semantics (6 decimals). When
  * interacting with the Anvil mock contract directly (e.g., fund-peer-wallet.sh,
  * faucet), use 18 decimals for on-chain amounts. The pricing pipeline
  * (basePricePerByte * toonLength) is denomination-agnostic (bigint math)
  * and works correctly regardless of on-chain decimals.
+ *
+ * **FiatTokenV2_2-compatible mock (Epic 5 prep):**
+ * For DVM compute settlement and x402 testing with proper 6-decimal
+ * semantics and EIP-3009 `transferWithAuthorization` support, deploy
+ * the FiatTokenV2_2-compatible mock:
+ *   `./scripts/deploy-mock-usdc.sh`
+ * This deploys a contract with 6 decimals, EIP-3009, and EIP-712
+ * domain matching production USDC ("USD Coin", version "2").
  *
  * USDC uses 6 decimals (not 18 like most ERC-20 tokens):
  *   1 USDC = 1,000,000 micro-USDC (10^6)
