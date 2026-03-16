@@ -28,7 +28,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -583,6 +583,7 @@ describe('Story 3.1: USDC Token Migration', () => {
   describe('Environment files USDC references (T-3.1-15)', () => {
     it('[P2] root .env has no AGENT references', () => {
       const envPath = resolve(monoRoot, '.env');
+      if (!existsSync(envPath)) return; // .env is gitignored; skip in CI
       const envSource = readFileSync(envPath, 'utf-8');
 
       // No AGENT as a standalone word (token name context)
@@ -591,6 +592,7 @@ describe('Story 3.1: USDC Token Migration', () => {
 
     it('[P2] packages/sdk/.env has no AGENT references', () => {
       const envPath = resolve(monoRoot, 'packages/sdk/.env');
+      if (!existsSync(envPath)) return; // .env is gitignored; skip in CI
       const envSource = readFileSync(envPath, 'utf-8');
 
       // No AGENT as a standalone word (token name context)
