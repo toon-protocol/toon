@@ -38,9 +38,18 @@ export interface SendPacketParams {
  * (13 = FULFILL, 14 = REJECT) used by @crosstown/connector@1.6.0+.
  */
 export type SendPacketResult =
-  | { type: 'fulfill'; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | {
+      type: 'fulfill';
+      fulfillment: Uint8Array | Buffer;
+      data?: Uint8Array | Buffer;
+    }
   | { type: 13; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
-  | { type: 'reject'; code: string; message: string; data?: Uint8Array | Buffer }
+  | {
+      type: 'reject';
+      code: string;
+      message: string;
+      data?: Uint8Array | Buffer;
+    }
   | { type: 14; code: string; message: string; data?: Uint8Array | Buffer };
 
 /**

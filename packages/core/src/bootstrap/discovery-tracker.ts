@@ -227,8 +227,7 @@ export function createDiscoveryTracker(
       } catch (error) {
         // Rollback peered state on registration failure
         peeredPubkeys.delete(targetPubkey);
-        const reason =
-          error instanceof Error ? error.message : 'Unknown error';
+        const reason = error instanceof Error ? error.message : 'Unknown error';
         console.warn(
           `[DiscoveryTracker] Failed to register ${peerId}:`,
           reason
@@ -257,15 +256,13 @@ export function createDiscoveryTracker(
           );
 
           if (negotiatedChain) {
-            const peerAddress =
-              peerInfo.settlementAddresses[negotiatedChain];
+            const peerAddress = peerInfo.settlementAddresses[negotiatedChain];
             const tokenAddress = resolveTokenForChain(
               negotiatedChain,
               config.settlementInfo.preferredTokens,
               peerInfo.preferredTokens
             );
-            const tokenNetwork =
-              peerInfo.tokenNetworks?.[negotiatedChain];
+            const tokenNetwork = peerInfo.tokenNetworks?.[negotiatedChain];
 
             if (peerAddress) {
               const channelResult = await channelClient.openChannel({

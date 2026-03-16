@@ -52,7 +52,7 @@ const GENESIS_PUBKEY =
 const TEST_ACCOUNT_ADDRESS = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
 
 // Deployed contract addresses (deterministic on Anvil)
-const TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'; // Mock USDC (Anvil)
 const TOKEN_NETWORK_ADDRESS = '0xCafac3dD18aC6c6e92c921884f9E4176737C052c';
 const CHAIN_ID = 'evm:base:31337';
 

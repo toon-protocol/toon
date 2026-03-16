@@ -37,6 +37,8 @@ import {
   createHttpIlpClient,
   createHttpConnectorAdmin,
   createHttpChannelClient,
+  resolveChainConfig,
+  buildIlpPrepare,
 } from '@crosstown/core';
 import type {
   IlpClient,
@@ -79,6 +81,9 @@ export interface NodeConfig {
   /** 32-byte secp256k1 secret key */
   secretKey: Uint8Array;
 
+  /** Chain preset name (default: 'anvil'). See resolveChainConfig(). */
+  chain?: string;
+
   // --- Connector (exactly one mode required) ---
 
   /** Embedded connector instance for zero-latency mode. */
@@ -104,7 +109,13 @@ export interface NodeConfig {
   assetCode?: string;
   /** Asset scale (default: 6) */
   assetScale?: number;
-  /** Base price per byte for pricing validation (default: 10n) */
+  /**
+   * Base price per byte for pricing validation (default: 10n).
+   *
+   * Amounts are in USDC micro-units (6 decimals) for production.
+   * Default 10n = 10 micro-USDC per byte = $0.00001/byte.
+   * A 1KB event costs 10,240 micro-USDC = ~$0.01.
+   */
   basePricePerByte?: bigint;
   /** Dev mode skips signature verification (default: false) */
   devMode?: boolean;
@@ -231,6 +242,27 @@ export function createNode(config: NodeConfig): ServiceNode {
   }
   const embeddedMode = hasConnector;
 
+  // 0b. Resolve chain config and auto-populate settlementInfo if not set
+  const chainConfig = resolveChainConfig(config.chain);
+  let effectiveSettlementInfo = config.settlementInfo;
+  if (!effectiveSettlementInfo) {
+    const chainKey = `evm:base:${chainConfig.chainId}`;
+    const supportedChains = [chainKey];
+    const preferredTokens: Record<string, string> = {
+      [chainKey]: chainConfig.usdcAddress,
+    };
+    const tokenNetworks: Record<string, string> | undefined =
+      chainConfig.tokenNetworkAddress
+        ? { [chainKey]: chainConfig.tokenNetworkAddress }
+        : undefined;
+
+    effectiveSettlementInfo = {
+      supportedChains,
+      preferredTokens,
+      ...(tokenNetworks && { tokenNetworks }),
+    };
+  }
+
   // 1. Derive identity from secretKey
   let identity;
   try {
@@ -287,7 +319,8 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // Mutable ref so the packet handler closure can access the tracker after it's created.
-  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } = {};
+  const trackerRef: { current?: { processEvent(event: NostrEvent): void } } =
+    {};
 
   // 8. Build the pipelined packet handler (Option A: directly on HandlePacketRequest)
   const pipelinedHandler = async (
@@ -445,7 +478,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       toonDecoder: decoder,
       relayUrl: config.relayUrl,
       knownPeers: config.knownPeers,
-      settlementInfo: config.settlementInfo,
+      settlementInfo: effectiveSettlementInfo,
       basePricePerByte: config.basePricePerByte,
       ardriveEnabled: config.ardriveEnabled,
     });
@@ -454,7 +487,10 @@ export function createNode(config: NodeConfig): ServiceNode {
     channelClient = crosstownNode.channelClient;
     bootstrapServiceInstance = crosstownNode.bootstrapService;
     discoveryTrackerInstance = crosstownNode.discoveryTracker;
-    adminClient = { addPeer: () => Promise.resolve(), removePeer: () => Promise.resolve() };
+    adminClient = {
+      addPeer: () => Promise.resolve(),
+      removePeer: () => Promise.resolve(),
+    };
 
     trackerRef.current = discoveryTrackerInstance;
 
@@ -469,7 +505,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     adminClient = createHttpConnectorAdmin(connectorUrl, '');
 
     // Channel client via HTTP if settlement is configured
-    if (config.settlementInfo) {
+    if (effectiveSettlementInfo) {
       channelClient = createHttpChannelClient(connectorUrl);
     }
 
@@ -479,7 +515,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         knownPeers: config.knownPeers ?? [],
         ardriveEnabled: config.ardriveEnabled ?? false,
         defaultRelayUrl: config.relayUrl ?? '',
-        settlementInfo: config.settlementInfo,
+        settlementInfo: effectiveSettlementInfo,
         ownIlpAddress: ilpInfo.ilpAddress,
         toonEncoder: encoder,
         toonDecoder: decoder,
@@ -498,7 +534,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     // Create DiscoveryTracker
     discoveryTrackerInstance = createDiscoveryTracker({
       secretKey: config.secretKey,
-      settlementInfo: config.settlementInfo,
+      settlementInfo: effectiveSettlementInfo,
     });
     discoveryTrackerInstance.setConnectorAdmin(adminClient);
     if (channelClient) {
@@ -524,7 +560,14 @@ export function createNode(config: NodeConfig): ServiceNode {
           req.on('end', async () => {
             try {
               const request = JSON.parse(body) as HandlePacketRequest;
-              if (!request.amount || !request.destination || !request.data) {
+              if (
+                request.amount === undefined ||
+                request.amount === null ||
+                request.destination === undefined ||
+                request.destination === null ||
+                request.data === undefined ||
+                request.data === null
+              ) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(
                   JSON.stringify({
@@ -715,15 +758,17 @@ export function createNode(config: NodeConfig): ServiceNode {
         const amount =
           (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
 
-        // Convert to base64
-        const base64Data = Buffer.from(toonData).toString('base64');
+        // Build ILP PREPARE packet using shared construction (packet equivalence
+        // with x402 rail -- the destination relay cannot distinguish between
+        // packets sent via publishEvent() and the x402 /publish endpoint).
+        const packet = buildIlpPrepare({
+          destination: options.destination,
+          amount,
+          data: toonData,
+        });
 
         // Send via ILP client
-        const result = await ilpClient.sendIlpPacket({
-          destination: options.destination,
-          amount: String(amount),
-          data: base64Data,
-        });
+        const result = await ilpClient.sendIlpPacket(packet);
 
         // Map IlpSendResult to PublishEventResult
         if (result.accepted) {

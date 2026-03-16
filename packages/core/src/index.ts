@@ -7,11 +7,17 @@
 export const VERSION = '0.1.0';
 
 // Event kind constants
-export { ILP_PEER_INFO_KIND } from './constants.js';
+export {
+  ILP_PEER_INFO_KIND,
+  SERVICE_DISCOVERY_KIND,
+  SEED_RELAY_LIST_KIND,
+  TEE_ATTESTATION_KIND,
+} from './constants.js';
 
 // TypeScript interfaces
 export type {
   IlpPeerInfo,
+  TeeAttestation,
   Subscription,
   OpenChannelParams,
   OpenChannelResult,
@@ -31,6 +37,16 @@ export {
   parseIlpPeerInfo,
   validateChainId,
   buildIlpPeerInfoEvent,
+  buildSeedRelayListEvent,
+  parseSeedRelayList,
+  type SeedRelayEntry,
+  buildServiceDiscoveryEvent,
+  parseServiceDiscovery,
+  type ServiceDiscoveryContent,
+  buildAttestationEvent,
+  parseAttestation,
+  type AttestationEventOptions,
+  type ParsedAttestation,
 } from './events/index.js';
 
 // Peer discovery
@@ -43,6 +59,11 @@ export {
   type SocialPeerDiscoveryConfig,
   type SocialDiscoveryEvent,
   type SocialDiscoveryEventListener,
+  SeedRelayDiscovery,
+  publishSeedRelayEntry,
+  type SeedRelayDiscoveryConfig,
+  type SeedRelayDiscoveryResult,
+  type PublishSeedRelayConfig,
 } from './discovery/index.js';
 
 // Settlement utilities
@@ -88,6 +109,16 @@ export {
   createHttpConnectorAdmin,
   createHttpRuntimeClientV2,
   createHttpChannelClient,
+  AttestationVerifier,
+  AttestationState,
+  type VerificationResult,
+  type PeerDescriptor,
+  type AttestationVerifierConfig,
+  AttestationBootstrap,
+  type AttestationBootstrapConfig,
+  type AttestationBootstrapResult,
+  type AttestationBootstrapEvent,
+  type AttestationBootstrapEventListener,
 } from './bootstrap/index.js';
 
 // Compose - embedded connector orchestration
@@ -114,6 +145,65 @@ export {
   shallowParseToon,
   type ToonRoutingMeta,
 } from './toon/index.js';
+
+// Chain configuration
+export {
+  MOCK_USDC_ADDRESS,
+  USDC_DECIMALS,
+  USDC_SYMBOL,
+  USDC_NAME,
+  MOCK_USDC_CONFIG,
+  type MockUsdcConfig,
+} from './chain/usdc.js';
+
+// Chain presets and multi-environment configuration
+export {
+  resolveChainConfig,
+  buildEip712Domain,
+  CHAIN_PRESETS,
+  type ChainPreset,
+  type ChainName,
+} from './chain/chain-config.js';
+
+// x402 protocol support (shared ILP PREPARE construction)
+export {
+  buildIlpPrepare,
+  type BuildIlpPrepareParams,
+  type IlpPreparePacket,
+} from './x402/index.js';
+
+// KMS Identity (TEE enclave-bound key derivation)
+export {
+  deriveFromKmsSeed,
+  KmsIdentityError,
+  type KmsKeypair,
+  type DeriveFromKmsSeedOptions,
+} from './identity/index.js';
+
+// Nix reproducible builds (TEE deployment)
+export {
+  NixBuilder,
+  type NixBuildResult,
+  type NixBuilderConfig,
+  verifyPcrReproducibility,
+  readDockerfileNix,
+  analyzeDockerfileForNonDeterminism,
+  PcrReproducibilityError,
+  type PcrReproducibilityResult,
+  type VerifyOptions,
+  type DeterminismReport,
+  type Violation,
+  type ForbiddenPattern,
+} from './build/index.js';
+
+// Structured logging
+export {
+  createLogger,
+  type Logger,
+  type LoggerConfig,
+  type LogLevel,
+  type LogEntry,
+} from './logger.js';
 
 // NIP-34: Git stuff
 // NOTE: Import from '@crosstown/core/nip34' to use Git integration

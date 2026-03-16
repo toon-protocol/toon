@@ -151,7 +151,7 @@ describe('buildIlpPeerInfoEvent - settlement fields', () => {
     return {
       ...createTestIlpPeerInfoWithChains(),
       settlementEngine: 'xrp-paychan',
-      preferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
+      preferredTokens: { 'evm:base:8453': '0xUSDC_TOKEN' },
       tokenNetworks: { 'evm:base:8453': '0xTOKEN_NETWORK' },
     };
   }
@@ -172,7 +172,7 @@ describe('buildIlpPeerInfoEvent - settlement fields', () => {
       'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
     });
     expect(content.preferredTokens).toEqual({
-      'evm:base:8453': '0xAGENT_TOKEN',
+      'evm:base:8453': '0xUSDC_TOKEN',
     });
     expect(content.tokenNetworks).toEqual({
       'evm:base:8453': '0xTOKEN_NETWORK',
@@ -207,7 +207,7 @@ describe('round-trip tests - settlement fields', () => {
         'evm:base:8453': '0x1234567890abcdef1234567890abcdef12345678',
         'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
       },
-      preferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
+      preferredTokens: { 'evm:base:8453': '0xUSDC_TOKEN' },
       tokenNetworks: { 'evm:base:8453': '0xTOKEN_NETWORK' },
     };
 

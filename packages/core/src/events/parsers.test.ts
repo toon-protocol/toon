@@ -220,7 +220,7 @@ describe('parseIlpPeerInfo - settlement fields', () => {
     const secretKey = generateSecretKey();
     const info: IlpPeerInfo = {
       ...createTestIlpPeerInfoWithChains(),
-      preferredTokens: { 'evm:base:8453': '0xAGENT_TOKEN' },
+      preferredTokens: { 'evm:base:8453': '0xUSDC_TOKEN' },
       tokenNetworks: { 'evm:base:8453': '0xTOKEN_NETWORK' },
     };
     const event = buildIlpPeerInfoEvent(info, secretKey);
@@ -235,7 +235,7 @@ describe('parseIlpPeerInfo - settlement fields', () => {
       'xrp:mainnet': 'rN7n3473SaZBCG4dFL83w7p1W9cgZw6dit',
     });
     expect(result.preferredTokens).toEqual({
-      'evm:base:8453': '0xAGENT_TOKEN',
+      'evm:base:8453': '0xUSDC_TOKEN',
     });
     expect(result.tokenNetworks).toEqual({
       'evm:base:8453': '0xTOKEN_NETWORK',

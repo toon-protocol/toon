@@ -24,9 +24,7 @@ import type { IlpClient, IlpSendResult } from './types.js';
  * });
  * ```
  */
-export function createHttpIlpClient(
-  connectorUrl: string
-): IlpClient {
+export function createHttpIlpClient(connectorUrl: string): IlpClient {
   const baseUrl = connectorUrl.replace(/\/$/, '');
 
   return {

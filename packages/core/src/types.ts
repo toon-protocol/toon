@@ -83,6 +83,25 @@ export interface ChannelState {
 }
 
 /**
+ * TEE Attestation content for kind:10033 events (Pattern 14).
+ * Contains attestation data from a Trusted Execution Environment.
+ */
+export interface TeeAttestation {
+  /** Enclave type identifier (e.g., 'aws-nitro', 'marlin-oyster'). */
+  enclave: string;
+  /** Platform Configuration Register 0 (SHA-384 hex, 96 chars). */
+  pcr0: string;
+  /** Platform Configuration Register 1 (SHA-384 hex, 96 chars). */
+  pcr1: string;
+  /** Platform Configuration Register 2 (SHA-384 hex, 96 chars). */
+  pcr2: string;
+  /** Base64-encoded attestation document from the TEE platform. */
+  attestationDoc: string;
+  /** Attestation format version. */
+  version: string;
+}
+
+/**
  * Interface for interacting with the connector's channel Admin API.
  * Abstracts POST /admin/channels and GET /admin/channels/:channelId.
  */

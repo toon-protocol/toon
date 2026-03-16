@@ -191,3 +191,115 @@ describe('Pricing Validator', () => {
     expect(result.rejection!.metadata!['received']).toBe('499');
   });
 });
+
+// =============================================================================
+// Story 3.1 Gap-Filling: USDC Denomination Integration (T-3.1-06)
+//
+// AC #2: "pricing is calculated for an event, then the amount is denominated
+// in USDC (micro-units), and the pricing model remains basePricePerByte *
+// toonData.length"
+//
+// These tests verify the actual createPricingValidator works correctly with
+// realistic USDC-scale amounts (6 decimals, not 18).
+// =============================================================================
+describe('Pricing Validator — USDC denomination (Story 3.1, AC #2)', () => {
+  /**
+   * USDC has 6 decimals: 1 USDC = 1,000,000 micro-USDC.
+   * basePricePerByte = 10n means 10 micro-USDC per byte = $0.00001/byte.
+   */
+  const USDC_BASE_PRICE = 10n;
+
+  it('[P1] 1KB event costs 10,240 micro-USDC (~$0.01) with default pricing', () => {
+    // Arrange
+    const validator = createPricingValidator({
+      basePricePerByte: USDC_BASE_PRICE,
+      ownPubkey: 'ff'.repeat(32),
+    });
+    const meta = createMockMeta({ rawBytes: new Uint8Array(1024) }); // 1KB
+
+    // Expected: 1024 bytes * 10 micro-USDC/byte = 10,240 micro-USDC
+    const exactPayment = 10240n;
+
+    // Act — exact payment accepted
+    const result = validator.validate(meta, exactPayment);
+
+    // Assert
+    expect(result.accepted).toBe(true);
+
+    // Verify underpayment by 1 micro-USDC is rejected
+    const underpaid = validator.validate(meta, exactPayment - 1n);
+    expect(underpaid.accepted).toBe(false);
+    expect(underpaid.rejection!.metadata!['required']).toBe('10240');
+    expect(underpaid.rejection!.metadata!['received']).toBe('10239');
+  });
+
+  it('[P1] 10KB event costs 102,400 micro-USDC (~$0.10) with default pricing', () => {
+    // Arrange
+    const validator = createPricingValidator({
+      basePricePerByte: USDC_BASE_PRICE,
+      ownPubkey: 'ff'.repeat(32),
+    });
+    const meta = createMockMeta({
+      rawBytes: new Uint8Array(10 * 1024),
+    }); // 10KB
+
+    // Expected: 10,240 bytes * 10 micro-USDC/byte = 102,400 micro-USDC = $0.1024
+    const exactPayment = 102400n;
+
+    // Act
+    const result = validator.validate(meta, exactPayment);
+
+    // Assert
+    expect(result.accepted).toBe(true);
+  });
+
+  it('[P1] USDC micro-unit amounts are compatible with 6-decimal token', () => {
+    // Arrange: demonstrate that pricing produces amounts that make sense
+    // in USDC 6-decimal context (not 18-decimal like old AGENT token)
+    const validator = createPricingValidator({
+      basePricePerByte: USDC_BASE_PRICE,
+      ownPubkey: 'ff'.repeat(32),
+    });
+
+    // A typical small Nostr event (~256 bytes)
+    const meta = createMockMeta({ rawBytes: new Uint8Array(256) });
+    const payment = USDC_BASE_PRICE * 256n; // 2,560 micro-USDC
+
+    // Act
+    const result = validator.validate(meta, payment);
+
+    // Assert
+    expect(result.accepted).toBe(true);
+
+    // Verify the amount is in a reasonable USDC range
+    // 2,560 micro-USDC = 0.00256 USDC = ~$0.00256
+    // This is a sensible micropayment amount for a single event
+    const usdcDollars = Number(payment) / 1_000_000; // 6 decimals
+    expect(usdcDollars).toBeGreaterThan(0);
+    expect(usdcDollars).toBeLessThan(1); // well under $1 per event
+  });
+
+  it('[P1] pricing formula is denomination-agnostic (bigint arithmetic only)', () => {
+    // Arrange: the same validator works regardless of decimal interpretation
+    // This proves the formula basePricePerByte * rawBytes.length is unchanged
+    const validator = createPricingValidator({
+      basePricePerByte: 10n,
+      ownPubkey: 'ff'.repeat(32),
+    });
+
+    // Test with various sizes
+    const sizes = [1, 100, 512, 1024, 4096, 65536];
+    for (const size of sizes) {
+      const meta = createMockMeta({ rawBytes: new Uint8Array(size) });
+      const required = 10n * BigInt(size);
+
+      // Exact payment accepted
+      expect(validator.validate(meta, required).accepted).toBe(true);
+
+      // 1 below rejected
+      if (required > 0n) {
+        expect(validator.validate(meta, required - 1n).accepted).toBe(false);
+      }
+    }
+  });
+});

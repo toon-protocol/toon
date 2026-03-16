@@ -19,13 +19,7 @@ function grepDirs(pattern: string, dirs: string[]): string[] {
   try {
     const output = execFileSync(
       'grep',
-      [
-        '-r',
-        '--include=*.ts',
-        '-l',
-        pattern,
-        ...dirs,
-      ],
+      ['-r', '--include=*.ts', '-l', pattern, ...dirs],
       { encoding: 'utf-8' }
     );
     return output

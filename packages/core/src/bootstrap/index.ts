@@ -67,3 +67,21 @@ export {
   createDirectBlsClient,
   type DirectBlsClientConfig,
 } from './direct-bls-client.js';
+
+// Attestation verifier (Story 4.3)
+export {
+  AttestationVerifier,
+  AttestationState,
+  type VerificationResult,
+  type PeerDescriptor,
+  type AttestationVerifierConfig,
+} from './AttestationVerifier.js';
+
+// Attestation-first bootstrap (Story 4.6)
+export {
+  AttestationBootstrap,
+  type AttestationBootstrapConfig,
+  type AttestationBootstrapResult,
+  type AttestationBootstrapEvent,
+  type AttestationBootstrapEventListener,
+} from './AttestationBootstrap.js';
