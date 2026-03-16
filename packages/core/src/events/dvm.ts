@@ -514,7 +514,8 @@ export function parseJobRequest(event: NostrEvent): ParsedJobRequest | null {
   // Extract optional 'p' tag (target provider) -- validate hex format if present
   const pTag = event.tags.find((t: string[]) => t[0] === 'p');
   const targetProvider = pTag?.[1];
-  if (targetProvider !== undefined && !HEX_64_REGEX.test(targetProvider)) return null;
+  if (targetProvider !== undefined && !HEX_64_REGEX.test(targetProvider))
+    return null;
 
   // Extract optional 'param' tags (collect all)
   const paramTags = event.tags.filter((t: string[]) => t[0] === 'param');
@@ -578,13 +579,15 @@ export function parseJobResult(event: NostrEvent): ParsedJobResult | null {
   const eTag = event.tags.find((t: string[]) => t[0] === 'e');
   if (!eTag) return null;
   const requestEventId = eTag[1];
-  if (requestEventId === undefined || !HEX_64_REGEX.test(requestEventId)) return null;
+  if (requestEventId === undefined || !HEX_64_REGEX.test(requestEventId))
+    return null;
 
   // Extract required 'p' tag: ['p', customerPubkey]
   const pTag = event.tags.find((t: string[]) => t[0] === 'p');
   if (!pTag) return null;
   const customerPubkey = pTag[1];
-  if (customerPubkey === undefined || !HEX_64_REGEX.test(customerPubkey)) return null;
+  if (customerPubkey === undefined || !HEX_64_REGEX.test(customerPubkey))
+    return null;
 
   // Extract required 'amount' tag: ['amount', cost, 'usdc']
   const amountTag = event.tags.find((t: string[]) => t[0] === 'amount');
@@ -625,13 +628,15 @@ export function parseJobFeedback(event: NostrEvent): ParsedJobFeedback | null {
   const eTag = event.tags.find((t: string[]) => t[0] === 'e');
   if (!eTag) return null;
   const requestEventId = eTag[1];
-  if (requestEventId === undefined || !HEX_64_REGEX.test(requestEventId)) return null;
+  if (requestEventId === undefined || !HEX_64_REGEX.test(requestEventId))
+    return null;
 
   // Extract required 'p' tag: ['p', customerPubkey]
   const pTag = event.tags.find((t: string[]) => t[0] === 'p');
   if (!pTag) return null;
   const customerPubkey = pTag[1];
-  if (customerPubkey === undefined || !HEX_64_REGEX.test(customerPubkey)) return null;
+  if (customerPubkey === undefined || !HEX_64_REGEX.test(customerPubkey))
+    return null;
 
   // Extract required 'status' tag: ['status', statusValue]
   const statusTag = event.tags.find((t: string[]) => t[0] === 'status');

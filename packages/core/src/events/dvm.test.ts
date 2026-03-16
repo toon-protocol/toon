@@ -2073,7 +2073,10 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
       const event = createTestJobResultEvent({
         tags: [
           ['e', 'a'.repeat(64)],
-          ['p', 'NOT-A-VALID-HEX-PUBKEY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'],
+          [
+            'p',
+            'NOT-A-VALID-HEX-PUBKEY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',
+          ],
           ['amount', '500000', 'usdc'],
         ],
       });
