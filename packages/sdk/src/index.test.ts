@@ -110,6 +110,8 @@ describe('@crosstown/sdk public API exports', () => {
       'createEventStorageHandler',
       // Node composition (Story 1.7)
       'createNode',
+      // Skill descriptor builder (Story 5.4)
+      'buildSkillDescriptor',
     ]);
 
     // Act

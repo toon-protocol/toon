@@ -65,5 +65,12 @@ export type {
   PublishEventResult,
 } from './create-node.js';
 
+// Skill descriptor builder (Story 5.4)
+export { buildSkillDescriptor } from './skill-descriptor.js';
+export type { BuildSkillDescriptorConfig } from './skill-descriptor.js';
+
+// Re-export types from core for convenience
+export type { SkillDescriptor } from '@crosstown/core';
+
 // Re-export bootstrap types for lifecycle event listeners
 export type { BootstrapEvent, BootstrapEventListener } from '@crosstown/core';

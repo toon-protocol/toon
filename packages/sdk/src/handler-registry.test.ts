@@ -241,4 +241,102 @@ describe('HandlerRegistry', () => {
     await registry.dispatch(createMockContext({ kind: 99999 }));
     expect(defaultHandler).toHaveBeenCalledTimes(1);
   });
+
+  // --------------------------------------------------------------------------
+  // Story 5.4: getRegisteredKinds() and getDvmKinds()
+  // --------------------------------------------------------------------------
+
+  describe('getRegisteredKinds() (T-5.4-17)', () => {
+    it('[P1] returns all registered kinds sorted ascending', () => {
+      // Arrange
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(30617, handler);
+      registry.on(1, handler);
+      registry.on(5100, handler);
+
+      // Act
+      const kinds = registry.getRegisteredKinds();
+
+      // Assert
+      expect(kinds).toEqual([1, 5100, 30617]);
+    });
+
+    it('[P1] returns empty array when no handlers registered', () => {
+      // Act
+      const kinds = registry.getRegisteredKinds();
+
+      // Assert
+      expect(kinds).toEqual([]);
+    });
+  });
+
+  describe('getDvmKinds() (T-5.4-18)', () => {
+    it('[P1] returns only kinds in 5000-5999 range', () => {
+      // Arrange
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(1, handler);
+      registry.on(5100, handler);
+      registry.on(5200, handler);
+      registry.on(6100, handler);
+      registry.on(10032, handler);
+
+      // Act
+      const dvmKinds = registry.getDvmKinds();
+
+      // Assert: only 5100 and 5200 are in DVM request range (5000-5999)
+      expect(dvmKinds).toEqual([5100, 5200]);
+    });
+
+    it('[P1] returns empty array when no DVM handlers registered (T-5.4-19)', () => {
+      // Arrange: register non-DVM kinds only
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(1, handler);
+      registry.on(10032, handler);
+
+      // Act
+      const dvmKinds = registry.getDvmKinds();
+
+      // Assert
+      expect(dvmKinds).toEqual([]);
+    });
+
+    it('[P1] register 5100 and 5200 -> getDvmKinds() returns [5100, 5200] (T-5.4-04)', () => {
+      // Arrange: register DVM handlers via .on()
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(5100, handler);
+      registry.on(5200, handler);
+
+      // Act
+      const dvmKinds = registry.getDvmKinds();
+
+      // Assert: exactly the registered DVM kinds
+      expect(dvmKinds).toEqual([5100, 5200]);
+    });
+
+    it('[P1] includes boundary kinds 5000 and 5999', () => {
+      // Arrange: register boundary kinds
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(5000, handler);
+      registry.on(5999, handler);
+
+      // Act
+      const dvmKinds = registry.getDvmKinds();
+
+      // Assert: both boundary values included
+      expect(dvmKinds).toEqual([5000, 5999]);
+    });
+
+    it('[P1] excludes kind 4999 and kind 6000', () => {
+      // Arrange: register kinds just outside the DVM range
+      const handler = vi.fn().mockResolvedValue({ accept: true });
+      registry.on(4999, handler);
+      registry.on(6000, handler);
+
+      // Act
+      const dvmKinds = registry.getDvmKinds();
+
+      // Assert: both are outside the range
+      expect(dvmKinds).toEqual([]);
+    });
+  });
 });

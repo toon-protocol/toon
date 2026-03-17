@@ -55,11 +55,16 @@ import {
   encodeEventToToon,
 } from '@crosstown/core/toon';
 
+import type { SkillDescriptor } from '@crosstown/core';
 import { fromSecretKey } from './identity.js';
 import { HandlerRegistry, type Handler } from './handler-registry.js';
 import { createHandlerContext } from './handler-context.js';
 import { createVerificationPipeline } from './verification-pipeline.js';
 import { createPricingValidator } from './pricing-validator.js';
+import {
+  buildSkillDescriptor,
+  type BuildSkillDescriptorConfig,
+} from './skill-descriptor.js';
 import { NodeError } from './errors.js';
 
 /**
@@ -141,6 +146,15 @@ export interface NodeConfig {
   handlers?: Record<number, Handler>;
   /** Config-based default handler (alternative to post-creation .onDefault()) */
   defaultHandler?: Handler;
+  /**
+   * Optional skill descriptor configuration overrides.
+   * When DVM handlers are registered, these values override the auto-derived
+   * defaults in the skill descriptor. See buildSkillDescriptor().
+   */
+  skillConfig?: Omit<
+    BuildSkillDescriptorConfig,
+    'basePricePerByte' | 'kindPricing'
+  >;
 }
 
 /**
@@ -248,6 +262,13 @@ export interface ServiceNode {
     content: string,
     options?: { destination: string; kind?: number }
   ): Promise<PublishEventResult>;
+
+  /**
+   * Returns the computed skill descriptor for this node's DVM capabilities.
+   * Returns `undefined` if no DVM handlers (kinds 5000-5999) are registered.
+   * The descriptor is computed from the handler registry and node config.
+   */
+  getSkillDescriptor(): SkillDescriptor | undefined;
 
   /**
    * Send an ILP payment to a provider for compute settlement.
@@ -716,6 +737,14 @@ export function createNode(config: NodeConfig): ServiceNode {
     },
     get channelClient() {
       return channelClient;
+    },
+
+    getSkillDescriptor(): SkillDescriptor | undefined {
+      return buildSkillDescriptor(registry, {
+        basePricePerByte: config.basePricePerByte ?? 10n,
+        kindPricing: config.kindPricing,
+        ...config.skillConfig,
+      });
     },
 
     on(

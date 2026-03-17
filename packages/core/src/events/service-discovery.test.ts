@@ -50,7 +50,10 @@ import {
   parseServiceDiscovery,
   SERVICE_DISCOVERY_KIND,
 } from './service-discovery.js';
-import type { ServiceDiscoveryContent } from './service-discovery.js';
+import type {
+  ServiceDiscoveryContent,
+  SkillDescriptor,
+} from './service-discovery.js';
 
 // ============================================================================
 // Factories
@@ -1108,6 +1111,790 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       expect(result!.serviceType).toBe('relay');
       expect(result!.ilpAddress).toBe('g.crosstown.test');
       expect(result!.chain).toBe('anvil');
+    });
+  });
+
+  // ==========================================================================
+  // Story 5.4: Skill Descriptor in Service Discovery
+  // ==========================================================================
+
+  // --------------------------------------------------------------------------
+  // T-5.4-01 [P1]: Skill descriptor structure
+  // --------------------------------------------------------------------------
+  describe('Skill descriptor structure (T-5.4-01)', () => {
+    it('[P1] skill descriptor contains all required fields', () => {
+      // Arrange: a valid skill descriptor
+      const skill: SkillDescriptor = {
+        name: 'crosstown-dvm',
+        version: '1.0',
+        kinds: [5100, 5200],
+        features: ['text-generation', 'streaming'],
+        inputSchema: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string' },
+          },
+          required: ['prompt'],
+        },
+        pricing: { '5100': '1000000', '5200': '5000000' },
+        models: ['gpt-4', 'claude-3'],
+      };
+
+      // Assert: all required fields present with correct types
+      expect(typeof skill.name).toBe('string');
+      expect(typeof skill.version).toBe('string');
+      expect(Array.isArray(skill.kinds)).toBe(true);
+      expect(Array.isArray(skill.features)).toBe(true);
+      expect(typeof skill.inputSchema).toBe('object');
+      expect(typeof skill.pricing).toBe('object');
+      expect(Array.isArray(skill.models)).toBe(true);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-10 [P1]: parseServiceDiscovery() roundtrip with skill descriptor
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() roundtrip with skill (T-5.4-10)', () => {
+    it('[P1] build -> parse -> all skill fields recovered including nested inputSchema', () => {
+      // Arrange
+      const secretKey = generateSecretKey();
+      const content = createServiceDiscoveryContent({
+        skill: {
+          name: 'crosstown-dvm',
+          version: '1.0',
+          kinds: [5100, 5200],
+          features: ['text-generation', 'image-generation'],
+          inputSchema: {
+            type: 'object',
+            properties: {
+              prompt: { type: 'string' },
+              maxTokens: { type: 'number' },
+            },
+            required: ['prompt'],
+          },
+          pricing: { '5100': '1000000', '5200': '5000000' },
+          models: ['gpt-4', 'claude-3'],
+        },
+      });
+
+      // Act
+      const event = buildServiceDiscoveryEvent(content, secretKey);
+      const parsed = parseServiceDiscovery(event);
+
+      // Assert: all skill fields round-trip correctly
+      expect(parsed).not.toBeNull();
+      expect(parsed!.skill).toBeDefined();
+      expect(parsed!.skill!.name).toBe('crosstown-dvm');
+      expect(parsed!.skill!.version).toBe('1.0');
+      expect(parsed!.skill!.kinds).toEqual([5100, 5200]);
+      expect(parsed!.skill!.features).toEqual([
+        'text-generation',
+        'image-generation',
+      ]);
+      expect(parsed!.skill!.inputSchema).toEqual({
+        type: 'object',
+        properties: {
+          prompt: { type: 'string' },
+          maxTokens: { type: 'number' },
+        },
+        required: ['prompt'],
+      });
+      expect(parsed!.skill!.pricing).toEqual({
+        '5100': '1000000',
+        '5200': '5000000',
+      });
+      expect(parsed!.skill!.models).toEqual(['gpt-4', 'claude-3']);
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-12 [P0]: Backward compatibility -- kind:10035 without skill
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() backward compatibility (T-5.4-12)', () => {
+    it('[P0] kind:10035 without skill field parses correctly (pre-DVM events)', () => {
+      // Arrange: content WITHOUT skill field (pre-5.4 format)
+      const secretKey = generateSecretKey();
+      const content = createServiceDiscoveryContent();
+
+      // Act
+      const event = buildServiceDiscoveryEvent(content, secretKey);
+      const parsed = parseServiceDiscovery(event);
+
+      // Assert: parses successfully with skill undefined
+      expect(parsed).not.toBeNull();
+      expect(parsed!.serviceType).toBe('relay');
+      expect(parsed!.skill).toBeUndefined();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-13 [P1]: Rejects malformed skill.name
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() malformed skill.name (T-5.4-13)', () => {
+    it('[P1] returns null when skill.name is not a string', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 42,
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-14 [P1]: Rejects malformed skill.kinds
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() malformed skill.kinds (T-5.4-14)', () => {
+    it('[P1] returns null when skill.kinds contains non-integers', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100, 5.5, 5200],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('[P1] returns null when skill.kinds contains strings', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100, '5200'],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-15 [P1]: Rejects malformed skill.inputSchema
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() malformed skill.inputSchema (T-5.4-15)', () => {
+    it('[P1] returns null when skill.inputSchema is not an object', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: 'not-an-object',
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('[P1] returns null when skill.inputSchema is an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: ['not', 'a', 'schema'],
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('[P1] returns null when skill.inputSchema is null', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: null,
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-16 [P1]: Rejects malformed skill.pricing
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() malformed skill.pricing (T-5.4-16)', () => {
+    it('[P1] returns null when skill.pricing has non-string values', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': 1000000 },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('[P1] returns null when skill.pricing is an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: ['1000000'],
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-09 [P2]: Crosstown-specific fields alongside skill descriptor
+  // --------------------------------------------------------------------------
+  describe('Crosstown-specific fields alongside skill (T-5.4-09)', () => {
+    it('[P2] ilpAddress, x402 (with endpoint), and chain present alongside skill', () => {
+      // Arrange
+      const secretKey = generateSecretKey();
+      const content = createServiceDiscoveryContent({
+        x402: { enabled: true, endpoint: '/publish' },
+        skill: {
+          name: 'crosstown-dvm',
+          version: '1.0',
+          kinds: [5100],
+          features: ['text-generation'],
+          inputSchema: { type: 'object' },
+          pricing: { '5100': '1000000' },
+        },
+      });
+
+      // Act
+      const event = buildServiceDiscoveryEvent(content, secretKey);
+      const parsed = parseServiceDiscovery(event);
+
+      // Assert: Crosstown-specific fields present alongside skill
+      expect(parsed).not.toBeNull();
+      expect(parsed!.ilpAddress).toBe('g.crosstown.test-relay');
+      expect(parsed!.x402).toBeDefined();
+      expect(parsed!.x402!.enabled).toBe(true);
+      expect(parsed!.x402!.endpoint).toBe('/publish');
+      expect(parsed!.chain).toBe('arbitrum-one');
+      expect(parsed!.skill).toBeDefined();
+      expect(parsed!.skill!.name).toBe('crosstown-dvm');
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // T-5.4-11 [P3]: Skill descriptor with attestation placeholder
+  // --------------------------------------------------------------------------
+  describe('Skill descriptor with attestation placeholder (T-5.4-11)', () => {
+    it('[P3] attestation field present as empty object (Epic 6 placeholder)', () => {
+      // Arrange
+      const secretKey = generateSecretKey();
+      const content = createServiceDiscoveryContent({
+        skill: {
+          name: 'crosstown-dvm',
+          version: '1.0',
+          kinds: [5100],
+          features: ['text-generation'],
+          inputSchema: { type: 'object' },
+          pricing: { '5100': '1000000' },
+          attestation: {},
+        },
+      });
+
+      // Act
+      const event = buildServiceDiscoveryEvent(content, secretKey);
+      const parsed = parseServiceDiscovery(event);
+
+      // Assert: attestation field present and empty
+      expect(parsed).not.toBeNull();
+      expect(parsed!.skill).toBeDefined();
+      expect(parsed!.skill!.attestation).toEqual({});
+    });
+
+    it('[P3] attestation field can contain structured data', () => {
+      // Arrange
+      const secretKey = generateSecretKey();
+      const content = createServiceDiscoveryContent({
+        skill: {
+          name: 'crosstown-dvm',
+          version: '1.0',
+          kinds: [5100],
+          features: ['text-generation'],
+          inputSchema: { type: 'object' },
+          pricing: { '5100': '1000000' },
+          attestation: { enclaveType: 'nitro', pcr0: 'a'.repeat(96) },
+        },
+      });
+
+      // Act
+      const event = buildServiceDiscoveryEvent(content, secretKey);
+      const parsed = parseServiceDiscovery(event);
+
+      // Assert: attestation data preserved
+      expect(parsed).not.toBeNull();
+      expect(parsed!.skill!.attestation).toEqual({
+        enclaveType: 'nitro',
+        pcr0: 'a'.repeat(96),
+      });
+    });
+  });
+
+  // --------------------------------------------------------------------------
+  // Additional skill validation edge cases
+  // --------------------------------------------------------------------------
+  describe('parseServiceDiscovery() skill field edge cases', () => {
+    it('returns null when skill is an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: ['not', 'an', 'object'],
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.version is missing', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.features contains non-strings', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation', 42],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.models contains non-strings', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+            models: ['gpt-4', 123],
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('parses skill without optional models field', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).not.toBeNull();
+      expect(result!.skill).toBeDefined();
+      expect(result!.skill!.models).toBeUndefined();
+      expect(result!.skill!.attestation).toBeUndefined();
+    });
+
+    it('returns null when skill.name is entirely missing', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.kinds is not an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: 'not-an-array',
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.kinds contains negative integers', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100, -1],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.features is not an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: 'not-an-array',
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when skill.attestation is an array', () => {
+      const event = {
+        kind: 10035,
+        content: JSON.stringify({
+          serviceType: 'relay',
+          ilpAddress: 'g.crosstown.test',
+          pricing: { basePricePerByte: 10, currency: 'USDC' },
+          supportedKinds: [1],
+          capabilities: ['relay'],
+          chain: 'anvil',
+          version: '0.1.0',
+          skill: {
+            name: 'crosstown-dvm',
+            version: '1.0',
+            kinds: [5100],
+            features: ['text-generation'],
+            inputSchema: { type: 'object' },
+            pricing: { '5100': '1000000' },
+            attestation: ['invalid'],
+          },
+        }),
+        tags: [['d', 'crosstown-service-discovery']],
+        created_at: 1700000000,
+        pubkey: 'a'.repeat(64),
+        id: 'b'.repeat(64),
+        sig: 'c'.repeat(128),
+      };
+
+      const result = parseServiceDiscovery(event);
+      expect(result).toBeNull();
     });
   });
 });

@@ -14,6 +14,7 @@ export {
   parseServiceDiscovery,
   SERVICE_DISCOVERY_KIND,
   type ServiceDiscoveryContent,
+  type SkillDescriptor,
 } from './service-discovery.js';
 export {
   buildAttestationEvent,

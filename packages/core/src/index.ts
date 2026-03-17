@@ -50,6 +50,7 @@ export {
   buildServiceDiscoveryEvent,
   parseServiceDiscovery,
   type ServiceDiscoveryContent,
+  type SkillDescriptor,
   buildAttestationEvent,
   parseAttestation,
   type AttestationEventOptions,

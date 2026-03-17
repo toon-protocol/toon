@@ -20,6 +20,36 @@ export { SERVICE_DISCOVERY_KIND };
 
 // ---------- Types ----------
 
+/**
+ * Structured skill descriptor for DVM service discovery.
+ *
+ * Embedded in kind:10035 events to advertise DVM capabilities.
+ * Enables programmatic agent-to-agent service discovery: agents
+ * can read `inputSchema` to construct valid Kind 5xxx job requests
+ * without prior knowledge of the provider's capabilities.
+ *
+ * The `attestation` field is a placeholder for Epic 6 TEE integration
+ * (Story 6.3: TEE-attested DVM results).
+ */
+export interface SkillDescriptor {
+  /** Service identifier (e.g., 'crosstown-dvm'). */
+  name: string;
+  /** Schema version (e.g., '1.0'). */
+  version: string;
+  /** Supported DVM Kind 5xxx numbers (e.g., [5100, 5200]). */
+  kinds: number[];
+  /** Capability list (e.g., ['text-generation', 'streaming']). */
+  features: string[];
+  /** JSON Schema draft-07 object describing job request parameters. */
+  inputSchema: Record<string, unknown>;
+  /** Kind number (as string) -> USDC micro-units cost (as string). */
+  pricing: Record<string, string>;
+  /** Available AI models (e.g., ['gpt-4', 'claude-3']). */
+  models?: string[];
+  /** Placeholder for Epic 6 TEE attestation integration. */
+  attestation?: Record<string, unknown>;
+}
+
 /** Content payload for a kind:10035 Service Discovery event. */
 export interface ServiceDiscoveryContent {
   /** Service type identifier (e.g., 'relay', 'rig'). */
@@ -51,6 +81,12 @@ export interface ServiceDiscoveryContent {
   chain: string;
   /** Node software version. */
   version: string;
+  /**
+   * Optional DVM skill descriptor.
+   * Present when the node has DVM handlers registered; omitted otherwise
+   * (backward compatible with pre-DVM kind:10035 events).
+   */
+  skill?: SkillDescriptor;
 }
 
 // ---------- Builder ----------
@@ -181,6 +217,99 @@ export function parseServiceDiscovery(
     }
 
     result.x402 = x402Result;
+  }
+
+  // Validate optional skill field (Story 5.4: DVM skill descriptor)
+  const skill = record['skill'];
+  if (skill !== undefined) {
+    if (typeof skill !== 'object' || skill === null || Array.isArray(skill))
+      return null;
+    const skillRecord = skill as Record<string, unknown>;
+
+    // Validate required string fields
+    const skillName = skillRecord['name'];
+    if (typeof skillName !== 'string') return null;
+
+    const skillVersion = skillRecord['version'];
+    if (typeof skillVersion !== 'string') return null;
+
+    // Validate kinds array (non-negative integers)
+    const kinds = skillRecord['kinds'];
+    if (!Array.isArray(kinds)) return null;
+    if (
+      !kinds.every(
+        (k): k is number =>
+          typeof k === 'number' && Number.isInteger(k) && k >= 0
+      )
+    ) {
+      return null;
+    }
+
+    // Validate features array (strings)
+    const features = skillRecord['features'];
+    if (!Array.isArray(features)) return null;
+    if (!features.every((f): f is string => typeof f === 'string')) {
+      return null;
+    }
+
+    // Validate inputSchema (must be a non-null object)
+    const inputSchema = skillRecord['inputSchema'];
+    if (
+      typeof inputSchema !== 'object' ||
+      inputSchema === null ||
+      Array.isArray(inputSchema)
+    )
+      return null;
+
+    // Validate pricing (must be a non-null object with string keys and string values)
+    // Named `skillPricing` to avoid shadowing the top-level `pricing` variable (line 159).
+    const skillPricing = skillRecord['pricing'];
+    if (
+      typeof skillPricing !== 'object' ||
+      skillPricing === null ||
+      Array.isArray(skillPricing)
+    )
+      return null;
+    const pricingEntries = Object.entries(
+      skillPricing as Record<string, unknown>
+    );
+    if (!pricingEntries.every(([, v]) => typeof v === 'string')) {
+      return null;
+    }
+
+    // Build skill descriptor
+    const skillResult: SkillDescriptor = {
+      name: skillName,
+      version: skillVersion,
+      kinds,
+      features,
+      inputSchema: inputSchema as Record<string, unknown>,
+      pricing: skillPricing as Record<string, string>,
+    };
+
+    // Validate optional models array (strings)
+    const models = skillRecord['models'];
+    if (models !== undefined) {
+      if (!Array.isArray(models)) return null;
+      if (!models.every((m): m is string => typeof m === 'string')) {
+        return null;
+      }
+      skillResult.models = models;
+    }
+
+    // Validate optional attestation (must be a non-null object when present)
+    const attestation = skillRecord['attestation'];
+    if (attestation !== undefined) {
+      if (
+        typeof attestation !== 'object' ||
+        attestation === null ||
+        Array.isArray(attestation)
+      )
+        return null;
+      skillResult.attestation = attestation as Record<string, unknown>;
+    }
+
+    result.skill = skillResult;
   }
 
   return result;

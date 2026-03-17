@@ -15,10 +15,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { generateSecretKey } from 'nostr-tools/pure';
 
 import { buildIlpPrepare } from './build-ilp-prepare.js';
-import {
-  TEXT_GENERATION_KIND,
-  buildJobRequestEvent,
-} from '../events/dvm.js';
+import { TEXT_GENERATION_KIND, buildJobRequestEvent } from '../events/dvm.js';
 import { encodeEventToToon, decodeEventFromToon } from '../toon/index.js';
 
 // ---------------------------------------------------------------------------
