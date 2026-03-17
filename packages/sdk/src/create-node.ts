@@ -39,7 +39,11 @@ import {
   createHttpChannelClient,
   resolveChainConfig,
   buildIlpPrepare,
+  buildJobFeedbackEvent,
+  buildJobResultEvent,
+  parseJobResult,
 } from '@crosstown/core';
+import type { DvmJobStatus, IlpSendResult } from '@crosstown/core';
 import type {
   IlpClient,
   ConnectorAdminClient,
@@ -200,6 +204,73 @@ export interface ServiceNode {
     event: NostrEvent,
     options?: { destination: string }
   ): Promise<PublishEventResult>;
+
+  /**
+   * Publish a Kind 7000 DVM job feedback event via ILP PREPARE.
+   *
+   * Builds a signed Kind 7000 feedback event with NIP-90 tags (e, p, status)
+   * and delegates to publishEvent() for TOON encoding and ILP delivery.
+   * Standard relay write fee applies: basePricePerByte * toonData.length.
+   *
+   * @param requestEventId - 64-char hex event ID of the original Kind 5xxx request
+   * @param customerPubkey - 64-char hex pubkey of the customer who posted the request
+   * @param status - Job status value ('processing', 'error', 'success', 'partial')
+   * @param content - Optional status details or error message
+   * @param options - Must include destination ILP address
+   * @returns Result with success/failure info and event ID
+   */
+  publishFeedback(
+    requestEventId: string,
+    customerPubkey: string,
+    status: DvmJobStatus,
+    content?: string,
+    options?: { destination: string }
+  ): Promise<PublishEventResult>;
+
+  /**
+   * Publish a Kind 6xxx DVM job result event via ILP PREPARE.
+   *
+   * Builds a signed Kind 6xxx result event with NIP-90 tags (e, p, amount)
+   * and delegates to publishEvent() for TOON encoding and ILP delivery.
+   * Standard relay write fee applies: basePricePerByte * toonData.length.
+   *
+   * @param requestEventId - 64-char hex event ID of the original Kind 5xxx request
+   * @param customerPubkey - 64-char hex pubkey of the customer who posted the request
+   * @param amount - Compute cost in USDC micro-units as string
+   * @param content - Result data (text, URL, etc.)
+   * @param options - Must include destination; optional kind (default: 6100)
+   * @returns Result with success/failure info and event ID
+   */
+  publishResult(
+    requestEventId: string,
+    customerPubkey: string,
+    amount: string,
+    content: string,
+    options?: { destination: string; kind?: number }
+  ): Promise<PublishEventResult>;
+
+  /**
+   * Send an ILP payment to a provider for compute settlement.
+   *
+   * Extracts the compute cost from the result event's `amount` tag via
+   * parseJobResult(), optionally validates against the original bid amount
+   * (E5-R005 bid validation), and sends a pure ILP value transfer
+   * (empty data field) to the provider's ILP address.
+   *
+   * This is a payment-only operation -- no TOON encoding, no relay write.
+   * The payment routes through the ILP mesh using the same infrastructure
+   * as relay write fees.
+   *
+   * @param resultEvent - Kind 6xxx result event with amount tag
+   * @param providerIlpAddress - Provider's ILP address from kind:10035
+   * @param options - Optional originalBid for bid validation (E5-R005)
+   * @returns ILP send result with accepted/rejected status
+   */
+  settleCompute(
+    resultEvent: NostrEvent,
+    providerIlpAddress: string,
+    options?: { originalBid?: string }
+  ): Promise<IlpSendResult>;
 }
 
 /**
@@ -795,6 +866,120 @@ export function createNode(config: NodeConfig): ServiceNode {
           error instanceof Error ? error : undefined
         );
       }
+    },
+
+    async publishFeedback(
+      requestEventId: string,
+      customerPubkey: string,
+      status: DvmJobStatus,
+      content?: string,
+      options?: { destination: string }
+    ): Promise<PublishEventResult> {
+      // Build Kind 7000 feedback event using provider's secretKey
+      const feedbackEvent = buildJobFeedbackEvent(
+        { requestEventId, customerPubkey, status, content },
+        config.secretKey
+      );
+
+      // Delegate to publishEvent() for TOON encoding, pricing, and ILP delivery
+      return node.publishEvent(feedbackEvent, options);
+    },
+
+    async publishResult(
+      requestEventId: string,
+      customerPubkey: string,
+      amount: string,
+      content: string,
+      options?: { destination: string; kind?: number }
+    ): Promise<PublishEventResult> {
+      // Default result kind is 6100 (text generation result = 5100 + 1000)
+      const resultKind = options?.kind ?? 6100;
+
+      // Build Kind 6xxx result event using provider's secretKey
+      const resultEvent = buildJobResultEvent(
+        { kind: resultKind, requestEventId, customerPubkey, amount, content },
+        config.secretKey
+      );
+
+      // Delegate to publishEvent() for TOON encoding, pricing, and ILP delivery
+      return node.publishEvent(resultEvent, options);
+    },
+
+    async settleCompute(
+      resultEvent: NostrEvent,
+      providerIlpAddress: string,
+      options?: { originalBid?: string }
+    ): Promise<IlpSendResult> {
+      // Guard: node must be started
+      if (!started) {
+        throw new NodeError(
+          'Cannot settle compute: node not started. Call start() first.'
+        );
+      }
+
+      // Guard: providerIlpAddress must be a non-empty, non-whitespace string
+      if (
+        !providerIlpAddress ||
+        typeof providerIlpAddress !== 'string' ||
+        providerIlpAddress.trim() === ''
+      ) {
+        throw new NodeError(
+          "Cannot settle compute: providerIlpAddress is required. Resolve it from the provider's kind:10035 service discovery event."
+        );
+      }
+
+      // Extract amount from result event via parseJobResult()
+      const parsed = parseJobResult(resultEvent);
+      if (!parsed) {
+        throw new NodeError(
+          'Cannot settle compute: failed to parse result event. Ensure the event is a valid Kind 6xxx with an amount tag.'
+        );
+      }
+
+      const computeAmount = parsed.amount;
+
+      // Validate computeAmount is a valid non-negative numeric string before any
+      // further processing. Without this, a non-numeric amount would propagate to
+      // ilpClient.sendIlpPacket() and cause a BootstrapError instead of a clear
+      // NodeError. Negative amounts would cause undefined behavior in the ILP layer.
+      let amountBigInt: bigint;
+      try {
+        amountBigInt = BigInt(computeAmount);
+      } catch {
+        throw new NodeError(
+          `Cannot settle compute: result event amount ('${computeAmount}') is not a valid numeric string.`
+        );
+      }
+      if (amountBigInt < 0n) {
+        throw new NodeError(
+          `Cannot settle compute: result event amount ('${computeAmount}') must be non-negative.`
+        );
+      }
+
+      // E5-R005 bid validation: if originalBid is provided, validate amount <= bid
+      if (options?.originalBid !== undefined) {
+        let bidBigInt: bigint;
+        try {
+          bidBigInt = BigInt(options.originalBid);
+        } catch {
+          throw new NodeError(
+            `Cannot settle compute: originalBid ('${options.originalBid}') is not a valid numeric string.`
+          );
+        }
+        if (amountBigInt > bidBigInt) {
+          throw new NodeError(
+            `Cannot settle compute: result amount (${computeAmount}) exceeds original bid (${options.originalBid}). Potential provider overcharge.`
+          );
+        }
+      }
+
+      // Send pure ILP value transfer (empty data = no event payload)
+      // This is a payment-only operation -- no TOON encoding, no relay write.
+      return ilpClient.sendIlpPacket({
+        destination: providerIlpAddress,
+        amount: computeAmount,
+        data: '',
+      });
     },
   };
 

@@ -110,9 +110,11 @@ export function createDirectIlpClient(
         // Convert base64 data to Uint8Array
         const data = Uint8Array.from(Buffer.from(params.data, 'base64'));
 
-        // Compute execution condition if toonDecoder is provided
+        // Compute execution condition if toonDecoder is provided and data is non-empty.
+        // Empty data signals a pure ILP value transfer (e.g., DVM compute settlement)
+        // where no TOON event payload exists -- skip condition computation.
         let executionCondition: Uint8Array | undefined;
-        if (config?.toonDecoder) {
+        if (config?.toonDecoder && data.length > 0) {
           const decoded = config.toonDecoder(data);
           const fulfillment = createHash('sha256').update(decoded.id).digest();
           executionCondition = createHash('sha256')
