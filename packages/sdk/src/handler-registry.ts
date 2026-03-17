@@ -4,6 +4,7 @@
  * Maps event kinds to handler functions for dispatching incoming ILP packets.
  */
 
+import { JOB_REQUEST_KIND_BASE } from '@crosstown/core';
 import type {
   HandlerContext,
   HandlePacketAcceptResponse,
@@ -38,6 +39,25 @@ export class HandlerRegistry {
   onDefault(handler: Handler): this {
     this.defaultHandler = handler;
     return this;
+  }
+
+  /**
+   * Returns all registered kind numbers, sorted ascending.
+   */
+  getRegisteredKinds(): number[] {
+    return [...this.handlers.keys()].sort((a, b) => a - b);
+  }
+
+  /**
+   * Returns registered kinds in the DVM request range (5000-5999), sorted ascending.
+   * Uses JOB_REQUEST_KIND_BASE (5000) as the range start.
+   */
+  getDvmKinds(): number[] {
+    const dvmRangeStart = JOB_REQUEST_KIND_BASE;
+    const dvmRangeEnd = JOB_REQUEST_KIND_BASE + 999;
+    return this.getRegisteredKinds().filter(
+      (k) => k >= dvmRangeStart && k <= dvmRangeEnd
+    );
   }
 
   /**

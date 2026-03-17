@@ -12,6 +12,13 @@ export {
   SERVICE_DISCOVERY_KIND,
   SEED_RELAY_LIST_KIND,
   TEE_ATTESTATION_KIND,
+  JOB_REQUEST_KIND_BASE,
+  JOB_RESULT_KIND_BASE,
+  JOB_FEEDBACK_KIND,
+  TEXT_GENERATION_KIND,
+  IMAGE_GENERATION_KIND,
+  TEXT_TO_SPEECH_KIND,
+  TRANSLATION_KIND,
 } from './constants.js';
 
 // TypeScript interfaces
@@ -43,10 +50,24 @@ export {
   buildServiceDiscoveryEvent,
   parseServiceDiscovery,
   type ServiceDiscoveryContent,
+  type SkillDescriptor,
   buildAttestationEvent,
   parseAttestation,
   type AttestationEventOptions,
   type ParsedAttestation,
+  buildJobRequestEvent,
+  buildJobResultEvent,
+  buildJobFeedbackEvent,
+  parseJobRequest,
+  parseJobResult,
+  parseJobFeedback,
+  type DvmJobStatus,
+  type JobRequestParams,
+  type JobResultParams,
+  type JobFeedbackParams,
+  type ParsedJobRequest,
+  type ParsedJobResult,
+  type ParsedJobFeedback,
 } from './events/index.js';
 
 // Peer discovery

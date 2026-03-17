@@ -37,3 +37,59 @@ export const SEED_RELAY_LIST_KIND = 10036;
  * pubkey + kind alone (unlike NIP-33 parameterized replaceable events).
  */
 export const TEE_ATTESTATION_KIND = 10033;
+
+// ---------------------------------------------------------------------------
+// NIP-90 DVM (Data Vending Machine) Event Kinds
+// ---------------------------------------------------------------------------
+
+/**
+ * Base kind for NIP-90 DVM job requests (kind range 5000-5999).
+ * Job requests are regular (non-replaceable) events. Each specific DVM task
+ * type is assigned a unique kind within this range (e.g., 5100 for text
+ * generation). Providers listen for requests in their supported kind range.
+ */
+export const JOB_REQUEST_KIND_BASE = 5000;
+
+/**
+ * Base kind for NIP-90 DVM job results (kind range 6000-6999).
+ * Result kind = request kind + 1000 (e.g., Kind 5100 request -> Kind 6100
+ * result). Result events reference the original request via an `e` tag and
+ * include the compute cost in an `amount` tag.
+ */
+export const JOB_RESULT_KIND_BASE = 6000;
+
+/**
+ * NIP-90 DVM job feedback (kind 7000).
+ * A single kind used for all feedback messages (processing, error, success,
+ * partial). Feedback events reference the original request via an `e` tag
+ * and carry a `status` tag indicating the current job state.
+ */
+export const JOB_FEEDBACK_KIND = 7000;
+
+/**
+ * Text Generation DVM kind (kind 5100).
+ * Reference DVM kind for the Crosstown protocol. Used for general-purpose
+ * text generation tasks (e.g., LLM inference, summarization, Q&A).
+ */
+export const TEXT_GENERATION_KIND = 5100;
+
+/**
+ * Image Generation DVM kind (kind 5200).
+ * Used for image generation tasks (e.g., text-to-image, image editing).
+ * Optional provider support -- not all nodes are required to handle this kind.
+ */
+export const IMAGE_GENERATION_KIND = 5200;
+
+/**
+ * Text-to-Speech DVM kind (kind 5300).
+ * Used for text-to-speech conversion tasks.
+ * Optional provider support -- not all nodes are required to handle this kind.
+ */
+export const TEXT_TO_SPEECH_KIND = 5300;
+
+/**
+ * Translation DVM kind (kind 5302).
+ * Used for language translation tasks.
+ * Optional provider support -- not all nodes are required to handle this kind.
+ */
+export const TRANSLATION_KIND = 5302;

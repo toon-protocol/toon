@@ -14,6 +14,7 @@ export {
   parseServiceDiscovery,
   SERVICE_DISCOVERY_KIND,
   type ServiceDiscoveryContent,
+  type SkillDescriptor,
 } from './service-discovery.js';
 export {
   buildAttestationEvent,
@@ -23,3 +24,25 @@ export {
   type ParsedAttestation,
   type TeeAttestation,
 } from './attestation.js';
+export {
+  buildJobRequestEvent,
+  buildJobResultEvent,
+  buildJobFeedbackEvent,
+  parseJobRequest,
+  parseJobResult,
+  parseJobFeedback,
+  JOB_REQUEST_KIND_BASE,
+  JOB_RESULT_KIND_BASE,
+  JOB_FEEDBACK_KIND,
+  TEXT_GENERATION_KIND,
+  IMAGE_GENERATION_KIND,
+  TEXT_TO_SPEECH_KIND,
+  TRANSLATION_KIND,
+  type DvmJobStatus,
+  type JobRequestParams,
+  type JobResultParams,
+  type JobFeedbackParams,
+  type ParsedJobRequest,
+  type ParsedJobResult,
+  type ParsedJobFeedback,
+} from './dvm.js';
