@@ -48,391 +48,42 @@ import {
 import { ConnectorNode, createLogger } from '@crosstown/connector';
 import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
 import {
-  createPublicClient,
   createWalletClient,
   http,
-  defineChain,
   keccak256,
   encodePacked,
   type Hex,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import WebSocket from 'ws';
 
-// ---------------------------------------------------------------------------
-// Constants (Docker SDK E2E ports — see docker-compose-sdk-e2e.yml)
-// ---------------------------------------------------------------------------
-
-const ANVIL_RPC = 'http://localhost:18545';
-
-// Peer 1 (Docker — genesis-like)
-const PEER1_RELAY_URL = 'ws://localhost:19700';
-const PEER1_BTP_URL = 'ws://localhost:19000';
-const PEER1_BLS_URL = 'http://localhost:19100';
-const PEER1_EVM_ADDRESS =
-  '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as const; // Anvil Account #0
-
-// Peer 2 (Docker — bootstraps from peer1)
-const PEER2_RELAY_URL = 'ws://localhost:19710';
-const PEER2_BLS_URL = 'http://localhost:19110';
-
-// Contracts (deterministic Anvil deployment)
-const TOKEN_ADDRESS =
-  '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const; // Mock USDC (Anvil)
-const TOKEN_NETWORK_ADDRESS =
-  '0xCafac3dD18aC6c6e92c921884f9E4176737C052c' as const;
-const REGISTRY_ADDRESS =
-  '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512' as const;
-
-// Test account (Anvil Account #3)
-const TEST_PRIVATE_KEY =
-  '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' as const;
-const TEST_EVM_ADDRESS =
-  '0x90F79bf6EB2c4f870365E785982E1f101E93b906' as const;
-
-// Settlement test accounts (Anvil Account #4 and #5 — unused by Docker infra)
-const SETTLEMENT_PRIVATE_KEY_A =
-  '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' as const;
-const SETTLEMENT_PRIVATE_KEY_B =
-  '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' as const;
-
-const CHAIN_ID = 31337;
-
-// ---------------------------------------------------------------------------
-// Anvil chain definition
-// ---------------------------------------------------------------------------
-
-const anvilChain = defineChain({
-  id: CHAIN_ID,
-  name: 'anvil',
-  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: [ANVIL_RPC] } },
-});
-
-// ---------------------------------------------------------------------------
-// ABIs
-// ---------------------------------------------------------------------------
-
-const TOKEN_NETWORK_ABI = [
-  {
-    name: 'channels',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ type: 'bytes32' }],
-    outputs: [
-      { name: 'settlementTimeout', type: 'uint256' },
-      { name: 'state', type: 'uint8' },
-      { name: 'closedAt', type: 'uint256' },
-      { name: 'openedAt', type: 'uint256' },
-      { name: 'participant1', type: 'address' },
-      { name: 'participant2', type: 'address' },
-    ],
-  },
-  {
-    name: 'participants',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ type: 'bytes32' }, { type: 'address' }],
-    outputs: [
-      { name: 'deposit', type: 'uint256' },
-      { name: 'withdrawnAmount', type: 'uint256' },
-      { name: 'isCloser', type: 'bool' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'transferredAmount', type: 'uint256' },
-    ],
-  },
-  {
-    name: 'channelCounter',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'openChannel',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'participant2', type: 'address' },
-      { name: 'settlementTimeout', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bytes32' }],
-  },
-  {
-    name: 'setTotalDeposit',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'channelId', type: 'bytes32' },
-      { name: 'participant', type: 'address' },
-      { name: 'totalDeposit', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-  {
-    name: 'closeChannel',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'channelId', type: 'bytes32' },
-      {
-        name: 'balanceProof',
-        type: 'tuple',
-        components: [
-          { name: 'channelId', type: 'bytes32' },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'transferredAmount', type: 'uint256' },
-          { name: 'lockedAmount', type: 'uint256' },
-          { name: 'locksRoot', type: 'bytes32' },
-        ],
-      },
-      { name: 'signature', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-  {
-    name: 'settleChannel',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'channelId', type: 'bytes32' }],
-    outputs: [],
-  },
-] as const;
-
-const ERC20_ABI = [
-  {
-    name: 'balanceOf',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'approve',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'spender', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-  {
-    name: 'transfer',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const;
-
-// EIP-712 types for balance proof signing
-const BALANCE_PROOF_TYPES = {
-  BalanceProof: [
-    { name: 'channelId', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'transferredAmount', type: 'uint256' },
-    { name: 'lockedAmount', type: 'uint256' },
-    { name: 'locksRoot', type: 'bytes32' },
-  ],
-} as const;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const CHANNEL_STATE_NAMES = ['settled', 'open', 'closed', 'settled'] as const;
-
-function createViemClient() {
-  return createPublicClient({
-    chain: anvilChain,
-    transport: http(ANVIL_RPC),
-  });
-}
-
-async function getChannelState(channelId: Hex) {
-  const client = createViemClient();
-  const result = await client.readContract({
-    address: TOKEN_NETWORK_ADDRESS,
-    abi: TOKEN_NETWORK_ABI,
-    functionName: 'channels',
-    args: [channelId],
-  });
-
-  const [settlementTimeout, state, closedAt, openedAt, participant1, participant2] =
-    result;
-
-  return {
-    channelId,
-    state: CHANNEL_STATE_NAMES[state] || 'unknown',
-    stateNum: state,
-    settlementTimeout: Number(settlementTimeout),
-    openedAt: Number(openedAt),
-    closedAt: Number(closedAt),
-    participant1,
-    participant2,
-  };
-}
-
-async function getParticipantInfo(channelId: Hex, participant: Hex) {
-  const client = createViemClient();
-  const result = await client.readContract({
-    address: TOKEN_NETWORK_ADDRESS,
-    abi: TOKEN_NETWORK_ABI,
-    functionName: 'participants',
-    args: [channelId, participant],
-  });
-
-  const [deposit, withdrawnAmount, isCloser, nonce, transferredAmount] = result;
-  return { deposit, withdrawnAmount, isCloser, nonce, transferredAmount };
-}
-
-async function getTokenBalance(address: Hex): Promise<bigint> {
-  const client = createViemClient();
-  return client.readContract({
-    address: TOKEN_ADDRESS,
-    abi: ERC20_ABI,
-    functionName: 'balanceOf',
-    args: [address],
-  });
-}
-
-async function getChannelCounter(): Promise<bigint> {
-  const client = createViemClient();
-  return client.readContract({
-    address: TOKEN_NETWORK_ADDRESS,
-    abi: TOKEN_NETWORK_ABI,
-    functionName: 'channelCounter',
-    args: [],
-  });
-}
-
-function waitForEventOnRelay(
-  relayUrl: string,
-  eventId: string,
-  timeoutMs = 15000
-): Promise<Record<string, unknown> | null> {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(relayUrl);
-    const subId = `test-${Date.now()}`;
-    // eslint-disable-next-line prefer-const
-    let timer: ReturnType<typeof setTimeout>;
-
-    const cleanup = () => {
-      clearTimeout(timer);
-      try {
-        ws.close();
-      } catch {
-        // ignore
-      }
-    };
-
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeoutMs);
-
-    ws.on('open', () => {
-      ws.send(JSON.stringify(['REQ', subId, { ids: [eventId] }]));
-    });
-
-    ws.on('message', (data: Buffer) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (Array.isArray(msg)) {
-          if (msg[0] === 'EVENT' && msg[1] === subId && msg[2]) {
-            const toonBytes = new TextEncoder().encode(msg[2]);
-            const event = decodeEventFromToon(toonBytes);
-            cleanup();
-            resolve(event as unknown as Record<string, unknown>);
-          }
-        }
-      } catch {
-        // ignore parse errors
-      }
-    });
-
-    ws.on('error', (err: Error) => {
-      cleanup();
-      reject(err);
-    });
-  });
-}
-
-async function waitForServiceHealth(
-  url: string,
-  timeoutMs = 30000
-): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (res.ok) return true;
-    } catch {
-      // retry
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  return false;
-}
-
-async function waitForRelayReady(
-  url: string,
-  timeoutMs = 30000
-): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const ws = new WebSocket(url);
-        const t = setTimeout(() => {
-          ws.close();
-          reject(new Error('timeout'));
-        }, 2000);
-        ws.on('open', () => {
-          clearTimeout(t);
-          ws.close();
-          resolve();
-        });
-        ws.on('error', (e: Error) => {
-          clearTimeout(t);
-          reject(e);
-        });
-      });
-      return true;
-    } catch {
-      // retry
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  return false;
-}
-
-/**
- * Wait for peer2's bootstrap to complete by polling its health endpoint
- * until bootstrapPhase is 'ready'.
- */
-async function waitForPeer2Bootstrap(timeoutMs = 45000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(`${PEER2_BLS_URL}/health`, {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as Record<string, unknown>;
-        if (data['bootstrapPhase'] === 'ready') return true;
-      }
-    } catch {
-      // retry
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-  return false;
-}
+import {
+  ANVIL_RPC,
+  PEER1_RELAY_URL,
+  PEER1_BTP_URL,
+  PEER1_EVM_ADDRESS,
+  PEER2_RELAY_URL,
+  TOKEN_ADDRESS,
+  TOKEN_NETWORK_ADDRESS,
+  REGISTRY_ADDRESS,
+  TEST_PRIVATE_KEY,
+  TEST_EVM_ADDRESS,
+  SETTLEMENT_PRIVATE_KEY_A,
+  SETTLEMENT_PRIVATE_KEY_B,
+  CHAIN_ID,
+  anvilChain,
+  TOKEN_NETWORK_ABI,
+  ERC20_ABI,
+  BALANCE_PROOF_TYPES,
+  createViemClient,
+  getChannelState,
+  getParticipantInfo,
+  getTokenBalance,
+  getChannelCounter,
+  waitForEventOnRelay,
+  waitForPeer2Bootstrap,
+  checkAllServicesReady,
+  skipIfNotReady,
+} from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
 // Test suite
@@ -453,48 +104,8 @@ describe('Docker SDK Publish Event E2E', () => {
     // -------------------------------------------------------------------
     // Phase 1: Health checks — ALL services must be running
     // -------------------------------------------------------------------
-    try {
-      const [anvilOk, peer1BlsOk, peer2BlsOk] = await Promise.all([
-        fetch(ANVIL_RPC, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'eth_blockNumber',
-            params: [],
-            id: 1,
-          }),
-          signal: AbortSignal.timeout(3000),
-        }).then((r) => r.ok),
-        waitForServiceHealth(`${PEER1_BLS_URL}/health`, 10000),
-        waitForServiceHealth(`${PEER2_BLS_URL}/health`, 10000),
-      ]);
-
-      if (!anvilOk || !peer1BlsOk || !peer2BlsOk) {
-        console.warn(
-          'Docker SDK E2E services not ready. Run: ./scripts/sdk-e2e-infra.sh up'
-        );
-        return;
-      }
-
-      // Check both relays via WebSocket
-      const [peer1RelayOk, peer2RelayOk] = await Promise.all([
-        waitForRelayReady(PEER1_RELAY_URL, 10000),
-        waitForRelayReady(PEER2_RELAY_URL, 10000),
-      ]);
-
-      if (!peer1RelayOk || !peer2RelayOk) {
-        console.warn(
-          'Relay WebSocket not ready. Run: ./scripts/sdk-e2e-infra.sh up'
-        );
-        return;
-      }
-    } catch (error) {
-      console.warn(
-        `Docker SDK E2E infra not running: ${error instanceof Error ? error.message : String(error)}`
-      );
-      return;
-    }
+    const ready = await checkAllServicesReady();
+    if (!ready) return;
 
     // -------------------------------------------------------------------
     // Phase 2: Snapshot on-chain state before tests
@@ -613,29 +224,12 @@ describe('Docker SDK Publish Event E2E', () => {
     await new Promise((r) => setTimeout(r, 500));
   });
 
-  // -------------------------------------------------------------------------
-  // Helpers
-  // -------------------------------------------------------------------------
-
-  function skipIfNotReady() {
-    if (!servicesReady) {
-      if (process.env['CI']) {
-        throw new Error(
-          'Docker SDK E2E services not ready — cannot run in CI.'
-        );
-      }
-      console.log('Skipping: Docker SDK E2E infra not ready');
-      return true;
-    }
-    return false;
-  }
-
   // =========================================================================
   // ON-CHAIN VERIFICATION
   // =========================================================================
 
   it('token balance decreased after channel deposit', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const balanceAfter = await getTokenBalance(TEST_EVM_ADDRESS);
     expect(balanceAfter).toBeLessThan(tokenBalanceBefore);
@@ -645,7 +239,7 @@ describe('Docker SDK Publish Event E2E', () => {
   });
 
   it('channel open on-chain with correct participants and deposit', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     // Verify channel state
     const state = await getChannelState(channelId as Hex);
@@ -672,7 +266,7 @@ describe('Docker SDK Publish Event E2E', () => {
   });
 
   it('channelCounter reflects all opened channels on-chain', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const counterAfter = await getChannelCounter();
     // channelCounterBefore was captured after peer2 bootstrap (which opens its
@@ -686,7 +280,7 @@ describe('Docker SDK Publish Event E2E', () => {
   // =========================================================================
 
   it('single-hop: publishEvent delivers event to peer1 relay', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const event = finalizeEvent(
       {
@@ -720,7 +314,7 @@ describe('Docker SDK Publish Event E2E', () => {
   });
 
   it('payment amount scales with TOON byte length', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const smallEvent = finalizeEvent(
       {
@@ -760,7 +354,7 @@ describe('Docker SDK Publish Event E2E', () => {
   // =========================================================================
 
   it('multi-hop: publishEvent routes through peer1 to peer2 relay', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const event = finalizeEvent(
       {
@@ -794,7 +388,7 @@ describe('Docker SDK Publish Event E2E', () => {
   });
 
   it('multi-hop: sequential events all arrive at peer2 relay', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const events = [];
     for (let i = 0; i < 3; i++) {
@@ -833,7 +427,7 @@ describe('Docker SDK Publish Event E2E', () => {
   });
 
   it('multi-hop: event metadata preserved through 2-hop pipeline', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const event = finalizeEvent(
       {
@@ -882,7 +476,7 @@ describe('Docker SDK Publish Event E2E', () => {
   // =========================================================================
 
   it('channel close and settlement lifecycle', async () => {
-    if (skipIfNotReady()) return;
+    if (skipIfNotReady(servicesReady)) return;
 
     const accountA = privateKeyToAccount(SETTLEMENT_PRIVATE_KEY_A);
     const accountB = privateKeyToAccount(SETTLEMENT_PRIVATE_KEY_B);
