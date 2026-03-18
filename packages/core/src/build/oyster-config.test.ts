@@ -68,10 +68,10 @@ const EXPECTED_PORTS: Record<string, number[]> = {
 /** Expected supervisord program names and priorities (2 programs, NOT 3). */
 const EXPECTED_PROGRAMS: Record<string, { priority: number; command: string }> =
   {
-    toon: { priority: 10, command: 'node /app/dist/entrypoint-town.js' },
+    toon: { priority: 10, command: 'node /app/entrypoint-sdk.js' },
     attestation: {
       priority: 20,
-      command: 'node /app/dist/attestation-server.js',
+      command: 'node /app/attestation-server.js',
     },
   };
 
@@ -109,7 +109,7 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     expect(serviceNames).toContain('attestation-server');
   });
 
-  it('T-4.1-01b: toon service exposes BLS port 3100 and Relay port 7100', async () => {
+  it('T-4.1-01b: toon service uses network_mode host (ports exposed directly)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
@@ -117,15 +117,16 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
 
     // Act
     const toon = compose.services.toon;
-    const ports = toon.ports || [];
-    const portStrings = ports.map((p: string | number) => String(p));
 
-    // Assert -- both BLS and Relay ports present
-    expect(portStrings.some((p: string) => p.includes('3100'))).toBe(true);
-    expect(portStrings.some((p: string) => p.includes('7100'))).toBe(true);
+    // Assert -- network_mode: host exposes all ports directly (no port mappings needed)
+    expect(toon.network_mode).toBe('host');
+    // BLS_PORT and WS_PORT set via environment
+    const env = toon.environment || {};
+    expect(env.BLS_PORT).toBe(3100);
+    expect(env.WS_PORT).toBe(7100);
   });
 
-  it('T-4.1-01c: attestation-server service exposes attestation port 1300', async () => {
+  it('T-4.1-01c: attestation-server service uses network_mode host with ATTESTATION_PORT 1300', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
@@ -133,14 +134,14 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
 
     // Act
     const attestation = compose.services['attestation-server'];
-    const ports = attestation.ports || [];
-    const portStrings = ports.map((p: string | number) => String(p));
 
-    // Assert -- attestation port present
-    expect(portStrings.some((p: string) => p.includes('1300'))).toBe(true);
+    // Assert -- network_mode: host, attestation port set via environment
+    expect(attestation.network_mode).toBe('host');
+    const env = attestation.environment || {};
+    expect(env.ATTESTATION_PORT).toBe(1300);
   });
 
-  it('T-4.1-01d: toon service uses toon:optimized image', async () => {
+  it('T-4.1-01d: toon service uses GHCR oyster image', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
@@ -149,8 +150,8 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     // Act
     const toon = compose.services.toon;
 
-    // Assert -- image references toon:optimized
-    expect(toon.image).toBe('toon:optimized');
+    // Assert -- image references the GHCR oyster image
+    expect(toon.image).toBe('ghcr.io/allidoizcode/toon:oyster');
   });
 
   it('T-4.1-01e: all services have image or build defined', async () => {
@@ -233,28 +234,19 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     expect(commandStr).toContain('attestation-server.js');
   });
 
-  it('T-4.1-01i: each service exposes the correct expected ports', async () => {
+  it('T-4.1-01i: each service configures the correct expected ports via environment', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act & Assert -- verify each service's ports match EXPECTED_PORTS
-    for (const [serviceName, expectedPorts] of Object.entries(EXPECTED_PORTS)) {
-      const service = compose.services[serviceName];
-      const ports = (service.ports || []).map((p: string | number) =>
-        String(p)
-      );
-      for (const expectedPort of expectedPorts) {
-        const found = ports.some((p: string) =>
-          p.includes(String(expectedPort))
-        );
-        expect(
-          found,
-          `Service "${serviceName}" must expose port ${expectedPort}`
-        ).toBe(true);
-      }
-    }
+    // Assert -- with network_mode: host, ports are configured via environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    expect(toonEnv.BLS_PORT).toBe(3100);
+    expect(toonEnv.WS_PORT).toBe(7100);
+
+    const attestationEnv = compose.services['attestation-server'].environment || {};
+    expect(attestationEnv.ATTESTATION_PORT).toBe(1300);
   });
 
   it('T-4.1-01j: compose file is valid YAML parseable by oyster-cvm CLI', async () => {
@@ -345,7 +337,7 @@ describe('T-4.1-02: supervisord.conf structure', () => {
     expect(toonPriority).toBeLessThan(attestationPriority);
   });
 
-  it('T-4.1-02e: toon command is node /app/dist/entrypoint-town.js', async () => {
+  it('T-4.1-02e: toon command is node /app/entrypoint-sdk.js', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
@@ -353,12 +345,12 @@ describe('T-4.1-02: supervisord.conf structure', () => {
     // Act -- extract command from [program:toon] section
     const toonMatch = confContent.match(/\[program:toon\][\s\S]*?command=(.+)/);
 
-    // Assert
+    // Assert -- esbuild bundles output directly to /app/ (no dist/ subdirectory)
     expect(toonMatch).not.toBeNull();
-    expect(toonMatch![1]!.trim()).toBe('node /app/dist/entrypoint-town.js');
+    expect(toonMatch![1]!.trim()).toBe('node /app/entrypoint-sdk.js');
   });
 
-  it('T-4.1-02f: attestation command is node /app/dist/attestation-server.js', async () => {
+  it('T-4.1-02f: attestation command is node /app/attestation-server.js', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
@@ -368,10 +360,10 @@ describe('T-4.1-02: supervisord.conf structure', () => {
       /\[program:attestation\][\s\S]*?command=(.+)/
     );
 
-    // Assert
+    // Assert -- esbuild bundles output directly to /app/ (no dist/ subdirectory)
     expect(attestationMatch).not.toBeNull();
     expect(attestationMatch![1]!.trim()).toBe(
-      'node /app/dist/attestation-server.js'
+      'node /app/attestation-server.js'
     );
   });
 
@@ -889,24 +881,16 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
     }
   });
 
-  it('T-4.1-13c: all port mappings use string format (host:container)', async () => {
+  it('T-4.1-13c: all services use network_mode host (no explicit port mappings)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act & Assert -- all port entries must be parseable as "host:container"
+    // Act & Assert -- with network_mode: host, no explicit port mappings needed
     for (const name of EXPECTED_SERVICES) {
       const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        // Must contain a colon separating host and container ports
-        expect(
-          portStr,
-          `Port mapping "${portStr}" in service "${name}" must use host:container format`
-        ).toMatch(/^\d+:\d+$/);
-      }
+      expect(service.network_mode).toBe('host');
     }
   });
 
@@ -920,55 +904,41 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
     const toonImage = compose.services.toon.image;
     const attestationImage = compose.services['attestation-server'].image;
 
-    // Assert -- both use toon:optimized
-    expect(toonImage).toBe('toon:optimized');
-    expect(attestationImage).toBe('toon:optimized');
+    // Assert -- both use the same GHCR oyster image
+    expect(toonImage).toBe('ghcr.io/allidoizcode/toon:oyster');
+    expect(attestationImage).toBe('ghcr.io/allidoizcode/toon:oyster');
   });
 
-  it('T-4.1-13e: no port conflicts between services', async () => {
+  it('T-4.1-13e: no port conflicts between services (environment-configured ports are unique)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act -- collect all host ports from all services
-    const allHostPorts: number[] = [];
-    for (const name of EXPECTED_SERVICES) {
-      const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        const hostPort = parseInt(portStr.split(':')[0]!, 10);
-        allHostPorts.push(hostPort);
-      }
-    }
+    // Act -- collect configured ports from environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    const attestationEnv = compose.services['attestation-server'].environment || {};
+    const allPorts = [toonEnv.BLS_PORT, toonEnv.WS_PORT, attestationEnv.ATTESTATION_PORT];
 
-    // Assert -- no duplicate host ports
-    const uniquePorts = new Set(allHostPorts);
-    expect(uniquePorts.size).toBe(allHostPorts.length);
+    // Assert -- no duplicate ports
+    const uniquePorts = new Set(allPorts);
+    expect(uniquePorts.size).toBe(allPorts.length);
   });
 
-  it('T-4.1-13f: all three required ports are exposed (3100, 7100, 1300)', async () => {
+  it('T-4.1-13f: all three required ports are configured (3100, 7100, 1300)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act -- collect all host ports across all services
-    const allHostPorts: number[] = [];
-    for (const name of EXPECTED_SERVICES) {
-      const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        const hostPort = parseInt(portStr.split(':')[0]!, 10);
-        allHostPorts.push(hostPort);
-      }
-    }
+    // Act -- collect configured ports from environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    const attestationEnv = compose.services['attestation-server'].environment || {};
+    const allPorts = [toonEnv.BLS_PORT, toonEnv.WS_PORT, attestationEnv.ATTESTATION_PORT];
 
     // Assert -- all required ports present
-    expect(allHostPorts).toContain(3100);
-    expect(allHostPorts).toContain(7100);
-    expect(allHostPorts).toContain(1300);
+    expect(allPorts).toContain(3100);
+    expect(allPorts).toContain(7100);
+    expect(allPorts).toContain(1300);
   });
 });
