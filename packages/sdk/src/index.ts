@@ -73,4 +73,7 @@ export type { BuildSkillDescriptorConfig } from './skill-descriptor.js';
 export type { SkillDescriptor } from '@toon-protocol/core';
 
 // Re-export bootstrap types for lifecycle event listeners
-export type { BootstrapEvent, BootstrapEventListener } from '@toon-protocol/core';
+export type {
+  BootstrapEvent,
+  BootstrapEventListener,
+} from '@toon-protocol/core';

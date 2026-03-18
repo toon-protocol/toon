@@ -595,6 +595,11 @@ export function parseJobResult(event: NostrEvent): ParsedJobResult | null {
   const amount = amountTag[1];
   if (amount === undefined || amount === '') return null;
 
+  // Validate amount is numeric (must be parseable as a non-negative integer).
+  // USDC micro-units are always whole numbers; reject decimals, negatives,
+  // and non-numeric strings to prevent downstream BigInt/arithmetic errors.
+  if (!/^\d+$/.test(amount)) return null;
+
   return {
     kind: event.kind,
     requestEventId,

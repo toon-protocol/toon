@@ -33,11 +33,7 @@ export type {
 } from './types.js';
 
 // Error classes
-export {
-  ToonError,
-  InvalidEventError,
-  PeerDiscoveryError,
-} from './errors.js';
+export { ToonError, InvalidEventError, PeerDiscoveryError } from './errors.js';
 
 // Event parsers and builders
 export {

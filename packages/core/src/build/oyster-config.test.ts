@@ -351,15 +351,11 @@ describe('T-4.1-02: supervisord.conf structure', () => {
     const confContent = await fs.readFile(confPath, 'utf-8');
 
     // Act -- extract command from [program:toon] section
-    const toonMatch = confContent.match(
-      /\[program:toon\][\s\S]*?command=(.+)/
-    );
+    const toonMatch = confContent.match(/\[program:toon\][\s\S]*?command=(.+)/);
 
     // Assert
     expect(toonMatch).not.toBeNull();
-    expect(toonMatch![1]!.trim()).toBe(
-      'node /app/dist/entrypoint-town.js'
-    );
+    expect(toonMatch![1]!.trim()).toBe('node /app/dist/entrypoint-town.js');
   });
 
   it('T-4.1-02f: attestation command is node /app/dist/attestation-server.js', async () => {

@@ -25,7 +25,9 @@ function validateNostrEvent(obj: unknown): asserts obj is NostrEvent {
 
   // Validate id (64-char hex)
   if (!isValidHex(event['id'], 64)) {
-    throw new ToonDecodeError('Invalid event id: must be a 64-character hex string');
+    throw new ToonDecodeError(
+      'Invalid event id: must be a 64-character hex string'
+    );
   }
 
   // Validate pubkey (64-char hex)
@@ -57,7 +59,9 @@ function validateNostrEvent(obj: unknown): asserts obj is NostrEvent {
     }
     for (let j = 0; j < tag.length; j++) {
       if (typeof tag[j] !== 'string') {
-        throw new ToonDecodeError(`Invalid event tags[${i}][${j}]: must be a string`);
+        throw new ToonDecodeError(
+          `Invalid event tags[${i}][${j}]: must be a string`
+        );
       }
     }
   }

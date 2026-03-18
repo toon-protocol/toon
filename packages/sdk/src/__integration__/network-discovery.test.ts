@@ -26,7 +26,10 @@ import WebSocket from 'ws';
 import { createNode, type NodeConfig, type StartResult } from '../index.js';
 
 // --- Imports from @toon-protocol/core (exists) ---
-import type { BootstrapEvent, EmbeddableConnectorLike } from '@toon-protocol/core';
+import type {
+  BootstrapEvent,
+  EmbeddableConnectorLike,
+} from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 import type {

@@ -148,9 +148,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
       mockSubscribePeers.mock.invocationCallOrder[0]!;
     expect(attestationCallOrder).toBeLessThan(subscribePeersCallOrder);
     expect(mockVerifier.verify).toHaveBeenCalledWith(attestationEvent);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
     expect(result.mode).toBe('attested');
   });
 
@@ -194,9 +192,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Should only subscribe to peers from the second (valid) relay
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     // Fallback succeeded — mode is attested via second relay
     expect(result.mode).toBe('attested');
@@ -230,9 +226,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Assert — peer discovery proceeded and found peers
     expect(mockVerifier.verify).toHaveBeenCalledWith(validEvent);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
     expect(result.discoveredPeers).toHaveLength(1);
     expect(result.attestedSeedRelay).toBe('wss://seed1.toon.example');
     // AC #3: result must include mode: 'attested'
@@ -323,9 +317,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     expect(mockVerifier.verify).toHaveBeenCalledWith(validAttestation);
 
     // Step 3: Subscribed to kind:10032 peer discovery
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
 
     // Step 4: Found peers
     expect(result.discoveredPeers).toHaveLength(1);
@@ -445,9 +437,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Only the second relay should have been subscribed to
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     // Result is attested (second relay succeeded)
     expect(result.mode).toBe('attested');
@@ -495,9 +485,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Only the second relay was subscribed to
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     expect(result.mode).toBe('attested');
     expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
@@ -584,9 +572,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Only the second relay should have subscribePeers called
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.toon.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     expect(result.mode).toBe('attested');
     expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');

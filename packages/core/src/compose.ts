@@ -282,9 +282,7 @@ export interface ToonNode {
  * await node.stop();
  * ```
  */
-export function createToonNode(
-  config: ToonNodeConfig
-): ToonNode {
+export function createToonNode(config: ToonNodeConfig): ToonNode {
   // Create direct clients for zero-latency embedded mode
   const directIlpClient = createDirectIlpClient(config.connector, {
     toonDecoder: config.toonDecoder,

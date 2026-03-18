@@ -25,7 +25,10 @@ import type {
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core/toon';
+import {
+  encodeEventToToon,
+  decodeEventFromToon,
+} from '@toon-protocol/core/toon';
 
 // ---------------------------------------------------------------------------
 // Mock Embedded Connector (same pattern as create-node.test.ts)

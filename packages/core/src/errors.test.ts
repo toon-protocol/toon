@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  ToonError,
-  InvalidEventError,
-  PeerDiscoveryError,
-} from './errors.js';
+import { ToonError, InvalidEventError, PeerDiscoveryError } from './errors.js';
 
 describe('ToonError', () => {
   it('should have correct name and code', () => {
