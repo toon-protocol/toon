@@ -22,7 +22,7 @@ import type { ConnectorAdminClient } from './types.js';
  *   id: 'peer2',
  *   url: 'ws://connector-peer2:3000',
  *   authToken: JSON.stringify({ peerId: 'peer2', secret: 'secret' }),
- *   routes: [{ prefix: 'g.crosstown.peer2', priority: 0 }],
+ *   routes: [{ prefix: 'g.toon.peer2', priority: 0 }],
  *   settlement: {
  *     preference: 'evm',
  *     evmAddress: '0x...',

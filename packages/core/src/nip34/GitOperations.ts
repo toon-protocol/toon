@@ -55,8 +55,8 @@ export class GitOperations {
 
   constructor(config: GitConfig = {}) {
     this.workDir = config.workDir || tmpdir();
-    this.userName = config.userName || 'Crosstown Node';
-    this.userEmail = config.userEmail || 'crosstown@nostr.local';
+    this.userName = config.userName || 'TOON Node';
+    this.userEmail = config.userEmail || 'toon@nostr.local';
   }
 
   /**

@@ -7,13 +7,13 @@ import {
   decodeEventFromToon,
   shallowParseToon,
   ToonEncodeError,
+  ToonDecodeError,
   ToonError,
-  CrosstownError,
 } from './index.js';
 import type { IlpPeerInfo, ToonRoutingMeta } from './index.js';
 import type { NostrEvent } from 'nostr-tools/pure';
 
-describe('@crosstown/core', () => {
+describe('@toon-protocol/core', () => {
   it('should export VERSION', () => {
     expect(VERSION).toBe('0.1.0');
   });
@@ -79,21 +79,21 @@ describe('@crosstown/core', () => {
       expect(meta.rawBytes).toBe(encoded);
     });
 
-    it('should export ToonEncodeError class extending CrosstownError', () => {
+    it('should export ToonEncodeError class extending ToonError', () => {
       expect(ToonEncodeError).toBeDefined();
       const err = new ToonEncodeError('test encode error');
       expect(err).toBeInstanceOf(Error);
-      expect(err).toBeInstanceOf(CrosstownError);
+      expect(err).toBeInstanceOf(ToonError);
       expect(err.name).toBe('ToonEncodeError');
       expect(err.code).toBe('TOON_ENCODE_ERROR');
     });
 
-    it('should export ToonError class extending CrosstownError', () => {
-      expect(ToonError).toBeDefined();
-      const err = new ToonError('test decode error');
+    it('should export ToonDecodeError class extending ToonError', () => {
+      expect(ToonDecodeError).toBeDefined();
+      const err = new ToonDecodeError('test decode error');
       expect(err).toBeInstanceOf(Error);
-      expect(err).toBeInstanceOf(CrosstownError);
-      expect(err.name).toBe('ToonError');
+      expect(err).toBeInstanceOf(ToonError);
+      expect(err.name).toBe('ToonDecodeError');
       expect(err.code).toBe('TOON_DECODE_ERROR');
     });
 

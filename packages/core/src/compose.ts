@@ -1,7 +1,7 @@
 /**
- * Crosstown Node composition API.
+ * TOON Node composition API.
  *
- * Provides createCrosstownNode() — a single composition function that wires
+ * Provides createToonNode() — a single composition function that wires
  * ConnectorNode ↔ BLS ↔ BootstrapService ↔ DiscoveryTracker into one object
  * with start() / stop() lifecycle, enabling zero-latency embedded mode without
  * manually wiring each component.
@@ -34,7 +34,7 @@ import { createDirectChannelClient } from './bootstrap/direct-channel-client.js'
  * Structural type for incoming ILP packet handler request.
  *
  * Matches the shape of BLS HandlePacketRequest without creating a cross-package
- * dependency from @crosstown/core → @crosstown/bls.
+ * dependency from @toon-protocol/core → @toon-protocol/bls.
  */
 export interface HandlePacketRequest {
   /** Payment amount as string (parsed to bigint) */
@@ -98,7 +98,7 @@ export type PacketHandler = (
  * 2. ConnectorAdminLike (registerPeer, removePeer) — for peer management
  * 3. setPacketHandler(handler) — for registering the incoming packet callback
  *
- * This structural interface allows @crosstown/connector's ConnectorNode to
+ * This structural interface allows @toon-protocol/connector's ConnectorNode to
  * be passed directly without importing it as a dependency.
  */
 export interface EmbeddableConnectorLike {
@@ -143,9 +143,9 @@ export interface EmbeddableConnectorLike {
 }
 
 /**
- * Configuration for creating an Crosstown Node.
+ * Configuration for creating an TOON Node.
  */
-export interface CrosstownNodeConfig {
+export interface ToonNodeConfig {
   /** The ConnectorNode instance (embeddable connector) */
   connector: EmbeddableConnectorLike;
   /**
@@ -188,9 +188,9 @@ export interface CrosstownNodeConfig {
 }
 
 /**
- * Result returned by CrosstownNode.start().
+ * Result returned by ToonNode.start().
  */
-export interface CrosstownNodeStartResult {
+export interface ToonNodeStartResult {
   /** Results from the bootstrap phase */
   bootstrapResults: BootstrapResult[];
   /** Number of peers successfully bootstrapped */
@@ -200,14 +200,14 @@ export interface CrosstownNodeStartResult {
 }
 
 /**
- * Crosstown Node instance with lifecycle methods.
+ * TOON Node instance with lifecycle methods.
  */
-export interface CrosstownNode {
+export interface ToonNode {
   /**
    * Wire components and run bootstrap.
    * Throws BootstrapError if already started or on bootstrap failure.
    */
-  start(): Promise<CrosstownNodeStartResult>;
+  start(): Promise<ToonNodeStartResult>;
   /**
    * Tear down and clean up.
    * Safe to call when not started (no-op).
@@ -226,7 +226,7 @@ export interface CrosstownNode {
   /**
    * Channel client for payment channel operations.
    * Null if the connector does not expose openChannel()/getChannelState().
-   * Available when using @crosstown/connector >=1.2.0.
+   * Available when using @toon-protocol/connector >=1.2.0.
    */
   readonly channelClient: ConnectorChannelClient | null;
   /**
@@ -243,7 +243,7 @@ export interface CrosstownNode {
 }
 
 /**
- * Create a Crosstown Node with integrated bootstrap and discovery tracking.
+ * Create a TOON Node with integrated bootstrap and discovery tracking.
  *
  * This composition function wires ConnectorNode ↔ DirectRuntimeClient ↔
  * DirectConnectorAdmin ↔ BootstrapService ↔ DiscoveryTracker into a single
@@ -251,17 +251,17 @@ export interface CrosstownNode {
  * without manually wiring each component.
  *
  * @param config - Configuration for the node
- * @returns CrosstownNode instance with start() / stop() methods
+ * @returns ToonNode instance with start() / stop() methods
  *
  * @example
  * ```typescript
- * import { ConnectorNode } from '@crosstown/connector';
- * import { createCrosstownNode } from '@crosstown/core/compose';
- * import { encodeEvent, decodeEvent } from '@crosstown/relay';
+ * import { ConnectorNode } from '@toon-protocol/connector';
+ * import { createToonNode } from '@toon-protocol/core/compose';
+ * import { encodeEvent, decodeEvent } from '@toon-protocol/relay';
  *
  * const connector = new ConnectorNode({ ... });
  *
- * const node = createCrosstownNode({
+ * const node = createToonNode({
  *   connector,
  *   handlePacket: async (req) => { ... },
  *   secretKey: new Uint8Array(32),
@@ -282,9 +282,9 @@ export interface CrosstownNode {
  * await node.stop();
  * ```
  */
-export function createCrosstownNode(
-  config: CrosstownNodeConfig
-): CrosstownNode {
+export function createToonNode(
+  config: ToonNodeConfig
+): ToonNode {
   // Create direct clients for zero-latency embedded mode
   const directIlpClient = createDirectIlpClient(config.connector, {
     toonDecoder: config.toonDecoder,
@@ -351,10 +351,10 @@ export function createCrosstownNode(
       return discoveryTracker.peerWith(pubkey);
     },
 
-    async start(): Promise<CrosstownNodeStartResult> {
+    async start(): Promise<ToonNodeStartResult> {
       // Guard against double-start
       if (started) {
-        throw new BootstrapError('CrosstownNode already started');
+        throw new BootstrapError('ToonNode already started');
       }
 
       try {
@@ -386,7 +386,7 @@ export function createCrosstownNode(
         };
       } catch (error) {
         throw new BootstrapError(
-          `Failed to start CrosstownNode: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to start ToonNode: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     },

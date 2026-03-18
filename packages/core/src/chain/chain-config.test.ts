@@ -4,7 +4,7 @@
  * Validates:
  * - resolveChainConfig() returns correct values for all 3 chain presets
  * - resolveChainConfig() defaults to 'anvil' when no argument provided
- * - Environment variable overrides (CROSSTOWN_CHAIN, CROSSTOWN_RPC_URL, CROSSTOWN_TOKEN_NETWORK)
+ * - Environment variable overrides (TOON_CHAIN, TOON_RPC_URL, TOON_TOKEN_NETWORK)
  * - Invalid chain name produces clear error
  * - ChainPreset type completeness
  * - Defensive copy (returned object is not shared reference)
@@ -13,7 +13,7 @@
  *
  * Test IDs from test-design-epic-3.md:
  * - 3.2-UNIT-001 [P0]: Chain preset correctness (3 tests + default-to-anvil)
- * - 3.2-UNIT-002 [P1]: Env var overrides (CROSSTOWN_CHAIN, CROSSTOWN_RPC_URL, CROSSTOWN_TOKEN_NETWORK)
+ * - 3.2-UNIT-002 [P1]: Env var overrides (TOON_CHAIN, TOON_RPC_URL, TOON_TOKEN_NETWORK)
  * - 3.2-UNIT-003 [P1]: Invalid chain name
  * - 3.2-UNIT-004 [P2]: Preset type completeness + defensive copy
  * - 3.9-UNIT-001 [P2]: viem-only enforcement (static analysis)
@@ -32,7 +32,7 @@ import {
 } from './chain-config.js';
 import type { ChainPreset } from './chain-config.js';
 import { MOCK_USDC_ADDRESS } from './usdc.js';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 
 // ============================================================================
 // Constants -- expected chain preset values
@@ -145,8 +145,8 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   // 3.2-UNIT-002 [P1]: Env var overrides
   // --------------------------------------------------------------------------
   describe('Environment variable overrides (3.2-UNIT-002)', () => {
-    it('[P1] CROSSTOWN_CHAIN env var overrides config file chain selection', () => {
-      vi.stubEnv('CROSSTOWN_CHAIN', 'arbitrum-one');
+    it('[P1] TOON_CHAIN env var overrides config file chain selection', () => {
+      vi.stubEnv('TOON_CHAIN', 'arbitrum-one');
 
       const config = resolveChainConfig('anvil'); // config says anvil, env says arbitrum-one
 
@@ -154,9 +154,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.name).toBe('arbitrum-one');
     });
 
-    it('[P1] CROSSTOWN_RPC_URL env var overrides preset RPC endpoint', () => {
+    it('[P1] TOON_RPC_URL env var overrides preset RPC endpoint', () => {
       const customRpc = 'https://custom-rpc.example.com';
-      vi.stubEnv('CROSSTOWN_RPC_URL', customRpc);
+      vi.stubEnv('TOON_RPC_URL', customRpc);
 
       const config = resolveChainConfig('arbitrum-one');
 
@@ -164,9 +164,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.chainId).toBe(ARBITRUM_ONE_CHAIN_ID); // other fields unchanged
     });
 
-    it('[P1] CROSSTOWN_TOKEN_NETWORK env var overrides preset tokenNetworkAddress', () => {
+    it('[P1] TOON_TOKEN_NETWORK env var overrides preset tokenNetworkAddress', () => {
       const customTokenNetwork = '0x1234567890abcdef1234567890abcdef12345678';
-      vi.stubEnv('CROSSTOWN_TOKEN_NETWORK', customTokenNetwork);
+      vi.stubEnv('TOON_TOKEN_NETWORK', customTokenNetwork);
 
       const config = resolveChainConfig('anvil');
 
@@ -198,18 +198,18 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       }
     });
 
-    it('[P1] throws CrosstownError with INVALID_CHAIN error code', () => {
+    it('[P1] throws ToonError with INVALID_CHAIN error code', () => {
       try {
         resolveChainConfig('nonexistent');
         expect.fail('Expected resolveChainConfig to throw');
       } catch (error: unknown) {
-        expect(error).toBeInstanceOf(CrosstownError);
-        expect((error as CrosstownError).code).toBe('INVALID_CHAIN');
+        expect(error).toBeInstanceOf(ToonError);
+        expect((error as ToonError).code).toBe('INVALID_CHAIN');
       }
     });
 
-    it('[P1] CROSSTOWN_CHAIN env var with invalid value throws clear error', () => {
-      vi.stubEnv('CROSSTOWN_CHAIN', 'invalid-env-chain');
+    it('[P1] TOON_CHAIN env var with invalid value throws clear error', () => {
+      vi.stubEnv('TOON_CHAIN', 'invalid-env-chain');
 
       expect(() => resolveChainConfig()).toThrow(
         /unknown chain.*invalid-env-chain/i
@@ -349,28 +349,28 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   });
 
   // --------------------------------------------------------------------------
-  // AC #4 coverage: CROSSTOWN_CHAIN env var with CROSSTOWN_RPC_URL combined
+  // AC #4 coverage: TOON_CHAIN env var with TOON_RPC_URL combined
   // --------------------------------------------------------------------------
   describe('Combined environment variable overrides', () => {
-    it('[P1] CROSSTOWN_CHAIN + CROSSTOWN_RPC_URL applies both overrides simultaneously', () => {
-      vi.stubEnv('CROSSTOWN_CHAIN', 'arbitrum-sepolia');
-      vi.stubEnv('CROSSTOWN_RPC_URL', 'https://my-private-rpc.example.com');
+    it('[P1] TOON_CHAIN + TOON_RPC_URL applies both overrides simultaneously', () => {
+      vi.stubEnv('TOON_CHAIN', 'arbitrum-sepolia');
+      vi.stubEnv('TOON_RPC_URL', 'https://my-private-rpc.example.com');
 
       const config = resolveChainConfig('anvil'); // param says anvil
 
-      // CROSSTOWN_CHAIN wins over parameter
+      // TOON_CHAIN wins over parameter
       expect(config.chainId).toBe(ARBITRUM_SEPOLIA_CHAIN_ID);
       expect(config.name).toBe('arbitrum-sepolia');
-      // CROSSTOWN_RPC_URL overrides preset RPC
+      // TOON_RPC_URL overrides preset RPC
       expect(config.rpcUrl).toBe('https://my-private-rpc.example.com');
       // usdcAddress comes from the Sepolia preset, unaffected
       expect(config.usdcAddress).toBe(ARBITRUM_SEPOLIA_USDC);
     });
 
-    it('[P1] CROSSTOWN_CHAIN + CROSSTOWN_TOKEN_NETWORK applies both overrides simultaneously', () => {
-      vi.stubEnv('CROSSTOWN_CHAIN', 'arbitrum-one');
+    it('[P1] TOON_CHAIN + TOON_TOKEN_NETWORK applies both overrides simultaneously', () => {
+      vi.stubEnv('TOON_CHAIN', 'arbitrum-one');
       const customTN = '0xDeadBeefDeadBeefDeadBeefDeadBeefDeadBeef';
-      vi.stubEnv('CROSSTOWN_TOKEN_NETWORK', customTN);
+      vi.stubEnv('TOON_TOKEN_NETWORK', customTN);
 
       const config = resolveChainConfig(); // no param, defaults to anvil but env overrides
 
@@ -380,9 +380,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
     });
 
     it('[P1] all three env var overrides apply together', () => {
-      vi.stubEnv('CROSSTOWN_CHAIN', 'arbitrum-one');
-      vi.stubEnv('CROSSTOWN_RPC_URL', 'https://custom.rpc');
-      vi.stubEnv('CROSSTOWN_TOKEN_NETWORK', '0x' + 'ff'.repeat(20));
+      vi.stubEnv('TOON_CHAIN', 'arbitrum-one');
+      vi.stubEnv('TOON_RPC_URL', 'https://custom.rpc');
+      vi.stubEnv('TOON_TOKEN_NETWORK', '0x' + 'ff'.repeat(20));
 
       const config = resolveChainConfig('anvil');
 

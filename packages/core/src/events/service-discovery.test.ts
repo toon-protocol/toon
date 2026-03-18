@@ -9,7 +9,7 @@
  * - kind:10035 event published on bootstrap (build + sign)
  * - Content correctness (service type, ILP address, pricing, x402 endpoint)
  * - x402 field entirely omitted when disabled (not set to { enabled: false })
- * - NIP-16 replaceable event pattern (d tag with 'crosstown-service-discovery')
+ * - NIP-16 replaceable event pattern (d tag with 'toon-service-discovery')
  * - SERVICE_DISCOVERY_KIND constant equals 10035
  * - parseServiceDiscovery() graceful degradation for malformed content
  * - parseServiceDiscovery() validation of required fields
@@ -68,7 +68,7 @@ function createServiceDiscoveryContent(
 ): ServiceDiscoveryContent {
   return {
     serviceType: 'relay',
-    ilpAddress: 'g.crosstown.test-relay',
+    ilpAddress: 'g.toon.test-relay',
     pricing: {
       basePricePerByte: 10,
       currency: 'USDC',
@@ -92,7 +92,7 @@ function createServiceDiscoveryContent(
 function createIlpOnlyContent(): ServiceDiscoveryContent {
   return {
     serviceType: 'relay',
-    ilpAddress: 'g.crosstown.test-relay',
+    ilpAddress: 'g.toon.test-relay',
     pricing: {
       basePricePerByte: 10,
       currency: 'USDC',
@@ -156,7 +156,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       // Assert: all fields round-trip correctly
       expect(parsed).not.toBeNull();
       expect(parsed!.serviceType).toBe('relay');
-      expect(parsed!.ilpAddress).toBe('g.crosstown.test-relay');
+      expect(parsed!.ilpAddress).toBe('g.toon.test-relay');
       expect(parsed!.pricing.basePricePerByte).toBe(10);
       expect(parsed!.pricing.currency).toBe('USDC');
       expect(parsed!.x402).toBeDefined();
@@ -209,7 +209,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       // Assert: NIP-16 replaceable events use d tag as content marker
       const dTag = event.tags.find((t: string[]) => t[0] === 'd');
       expect(dTag).toBeDefined();
-      expect(dTag![1]).toBe('crosstown-service-discovery');
+      expect(dTag![1]).toBe('toon-service-discovery');
     });
   });
 
@@ -222,7 +222,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const malformedEvent = {
         kind: 10035,
         content: 'not valid json {{{',
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -241,7 +241,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const arrayEvent = {
         kind: 10035,
         content: '["not", "an", "object"]',
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -265,14 +265,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const event = {
         kind: 10035,
         content: JSON.stringify({
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -292,13 +292,13 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -324,7 +324,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -344,14 +344,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: 'not-an-array',
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -371,13 +371,13 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -397,13 +397,13 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -489,13 +489,13 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -515,14 +515,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: 'relay',
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -547,14 +547,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: '10', currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -574,14 +574,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10 },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -606,7 +606,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -614,7 +614,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           version: '0.1.0',
           x402: { enabled: 'yes', endpoint: '/publish' },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -634,7 +634,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -642,7 +642,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           version: '0.1.0',
           x402: { enabled: true, endpoint: 42 },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -662,7 +662,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay', 'x402'],
@@ -670,7 +670,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           version: '0.1.0',
           x402: { enabled: true },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -697,7 +697,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const event = {
         kind: 10035,
         content: 'null',
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -716,7 +716,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const event = {
         kind: 10035,
         content: '',
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -736,14 +736,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1, 'invalid', 10036],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -763,14 +763,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1, 1.5, 10036],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -790,14 +790,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1, -5, 10036],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -817,14 +817,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay', 42],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -848,7 +848,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const secretKey = generateSecretKey();
       const content = createServiceDiscoveryContent({
         serviceType: 'rig',
-        ilpAddress: 'g.crosstown.custom-node',
+        ilpAddress: 'g.toon.custom-node',
         chain: 'arbitrum-sepolia',
         version: '1.2.3',
       });
@@ -859,7 +859,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
 
       // Assert: raw JSON matches the input content structure
       expect(rawParsed['serviceType']).toBe('rig');
-      expect(rawParsed['ilpAddress']).toBe('g.crosstown.custom-node');
+      expect(rawParsed['ilpAddress']).toBe('g.toon.custom-node');
       expect(rawParsed['chain']).toBe('arbitrum-sepolia');
       expect(rawParsed['version']).toBe('1.2.3');
     });
@@ -892,7 +892,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
 
       // Assert: exactly one tag, and it's the d tag
       expect(event.tags).toHaveLength(1);
-      expect(event.tags[0]).toEqual(['d', 'crosstown-service-discovery']);
+      expect(event.tags[0]).toEqual(['d', 'toon-service-discovery']);
     });
   });
 
@@ -924,14 +924,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: [10, 'USDC'],
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -956,7 +956,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -964,7 +964,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           version: '0.1.0',
           x402: [true, '/publish'],
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -988,14 +988,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: NaN, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1011,14 +1011,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: -5, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1034,14 +1034,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: Infinity, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1057,14 +1057,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 0, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1087,7 +1087,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1, 10032, 10036],
           capabilities: ['relay'],
@@ -1096,7 +1096,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           futureField: 'some-value',
           anotherField: { nested: true },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1109,7 +1109,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       // Assert: parser succeeds and extracts known fields
       expect(result).not.toBeNull();
       expect(result!.serviceType).toBe('relay');
-      expect(result!.ilpAddress).toBe('g.crosstown.test');
+      expect(result!.ilpAddress).toBe('g.toon.test');
       expect(result!.chain).toBe('anvil');
     });
   });
@@ -1125,7 +1125,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
     it('[P1] skill descriptor contains all required fields', () => {
       // Arrange: a valid skill descriptor
       const skill: SkillDescriptor = {
-        name: 'crosstown-dvm',
+        name: 'toon-dvm',
         version: '1.0',
         kinds: [5100, 5200],
         features: ['text-generation', 'streaming'],
@@ -1160,7 +1160,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const secretKey = generateSecretKey();
       const content = createServiceDiscoveryContent({
         skill: {
-          name: 'crosstown-dvm',
+          name: 'toon-dvm',
           version: '1.0',
           kinds: [5100, 5200],
           features: ['text-generation', 'image-generation'],
@@ -1184,7 +1184,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       // Assert: all skill fields round-trip correctly
       expect(parsed).not.toBeNull();
       expect(parsed!.skill).toBeDefined();
-      expect(parsed!.skill!.name).toBe('crosstown-dvm');
+      expect(parsed!.skill!.name).toBe('toon-dvm');
       expect(parsed!.skill!.version).toBe('1.0');
       expect(parsed!.skill!.kinds).toEqual([5100, 5200]);
       expect(parsed!.skill!.features).toEqual([
@@ -1236,7 +1236,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -1251,7 +1251,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1272,14 +1272,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100, 5.5, 5200],
             features: ['text-generation'],
@@ -1287,7 +1287,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1303,14 +1303,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100, '5200'],
             features: ['text-generation'],
@@ -1318,7 +1318,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1339,14 +1339,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1354,7 +1354,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1370,14 +1370,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1385,7 +1385,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1401,14 +1401,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1416,7 +1416,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1437,14 +1437,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1452,7 +1452,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': 1000000 },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1468,14 +1468,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1483,7 +1483,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: ['1000000'],
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1496,16 +1496,16 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
   });
 
   // --------------------------------------------------------------------------
-  // T-5.4-09 [P2]: Crosstown-specific fields alongside skill descriptor
+  // T-5.4-09 [P2]: TOON-specific fields alongside skill descriptor
   // --------------------------------------------------------------------------
-  describe('Crosstown-specific fields alongside skill (T-5.4-09)', () => {
+  describe('TOON-specific fields alongside skill (T-5.4-09)', () => {
     it('[P2] ilpAddress, x402 (with endpoint), and chain present alongside skill', () => {
       // Arrange
       const secretKey = generateSecretKey();
       const content = createServiceDiscoveryContent({
         x402: { enabled: true, endpoint: '/publish' },
         skill: {
-          name: 'crosstown-dvm',
+          name: 'toon-dvm',
           version: '1.0',
           kinds: [5100],
           features: ['text-generation'],
@@ -1518,15 +1518,15 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const event = buildServiceDiscoveryEvent(content, secretKey);
       const parsed = parseServiceDiscovery(event);
 
-      // Assert: Crosstown-specific fields present alongside skill
+      // Assert: TOON-specific fields present alongside skill
       expect(parsed).not.toBeNull();
-      expect(parsed!.ilpAddress).toBe('g.crosstown.test-relay');
+      expect(parsed!.ilpAddress).toBe('g.toon.test-relay');
       expect(parsed!.x402).toBeDefined();
       expect(parsed!.x402!.enabled).toBe(true);
       expect(parsed!.x402!.endpoint).toBe('/publish');
       expect(parsed!.chain).toBe('arbitrum-one');
       expect(parsed!.skill).toBeDefined();
-      expect(parsed!.skill!.name).toBe('crosstown-dvm');
+      expect(parsed!.skill!.name).toBe('toon-dvm');
     });
   });
 
@@ -1539,7 +1539,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const secretKey = generateSecretKey();
       const content = createServiceDiscoveryContent({
         skill: {
-          name: 'crosstown-dvm',
+          name: 'toon-dvm',
           version: '1.0',
           kinds: [5100],
           features: ['text-generation'],
@@ -1564,7 +1564,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
       const secretKey = generateSecretKey();
       const content = createServiceDiscoveryContent({
         skill: {
-          name: 'crosstown-dvm',
+          name: 'toon-dvm',
           version: '1.0',
           kinds: [5100],
           features: ['text-generation'],
@@ -1596,7 +1596,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -1604,7 +1604,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
           version: '0.1.0',
           skill: ['not', 'an', 'object'],
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1620,21 +1620,21 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             kinds: [5100],
             features: ['text-generation'],
             inputSchema: { type: 'object' },
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1650,14 +1650,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation', 42],
@@ -1665,7 +1665,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1681,14 +1681,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1697,7 +1697,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             models: ['gpt-4', 123],
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1713,14 +1713,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1728,7 +1728,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1747,7 +1747,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
@@ -1761,7 +1761,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1777,14 +1777,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: 'not-an-array',
             features: ['text-generation'],
@@ -1792,7 +1792,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1808,14 +1808,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100, -1],
             features: ['text-generation'],
@@ -1823,7 +1823,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1839,14 +1839,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: 'not-an-array',
@@ -1854,7 +1854,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             pricing: { '5100': '1000000' },
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),
@@ -1870,14 +1870,14 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
         kind: 10035,
         content: JSON.stringify({
           serviceType: 'relay',
-          ilpAddress: 'g.crosstown.test',
+          ilpAddress: 'g.toon.test',
           pricing: { basePricePerByte: 10, currency: 'USDC' },
           supportedKinds: [1],
           capabilities: ['relay'],
           chain: 'anvil',
           version: '0.1.0',
           skill: {
-            name: 'crosstown-dvm',
+            name: 'toon-dvm',
             version: '1.0',
             kinds: [5100],
             features: ['text-generation'],
@@ -1886,7 +1886,7 @@ describe('Story 3.5: kind:10035 Service Discovery Events', () => {
             attestation: ['invalid'],
           },
         }),
-        tags: [['d', 'crosstown-service-discovery']],
+        tags: [['d', 'toon-service-discovery']],
         created_at: 1700000000,
         pubkey: 'a'.repeat(64),
         id: 'b'.repeat(64),

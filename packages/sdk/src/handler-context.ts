@@ -1,16 +1,16 @@
 /**
- * Handler context for @crosstown/sdk.
+ * Handler context for @toon-protocol/sdk.
  *
  * Provides a context object passed to kind-based handlers with methods
  * for accessing TOON data, shallow-parsed metadata, and accept/reject actions.
  */
 
 import type { NostrEvent } from 'nostr-tools/pure';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import type {
   HandlePacketAcceptResponse,
   HandlePacketRejectResponse,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
 // Re-export core response types so SDK consumers don't need to import from core
 export type { HandlePacketAcceptResponse, HandlePacketRejectResponse };

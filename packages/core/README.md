@@ -1,11 +1,11 @@
-# @crosstown/core
+# @toon-protocol/core
 
 Core library for Nostr-based ILP peer discovery, bootstrap, and settlement negotiation.
 
 ## Install
 
 ```bash
-npm install @crosstown/core
+npm install @toon-protocol/core
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ import {
   SocialPeerDiscovery,
   parseIlpPeerInfo,
   buildIlpPeerInfoEvent,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 ```
 
 ## License

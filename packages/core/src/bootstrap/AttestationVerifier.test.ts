@@ -860,7 +860,7 @@ describe('AttestationVerifier', () => {
       expect(bootstrapExports.AttestationState.UNATTESTED).toBe('unattested');
     });
 
-    it('should export AttestationVerifier from top-level @crosstown/core index', async () => {
+    it('should export AttestationVerifier from top-level @toon-protocol/core index', async () => {
       const coreExports = await import('../index.js');
       expect(coreExports.AttestationVerifier).toBeDefined();
       expect(coreExports.AttestationState).toBeDefined();

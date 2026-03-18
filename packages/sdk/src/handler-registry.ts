@@ -1,10 +1,10 @@
 /**
- * Handler registry for @crosstown/sdk.
+ * Handler registry for @toon-protocol/sdk.
  *
  * Maps event kinds to handler functions for dispatching incoming ILP packets.
  */
 
-import { JOB_REQUEST_KIND_BASE } from '@crosstown/core';
+import { JOB_REQUEST_KIND_BASE } from '@toon-protocol/core';
 import type {
   HandlerContext,
   HandlePacketAcceptResponse,

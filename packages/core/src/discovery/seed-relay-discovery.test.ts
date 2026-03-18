@@ -216,7 +216,7 @@ vi.mock('ws', () => {
  */
 function createSeedRelayList(count = 3): SeedRelayEntry[] {
   return Array.from({ length: count }, (_, i) => ({
-    url: `wss://seed-relay-${i + 1}.crosstown.example.com`,
+    url: `wss://seed-relay-${i + 1}.toon.example.com`,
     pubkey: `${String(i + 1).padStart(2, '0')}`.repeat(32),
     metadata: { region: 'us-east', version: '1.0.0' },
   }));
@@ -234,7 +234,7 @@ function createSeedRelayEvent(
     pubkey: 'b'.repeat(64),
     kind: 10036,
     content: JSON.stringify(seedRelays),
-    tags: [['d', 'crosstown-seed-list']],
+    tags: [['d', 'toon-seed-list']],
     created_at: Math.floor(Date.now() / 1000),
     sig: 'c'.repeat(128),
     ...overrides,
@@ -304,7 +304,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
   describe('Constants (T-3.4-11)', () => {
     it('[P2] SEED_RELAY_LIST_KIND equals 10036', () => {
       // Assert
-      // The constant must be exported from @crosstown/core constants
+      // The constant must be exported from @toon-protocol/core constants
       expect(SEED_RELAY_LIST_KIND).toBe(10036);
     });
   });
@@ -323,10 +323,10 @@ describe('Story 3.4: Seed Relay Discovery', () => {
 
       // Assert -- kind must be 10036 (NIP-16 replaceable: 10000-19999)
       expect(event.kind).toBe(10036);
-      // Assert -- must have d-tag with value 'crosstown-seed-list'
+      // Assert -- must have d-tag with value 'toon-seed-list'
       const dTag = event.tags.find((t: string[]) => t[0] === 'd');
       expect(dTag).toBeDefined();
-      expect(dTag![1]).toBe('crosstown-seed-list');
+      expect(dTag![1]).toBe('toon-seed-list');
       // Assert -- content is JSON-serialized SeedRelayEntry[]
       const content = JSON.parse(event.content) as SeedRelayEntry[];
       expect(content).toHaveLength(2);
@@ -389,7 +389,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
     it('[P2] accepts entries with wss:// prefix', () => {
       // Arrange
       const entries: SeedRelayEntry[] = [
-        { url: 'wss://relay.crosstown.example.com', pubkey: 'bb'.repeat(32) },
+        { url: 'wss://relay.toon.example.com', pubkey: 'bb'.repeat(32) },
       ];
       const event = createSeedRelayEvent(entries);
 
@@ -398,7 +398,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
 
       // Assert
       expect(result).toHaveLength(1);
-      expect(result[0]!.url).toBe('wss://relay.crosstown.example.com');
+      expect(result[0]!.url).toBe('wss://relay.toon.example.com');
     });
 
     it('[P2] rejects entries with http:// prefix (non-WebSocket)', () => {
@@ -798,7 +798,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       const seedRelayEvent = createSeedRelayEvent(seedEntries);
       const peerPubkey = 'ab'.repeat(32);
       const peerInfoEvent = createIlpPeerInfoEvent(peerPubkey, {
-        ilpAddress: 'g.crosstown.compat-peer',
+        ilpAddress: 'g.toon.compat-peer',
         btpEndpoint: 'wss://btp.compat.test',
       });
 
@@ -825,7 +825,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       // (the three fields required for KnownPeer conversion)
       const peer = result.discoveredPeers[0]!;
       expect(peer.pubkey).toBe(peerPubkey);
-      expect(peer.ilpAddress).toBe('g.crosstown.compat-peer');
+      expect(peer.ilpAddress).toBe('g.toon.compat-peer');
       expect(peer.btpEndpoint).toBe('wss://btp.compat.test');
 
       await discovery.close();
@@ -844,7 +844,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       // Act
       const result = await publishSeedRelayEntry({
         secretKey,
-        relayUrl: 'wss://my-relay.crosstown.example.com',
+        relayUrl: 'wss://my-relay.toon.example.com',
         publicRelays: ['wss://relay.damus.io'],
         metadata: { region: 'us-east', version: '1.0.0' },
       });
@@ -944,7 +944,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       // Act
       const result = await publishSeedRelayEntry({
         secretKey,
-        relayUrl: 'wss://my-relay.crosstown.example.com',
+        relayUrl: 'wss://my-relay.toon.example.com',
         publicRelays: ['wss://relay.damus.io'],
         metadata: { region: 'us-east', version: '1.0.0', services: ['relay'] },
       });
@@ -968,7 +968,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       // Assert -- content contains the node's URL and derived pubkey
       const content = JSON.parse(event.content) as SeedRelayEntry[];
       expect(content).toHaveLength(1);
-      expect(content[0]!.url).toBe('wss://my-relay.crosstown.example.com');
+      expect(content[0]!.url).toBe('wss://my-relay.toon.example.com');
       expect(content[0]!.pubkey).toBe(expectedPubkey);
 
       // Assert -- metadata is included
@@ -1254,7 +1254,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       const seedEntries = createSeedRelayList(1);
       const seedRelayEvent = createSeedRelayEvent(seedEntries);
       const peerInfoEvent = createIlpPeerInfoEvent(eventPubkey, {
-        ilpAddress: 'g.crosstown.peer1',
+        ilpAddress: 'g.toon.peer1',
         btpEndpoint: 'wss://btp.peer1.example.com',
       });
 
@@ -1281,7 +1281,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       expect(result.discoveredPeers).toHaveLength(1);
       expect(result.discoveredPeers[0]!.pubkey).toBe(eventPubkey);
       // Also verify the ILP peer info fields are correct
-      expect(result.discoveredPeers[0]!.ilpAddress).toBe('g.crosstown.peer1');
+      expect(result.discoveredPeers[0]!.ilpAddress).toBe('g.toon.peer1');
       expect(result.discoveredPeers[0]!.btpEndpoint).toBe(
         'wss://btp.peer1.example.com'
       );

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createPricingValidator } from './pricing-validator.js';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 
 // ATDD tests for Story 1.5 -- pricing validator
 

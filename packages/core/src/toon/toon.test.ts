@@ -3,12 +3,12 @@ import {
   encodeEventToToon,
   encodeEventToToonString,
   decodeEventFromToon,
-  ToonError,
+  ToonDecodeError,
   ToonEncodeError,
   shallowParseToon,
 } from './index.js';
 import type { ToonRoutingMeta } from './index.js';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 /**
@@ -549,7 +549,7 @@ describe('TOON Encoding', () => {
     });
   });
 
-  describe('Re-exports from @crosstown/core (T-1.0-07)', () => {
+  describe('Re-exports from @toon-protocol/core (T-1.0-07)', () => {
     it('should export encodeEventToToon function', () => {
       expect(typeof encodeEventToToon).toBe('function');
     });
@@ -570,36 +570,36 @@ describe('TOON Encoding', () => {
       expect(ToonEncodeError).toBeDefined();
       const err = new ToonEncodeError('test');
       expect(err).toBeInstanceOf(Error);
-      expect(err).toBeInstanceOf(CrosstownError);
+      expect(err).toBeInstanceOf(ToonError);
       expect(err.name).toBe('ToonEncodeError');
       expect(err.code).toBe('TOON_ENCODE_ERROR');
     });
 
-    it('should export ToonError class', () => {
-      expect(ToonError).toBeDefined();
-      const err = new ToonError('test');
+    it('should export ToonDecodeError class', () => {
+      expect(ToonDecodeError).toBeDefined();
+      const err = new ToonDecodeError('test');
       expect(err).toBeInstanceOf(Error);
-      expect(err).toBeInstanceOf(CrosstownError);
-      expect(err.name).toBe('ToonError');
+      expect(err).toBeInstanceOf(ToonError);
+      expect(err.name).toBe('ToonDecodeError');
       expect(err.code).toBe('TOON_DECODE_ERROR');
     });
   });
 
   describe('Error cause chaining', () => {
-    it('should propagate cause through ToonEncodeError via CrosstownError', () => {
+    it('should propagate cause through ToonEncodeError via ToonError', () => {
       const originalError = new Error('underlying failure');
       const err = new ToonEncodeError('encode failed', originalError);
       expect(err.cause).toBe(originalError);
       expect(err.message).toBe('encode failed');
-      expect(err).toBeInstanceOf(CrosstownError);
+      expect(err).toBeInstanceOf(ToonError);
     });
 
-    it('should propagate cause through ToonError via CrosstownError', () => {
+    it('should propagate cause through ToonDecodeError via ToonError', () => {
       const originalError = new Error('decode failure');
-      const err = new ToonError('decode failed', originalError);
+      const err = new ToonDecodeError('decode failed', originalError);
       expect(err.cause).toBe(originalError);
       expect(err.message).toBe('decode failed');
-      expect(err).toBeInstanceOf(CrosstownError);
+      expect(err).toBeInstanceOf(ToonError);
     });
 
     it('should attach cause when encoding fails (e.g., circular reference)', () => {
@@ -611,7 +611,7 @@ describe('TOON Encoding', () => {
         expect.fail('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ToonEncodeError);
-        expect(error).toBeInstanceOf(CrosstownError);
+        expect(error).toBeInstanceOf(ToonError);
         expect((error as ToonEncodeError).cause).toBeDefined();
       }
     });
@@ -624,10 +624,10 @@ describe('TOON Encoding', () => {
         decodeEventFromToon(validToonInvalidEvent);
         expect.fail('should have thrown');
       } catch (error) {
+        expect(error).toBeInstanceOf(ToonDecodeError);
         expect(error).toBeInstanceOf(ToonError);
-        expect(error).toBeInstanceOf(CrosstownError);
         // Validation errors are thrown directly, not wrapping another error
-        expect((error as ToonError).cause).toBeUndefined();
+        expect((error as ToonDecodeError).cause).toBeUndefined();
       }
     });
   });

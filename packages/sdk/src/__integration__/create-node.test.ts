@@ -23,7 +23,7 @@ import {
 } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
-// --- Imports from @crosstown/sdk ---
+// --- Imports from @toon-protocol/sdk ---
 import {
   createNode,
   NodeError,
@@ -33,17 +33,17 @@ import {
   type HandlerContext,
 } from '../index.js';
 
-// --- Imports from @crosstown/core ---
+// --- Imports from @toon-protocol/core ---
 import type {
   HandlePacketRequest,
   HandlePacketResponse,
   EmbeddableConnectorLike,
-} from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
 
-// --- Import from @crosstown/relay (for TOON encoding) ---
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+// --- Import from @toon-protocol/relay (for TOON encoding) ---
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 
 // ---------------------------------------------------------------------------
 // Mock Embedded Connector

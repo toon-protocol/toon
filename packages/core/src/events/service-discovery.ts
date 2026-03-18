@@ -3,7 +3,7 @@
  *
  * Kind 10035 is a NIP-16 replaceable event (kind 10000-19999) published to
  * the local relay and optionally to peers. Relays store only the latest event
- * per `pubkey + kind`. The `d` tag with value `crosstown-service-discovery` is
+ * per `pubkey + kind`. The `d` tag with value `toon-service-discovery` is
  * included as a content marker for filtering.
  *
  * Service discovery events advertise a node's capabilities, pricing, and
@@ -32,7 +32,7 @@ export { SERVICE_DISCOVERY_KIND };
  * (Story 6.3: TEE-attested DVM results).
  */
 export interface SkillDescriptor {
-  /** Service identifier (e.g., 'crosstown-dvm'). */
+  /** Service identifier (e.g., 'toon-dvm'). */
   name: string;
   /** Schema version (e.g., '1.0'). */
   version: string;
@@ -95,7 +95,7 @@ export interface ServiceDiscoveryContent {
  * Builds a kind:10035 Service Discovery event (NIP-16 replaceable).
  * Kind 10035 is in the 10000-19999 replaceable range (NIP-16).
  * Relays store only the latest event per pubkey + kind.
- * Includes 'd' tag with value 'crosstown-service-discovery' as a content marker.
+ * Includes 'd' tag with value 'toon-service-discovery' as a content marker.
  *
  * @param content - The service discovery payload.
  * @param secretKey - The secret key to sign the event with.
@@ -109,7 +109,7 @@ export function buildServiceDiscoveryEvent(
     {
       kind: SERVICE_DISCOVERY_KIND,
       content: JSON.stringify(content),
-      tags: [['d', 'crosstown-service-discovery']],
+      tags: [['d', 'toon-service-discovery']],
       created_at: Math.floor(Date.now() / 1000),
     },
     secretKey

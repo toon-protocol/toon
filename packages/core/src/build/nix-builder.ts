@@ -96,7 +96,7 @@ export interface NixBuilderConfig {
  * @example
  * ```typescript
  * const builder = new NixBuilder({
- *   projectRoot: '/path/to/crosstown',
+ *   projectRoot: '/path/to/toon',
  *   dockerfilePath: 'docker/Dockerfile.nix',
  * });
  * const result = await builder.build();
@@ -126,7 +126,7 @@ export class NixBuilder {
     try {
       // If source overrides are configured, create a temporary modified source tree
       if (this.config.sourceOverride) {
-        tempDir = await mkdtemp(path.join(tmpdir(), 'crosstown-nix-'));
+        tempDir = await mkdtemp(path.join(tmpdir(), 'toon-nix-'));
         await cp(this.config.projectRoot, tempDir, { recursive: true });
 
         for (const [relativePath, content] of Object.entries(
@@ -136,7 +136,7 @@ export class NixBuilder {
           // Defense-in-depth: prevent path traversal outside the temp dir.
           // Use tempDir + path.sep to prevent prefix collision attacks where
           // a sibling directory shares the same prefix (e.g., tempDir is
-          // /tmp/crosstown-nix-abc and path resolves to /tmp/crosstown-nix-abc123/).
+          // /tmp/toon-nix-abc and path resolves to /tmp/toon-nix-abc123/).
           if (
             !fullPath.startsWith(tempDir + path.sep) &&
             fullPath !== tempDir

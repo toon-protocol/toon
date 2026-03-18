@@ -437,21 +437,21 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       expect(existsSync(townSpspTest)).toBe(false);
     });
 
-    it('SPSP_REQUEST_KIND (23194) should not be exported from @crosstown/core', async () => {
+    it('SPSP_REQUEST_KIND (23194) should not be exported from @toon-protocol/core', async () => {
       const core = await import('../index.js');
       const exports = Object.keys(core);
       expect(exports).not.toContain('SPSP_REQUEST_KIND');
       expect(exports).not.toContain('SPSP_RESPONSE_KIND');
     });
 
-    it('SPSP error classes should not be exported from @crosstown/core', async () => {
+    it('SPSP error classes should not be exported from @toon-protocol/core', async () => {
       const core = await import('../index.js');
       const exports = Object.keys(core);
       expect(exports).not.toContain('SpspError');
       expect(exports).not.toContain('SpspTimeoutError');
     });
 
-    it('SPSP types should not be exported from @crosstown/core', async () => {
+    it('SPSP types should not be exported from @toon-protocol/core', async () => {
       // Type-only exports are erased at runtime, so we check
       // that no runtime SPSP-related symbols exist
       const core = await import('../index.js');
@@ -477,7 +477,7 @@ describe('Story 2.7: SPSP Removal Verification', () => {
     it('errors.ts should not export SpspError or SpspTimeoutError', async () => {
       const errors = await import('../errors.js');
       const exports = Object.keys(errors);
-      expect(exports).toContain('CrosstownError');
+      expect(exports).toContain('ToonError');
       expect(exports).toContain('InvalidEventError');
       expect(exports).toContain('PeerDiscoveryError');
       expect(exports).not.toContain('SpspError');

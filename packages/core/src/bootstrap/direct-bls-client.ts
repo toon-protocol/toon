@@ -12,7 +12,7 @@
 import type { IlpClient, IlpSendResult } from './types.js';
 
 export interface DirectBlsClientConfig {
-  /** BLS HTTP endpoint (e.g., 'http://crosstown-peer1:3100') */
+  /** BLS HTTP endpoint (e.g., 'http://toon-peer1:3100') */
   blsUrl: string;
   /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
@@ -27,11 +27,11 @@ export interface DirectBlsClientConfig {
  * @example
  * ```typescript
  * const client = createDirectBlsClient({
- *   blsUrl: 'http://crosstown-peer1:3100'
+ *   blsUrl: 'http://toon-peer1:3100'
  * });
  *
  * const result = await client.sendIlpPacket({
- *   destination: 'g.crosstown.peer1',
+ *   destination: 'g.toon.peer1',
  *   amount: '0',
  *   data: base64ToonEvent,
  * });

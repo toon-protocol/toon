@@ -128,7 +128,7 @@ describe('Identity', () => {
         kind: 1,
         created_at: Math.floor(Date.now() / 1000),
         tags: [],
-        content: 'Hello from crosstown SDK identity test',
+        content: 'Hello from toon SDK identity test',
       };
       const signedEvent = finalizeEvent(unsignedEvent, identity.secretKey);
 

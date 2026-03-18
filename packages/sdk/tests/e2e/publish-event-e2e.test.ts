@@ -32,15 +32,15 @@ import {
   type ServiceNode,
   type HandlerContext,
   type PublishEventResult,
-} from '@crosstown/sdk';
+} from '@toon-protocol/sdk';
 import type {
   EmbeddableConnectorLike,
   HandlePacketRequest,
   HandlePacketResponse,
-} from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 
 // ---------------------------------------------------------------------------
 // InMemoryIlpRouter -- shared routing fabric between mock connectors
@@ -170,8 +170,8 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
   const receivedEvents: NostrEvent[] = [];
   const receivedAmounts: bigint[] = [];
 
-  const SENDER_ILP_ADDRESS = 'g.crosstown.sender';
-  const RECEIVER_ILP_ADDRESS = 'g.crosstown.receiver';
+  const SENDER_ILP_ADDRESS = 'g.toon.sender';
+  const RECEIVER_ILP_ADDRESS = 'g.toon.receiver';
   const BASE_PRICE_PER_BYTE = 10n;
 
   beforeAll(async () => {
@@ -469,7 +469,7 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
     const tags = [
       ['e', 'a'.repeat(64)],
       ['p', 'b'.repeat(64)],
-      ['t', 'crosstown'],
+      ['t', 'toon'],
     ];
     const createdAt = 1700000000;
     const event = finalizeEvent(
@@ -504,7 +504,7 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
     expect(received.tags).toHaveLength(3);
     expect(received.tags[0]).toEqual(['e', 'a'.repeat(64)]);
     expect(received.tags[1]).toEqual(['p', 'b'.repeat(64)]);
-    expect(received.tags[2]).toEqual(['t', 'crosstown']);
+    expect(received.tags[2]).toEqual(['t', 'toon']);
   });
 
   // ---------------------------------------------------------------------------
@@ -515,7 +515,7 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
     // Register a handler for kind 30023 (long-form content) on a fresh receiver
     const receiverKey2 = generateSecretKey();
     const receiverConnector2 = new MockConnectorWithRouter(router);
-    const receiverIlp2 = 'g.crosstown.receiver2';
+    const receiverIlp2 = 'g.toon.receiver2';
     router.register(receiverIlp2, receiverConnector2);
 
     const kind1Events: NostrEvent[] = [];
@@ -596,7 +596,7 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
     // The receiver should accept because the payment exceeds the minimum.
     const senderKey2 = generateSecretKey();
     const senderConnector2 = new MockConnectorWithRouter(router);
-    const senderIlp2 = 'g.crosstown.sender2';
+    const senderIlp2 = 'g.toon.sender2';
     router.register(senderIlp2, senderConnector2);
 
     const sender2 = createNode({

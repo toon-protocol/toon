@@ -1,6 +1,6 @@
 # Integration Tests
 
-This directory contains integration tests that verify the complete Crosstown protocol stack with real services running.
+This directory contains integration tests that verify the complete TOON protocol stack with real services running.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ Before running integration tests, you need to have the following services runnin
 
 ```bash
 # From repository root
-docker compose -p crosstown-genesis -f docker-compose-genesis.yml up -d
+docker compose -p toon-genesis -f docker-compose-genesis.yml up -d
 ```
 
 This starts:
@@ -127,7 +127,7 @@ Stop all services:
 
 ```bash
 # Genesis
-docker compose -p crosstown-genesis -f docker-compose-genesis.yml down
+docker compose -p toon-genesis -f docker-compose-genesis.yml down
 
 # Peers (if using deploy-peers.sh)
 # Stop individual peer stacks as needed
@@ -139,5 +139,5 @@ docker compose -p crosstown-genesis -f docker-compose-genesis.yml down
 Remove volumes (clears all data):
 
 ```bash
-docker compose -p crosstown-genesis -f docker-compose-genesis.yml down -v
+docker compose -p toon-genesis -f docker-compose-genesis.yml down -v
 ```

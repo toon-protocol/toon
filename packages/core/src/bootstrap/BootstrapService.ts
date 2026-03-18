@@ -14,7 +14,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import { GenesisPeerLoader, ArDrivePeerRegistry } from '../discovery/index.js';
 import type { GenesisPeer } from '../discovery/index.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
@@ -39,7 +39,7 @@ import type {
 /**
  * Error thrown when bootstrap operations fail.
  */
-export class BootstrapError extends CrosstownError {
+export class BootstrapError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'BOOTSTRAP_FAILED', cause);
     this.name = 'BootstrapError';

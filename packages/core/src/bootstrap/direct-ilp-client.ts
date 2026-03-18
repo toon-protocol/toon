@@ -35,7 +35,7 @@ export interface SendPacketParams {
  *
  * Accepts both string discriminants ('fulfill'/'reject') for backward
  * compatibility with test mocks, and numeric PacketType enum values
- * (13 = FULFILL, 14 = REJECT) used by @crosstown/connector@1.6.0+.
+ * (13 = FULFILL, 14 = REJECT) used by @toon-protocol/connector@1.6.0+.
  */
 export type SendPacketResult =
   | {
@@ -55,8 +55,8 @@ export type SendPacketResult =
 /**
  * Structural interface matching ConnectorNode's sendPacket() method.
  *
- * Consumers pass a `@crosstown/connector` ConnectorNode instance without
- * needing to import `@crosstown/connector` as a dependency.
+ * Consumers pass a `@toon-protocol/connector` ConnectorNode instance without
+ * needing to import `@toon-protocol/connector` as a dependency.
  * TypeScript's structural type system handles compatibility automatically.
  */
 export interface ConnectorNodeLike {

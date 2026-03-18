@@ -12,9 +12,9 @@ function readJsonFile(relativePath: string): Record<string, unknown> {
   return JSON.parse(content) as Record<string, unknown>;
 }
 
-// T-1.11-01: All public APIs importable from @crosstown/sdk (P2, E1-R16)
+// T-1.11-01: All public APIs importable from @toon-protocol/sdk (P2, E1-R16)
 
-describe('@crosstown/sdk public API exports', () => {
+describe('@toon-protocol/sdk public API exports', () => {
   it('[P2] exports createNode function (T-1.11-01)', () => {
     // Arrange & Act & Assert
     expect(typeof sdk.createNode).toBe('function');
@@ -136,7 +136,7 @@ describe('@crosstown/sdk public API exports', () => {
 
 // AC1: package.json has correct module type, engines, dependencies, and tooling config
 
-describe('@crosstown/sdk package.json structure (AC1)', () => {
+describe('@toon-protocol/sdk package.json structure (AC1)', () => {
   const pkg = readJsonFile('package.json');
 
   it('[P2] has "type": "module" for ESM support (T-1.11-01)', () => {
@@ -151,7 +151,7 @@ describe('@crosstown/sdk package.json structure (AC1)', () => {
     expect(engines?.['node']).toBe('>=20');
   });
 
-  it('[P2] has @crosstown/connector as optional peer dependency (T-1.11-01)', () => {
+  it('[P2] has @toon-protocol/connector as optional peer dependency (T-1.11-01)', () => {
     // Arrange
     const peerDeps = pkg['peerDependencies'] as
       | Record<string, string>
@@ -162,15 +162,15 @@ describe('@crosstown/sdk package.json structure (AC1)', () => {
 
     // Act & Assert
     expect(peerDeps).toBeDefined();
-    expect(peerDeps?.['@crosstown/connector']).toBeDefined();
-    expect(peerDepsMeta?.['@crosstown/connector']?.['optional']).toBe(true);
+    expect(peerDeps?.['@toon-protocol/connector']).toBeDefined();
+    expect(peerDepsMeta?.['@toon-protocol/connector']?.['optional']).toBe(true);
   });
 
   it('[P2] has correct runtime dependencies per NFR-SDK-7 (T-1.11-01)', () => {
     // Arrange
     const deps = pkg['dependencies'] as Record<string, string> | undefined;
     const requiredDeps = [
-      '@crosstown/core',
+      '@toon-protocol/core',
       'nostr-tools',
       '@scure/bip39',
       '@scure/bip32',
@@ -189,7 +189,7 @@ describe('@crosstown/sdk package.json structure (AC1)', () => {
     // Arrange
     const deps = pkg['dependencies'] as Record<string, string> | undefined;
     const allowedDeps = new Set([
-      '@crosstown/core',
+      '@toon-protocol/core',
       'nostr-tools',
       '@scure/bip39',
       '@scure/bip32',
@@ -209,7 +209,7 @@ describe('@crosstown/sdk package.json structure (AC1)', () => {
 
 // AC1: TypeScript strict mode is configured
 
-describe('@crosstown/sdk TypeScript strict mode (AC1)', () => {
+describe('@toon-protocol/sdk TypeScript strict mode (AC1)', () => {
   it('[P2] SDK tsconfig extends root tsconfig which has strict: true (T-1.11-02)', () => {
     // Arrange
     const sdkTsconfig = readJsonFile('tsconfig.json');
@@ -228,7 +228,7 @@ describe('@crosstown/sdk TypeScript strict mode (AC1)', () => {
 
 // AC1: ESLint 9.x flat config and Prettier 3.x are configured
 
-describe('@crosstown/sdk tooling configuration (AC1)', () => {
+describe('@toon-protocol/sdk tooling configuration (AC1)', () => {
   const rootPkg = readJsonFile('../../package.json');
   const rootDevDeps = rootPkg['devDependencies'] as
     | Record<string, string>
@@ -259,7 +259,7 @@ describe('@crosstown/sdk tooling configuration (AC1)', () => {
 
 // AC3: package is configured for correct npm publish
 
-describe('@crosstown/sdk npm publish readiness (AC3)', () => {
+describe('@toon-protocol/sdk npm publish readiness (AC3)', () => {
   const pkg = readJsonFile('package.json');
 
   it('[P2] has publishConfig with "access": "public" (T-1.11-01)', () => {
@@ -298,7 +298,7 @@ describe('@crosstown/sdk npm publish readiness (AC3)', () => {
 
   it('[P2] has correct package name for npm scope (T-1.11-01)', () => {
     // Arrange & Act & Assert
-    expect(pkg['name']).toBe('@crosstown/sdk');
+    expect(pkg['name']).toBe('@toon-protocol/sdk');
   });
 
   it('[P2] has license field set to MIT (T-1.11-01)', () => {

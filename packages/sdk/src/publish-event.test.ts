@@ -32,9 +32,9 @@ import type {
   HandlePacketRequest,
   HandlePacketResponse,
   EmbeddableConnectorLike,
-} from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // Test Fixtures: Deterministic mock data
@@ -51,7 +51,7 @@ function createTestEvent(overrides: Partial<NostrEvent> = {}): NostrEvent {
     created_at: 1700000000,
     kind: 1,
     tags: [],
-    content: 'Hello, Crosstown!',
+    content: 'Hello, TOON!',
     sig: 'c'.repeat(128),
     ...overrides,
   };
@@ -421,7 +421,7 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
 
   it('[P2] publishEvent() computes exact amount matching basePricePerByte * TOON byte length (AC#1)', async () => {
     // Arrange -- use default encoder to get known TOON length
-    const { encodeEventToToon } = await import('@crosstown/core/toon');
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
       fulfillment: Buffer.from('test-fulfillment'),
@@ -640,7 +640,7 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
   it('[P1] publishEvent() uses the configured toonEncoder for encoding (AC#1)', async () => {
     // Arrange -- spy-wrapping encoder that delegates to the real encoder
     // but lets us verify it was called (not the default)
-    const { encodeEventToToon } = await import('@crosstown/core/toon');
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const customEncoder = vi.fn((event: NostrEvent) =>
       encodeEventToToon(event)
     );
@@ -833,7 +833,7 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
   it('[P2] publishEvent() sends TOON-encoded bytes that match the encoder output (AC#1)', async () => {
     // Arrange -- use the default encoder and verify data roundtrip
     const { encodeEventToToon, decodeEventFromToon } =
-      await import('@crosstown/core/toon');
+      await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
       fulfillment: Buffer.from('test-fulfillment'),

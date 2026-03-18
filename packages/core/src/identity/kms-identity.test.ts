@@ -365,7 +365,7 @@ describe('KMS identity -- export verification (AC #6)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC #6 gap: top-level @crosstown/core exports include identity module
+// AC #6 gap: top-level @toon-protocol/core exports include identity module
 // ---------------------------------------------------------------------------
 describe('KMS identity -- barrel export verification (AC #6)', () => {
   it('identity/index.ts re-exports deriveFromKmsSeed and KmsIdentityError', async () => {

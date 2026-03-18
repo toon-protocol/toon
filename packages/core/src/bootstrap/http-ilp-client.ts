@@ -18,7 +18,7 @@ import type { IlpClient, IlpSendResult } from './types.js';
  * const ilpClient = createHttpIlpClient('http://localhost:8081');
  *
  * const result = await ilpClient.sendIlpPacket({
- *   destination: 'g.crosstown.peer2',
+ *   destination: 'g.toon.peer2',
  *   amount: '1000',
  *   data: base64EncodedToon,
  * });

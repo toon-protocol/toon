@@ -33,7 +33,7 @@
  * - T-5.1-20 [P1]: Parser returns null for wrong kind range, missing required tags
  * - T-5.1-21 [P2]: Edge cases: empty content, many tags (>20), large content (>10KB)
  * - T-5.1-22 [P1]: TOON roundtrip preserves tag order
- * - T-5.1-23 [P0]: Export verification from @crosstown/core
+ * - T-5.1-23 [P0]: Export verification from @toon-protocol/core
  * - T-5.1-24 [P2]: `relays` tag with multiple URLs preserved
  * - T-5.1-25 [P2]: Multiple `param` tags preserved
  */
@@ -46,7 +46,7 @@ import {
   decodeEventFromToon,
   shallowParseToon,
 } from '../toon/index.js';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 
 // DVM builders and parsers
 import {
@@ -1653,7 +1653,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
   // ==========================================================================
 
   describe('export verification (T-5.1-23)', () => {
-    it('[P0] DVM constants importable from @crosstown/core', async () => {
+    it('[P0] DVM constants importable from @toon-protocol/core', async () => {
       // Arrange
       const core = await import('../index.js');
 
@@ -1667,7 +1667,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
       expect(core.TRANSLATION_KIND).toBe(5302);
     });
 
-    it('[P0] DVM builder functions importable from @crosstown/core', async () => {
+    it('[P0] DVM builder functions importable from @toon-protocol/core', async () => {
       // Arrange
       const core = await import('../index.js');
 
@@ -1677,7 +1677,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
       expect(typeof core.buildJobFeedbackEvent).toBe('function');
     });
 
-    it('[P0] DVM parser functions importable from @crosstown/core', async () => {
+    it('[P0] DVM parser functions importable from @toon-protocol/core', async () => {
       // Arrange
       const core = await import('../index.js');
 
@@ -1719,11 +1719,11 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
   });
 
   // ==========================================================================
-  // Gap-fill tests: CrosstownError code verification (AC #1, #2, #3)
+  // Gap-fill tests: ToonError code verification (AC #1, #2, #3)
   // ==========================================================================
 
-  describe('CrosstownError codes on builder validation (AC #1-3 gap-fill)', () => {
-    it('buildJobRequestEvent throws CrosstownError with DVM_INVALID_KIND code', () => {
+  describe('ToonError codes on builder validation (AC #1-3 gap-fill)', () => {
+    it('buildJobRequestEvent throws ToonError with DVM_INVALID_KIND code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams({ kind: 4999 });
@@ -1733,12 +1733,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_KIND');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_KIND');
       }
     });
 
-    it('buildJobRequestEvent throws CrosstownError with DVM_INVALID_BID code for empty bid', () => {
+    it('buildJobRequestEvent throws ToonError with DVM_INVALID_BID code for empty bid', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams({ bid: '' });
@@ -1748,12 +1748,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_BID');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_BID');
       }
     });
 
-    it('buildJobRequestEvent throws CrosstownError with DVM_MISSING_OUTPUT code for empty output', () => {
+    it('buildJobRequestEvent throws ToonError with DVM_MISSING_OUTPUT code for empty output', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams({ output: '' });
@@ -1763,12 +1763,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_MISSING_OUTPUT');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_MISSING_OUTPUT');
       }
     });
 
-    it('buildJobRequestEvent throws CrosstownError with DVM_MISSING_INPUT code for empty input type', () => {
+    it('buildJobRequestEvent throws ToonError with DVM_MISSING_INPUT code for empty input type', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams({
@@ -1780,12 +1780,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_MISSING_INPUT');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_MISSING_INPUT');
       }
     });
 
-    it('buildJobResultEvent throws CrosstownError with DVM_INVALID_KIND code', () => {
+    it('buildJobResultEvent throws ToonError with DVM_INVALID_KIND code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams({ kind: 5999 });
@@ -1795,12 +1795,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_KIND');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_KIND');
       }
     });
 
-    it('buildJobResultEvent throws CrosstownError with DVM_INVALID_EVENT_ID code', () => {
+    it('buildJobResultEvent throws ToonError with DVM_INVALID_EVENT_ID code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams({ requestEventId: 'too-short' });
@@ -1810,12 +1810,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_EVENT_ID');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_EVENT_ID');
       }
     });
 
-    it('buildJobResultEvent throws CrosstownError with DVM_INVALID_PUBKEY code', () => {
+    it('buildJobResultEvent throws ToonError with DVM_INVALID_PUBKEY code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams({ customerPubkey: 'invalid' });
@@ -1825,12 +1825,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_PUBKEY');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_PUBKEY');
       }
     });
 
-    it('buildJobResultEvent throws CrosstownError with DVM_INVALID_AMOUNT code', () => {
+    it('buildJobResultEvent throws ToonError with DVM_INVALID_AMOUNT code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams({ amount: '' });
@@ -1840,12 +1840,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_AMOUNT');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_AMOUNT');
       }
     });
 
-    it('buildJobFeedbackEvent throws CrosstownError with DVM_INVALID_STATUS code', () => {
+    it('buildJobFeedbackEvent throws ToonError with DVM_INVALID_STATUS code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobFeedbackParams({
@@ -1857,12 +1857,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobFeedbackEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_STATUS');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_STATUS');
       }
     });
 
-    it('buildJobFeedbackEvent throws CrosstownError with DVM_INVALID_EVENT_ID code', () => {
+    it('buildJobFeedbackEvent throws ToonError with DVM_INVALID_EVENT_ID code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobFeedbackParams({ requestEventId: 'bad' });
@@ -1872,12 +1872,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobFeedbackEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_EVENT_ID');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_EVENT_ID');
       }
     });
 
-    it('buildJobFeedbackEvent throws CrosstownError with DVM_INVALID_PUBKEY code', () => {
+    it('buildJobFeedbackEvent throws ToonError with DVM_INVALID_PUBKEY code', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobFeedbackParams({ customerPubkey: 'bad' });
@@ -1887,12 +1887,12 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobFeedbackEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_PUBKEY');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_PUBKEY');
       }
     });
 
-    it('buildJobRequestEvent throws CrosstownError with DVM_INVALID_PUBKEY for invalid targetProvider', () => {
+    it('buildJobRequestEvent throws ToonError with DVM_INVALID_PUBKEY for invalid targetProvider', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams({
@@ -1904,8 +1904,8 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_PUBKEY');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_PUBKEY');
       }
     });
   });
@@ -2593,7 +2593,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
   // ==========================================================================
 
   describe('buildJobResultEvent DVM_MISSING_CONTENT error code (AC #2 gap-fill)', () => {
-    it('throws CrosstownError with DVM_MISSING_CONTENT when content is not a string', () => {
+    it('throws ToonError with DVM_MISSING_CONTENT when content is not a string', () => {
       // Arrange
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
@@ -2605,8 +2605,8 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_MISSING_CONTENT');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_MISSING_CONTENT');
       }
     });
   });
@@ -2663,7 +2663,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
   // ==========================================================================
 
   describe('buildJobRequestEvent non-string bid type (AC #1 gap-fill)', () => {
-    it('throws CrosstownError with DVM_INVALID_BID when bid is a number', () => {
+    it('throws ToonError with DVM_INVALID_BID when bid is a number', () => {
       // Arrange: force bid to a numeric value (TypeScript won't prevent this at runtime)
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams();
@@ -2674,8 +2674,8 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobRequestEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_BID');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_BID');
       }
     });
   });
@@ -2685,7 +2685,7 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
   // ==========================================================================
 
   describe('buildJobResultEvent non-string amount type (AC #2 gap-fill)', () => {
-    it('throws CrosstownError with DVM_INVALID_AMOUNT when amount is a number', () => {
+    it('throws ToonError with DVM_INVALID_AMOUNT when amount is a number', () => {
       // Arrange: force amount to a numeric value
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
@@ -2696,8 +2696,8 @@ describe('Story 5.1: DVM Event Kind Definitions', () => {
         buildJobResultEvent(params, secretKey);
         expect.fail('Should have thrown');
       } catch (err) {
-        expect(err).toBeInstanceOf(CrosstownError);
-        expect((err as CrosstownError).code).toBe('DVM_INVALID_AMOUNT');
+        expect(err).toBeInstanceOf(ToonError);
+        expect((err as ToonError).code).toBe('DVM_INVALID_AMOUNT');
       }
     });
   });

@@ -5,7 +5,7 @@
  * Git operations on a Forgejo instance.
  *
  * Flow:
- * 1. Crosstown receives NIP-34 event via ILP payment
+ * 1. TOON receives NIP-34 event via ILP payment
  * 2. BLS validates payment and stores event
  * 3. BLS calls NIP34Handler.handleEvent()
  * 4. Handler maps event to Git operation

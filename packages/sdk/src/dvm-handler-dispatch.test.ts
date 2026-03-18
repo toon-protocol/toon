@@ -21,13 +21,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HandlerRegistry } from './handler-registry.js';
 import { createHandlerContext } from './handler-context.js';
 import type { HandlerContext } from './handler-context.js';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import type { NostrEvent } from 'nostr-tools/pure';
 import {
   TEXT_GENERATION_KIND,
   IMAGE_GENERATION_KIND,
   TEXT_TO_SPEECH_KIND,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
 // Prevent live relay connections (project rule: always mock nostr-tools in tests)
 vi.mock('nostr-tools');
@@ -89,7 +89,7 @@ function createMockDvmContext(
     kind: TEXT_GENERATION_KIND,
     pubkey: 'ab'.repeat(32),
     amount: 5000n,
-    destination: 'g.crosstown.relay',
+    destination: 'g.toon.relay',
     decode: vi.fn().mockReturnValue(createDvmJobRequestEvent()),
     accept: vi.fn().mockReturnValue({ accept: true, fulfillment: 'mock' }),
     reject: vi
@@ -221,7 +221,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: mockDecoder,
     });
 
@@ -241,7 +241,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: mockDecoder,
     });
 
@@ -291,7 +291,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: mockDecoder,
     });
 
@@ -321,7 +321,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: targetedDecoder,
     });
 
@@ -347,7 +347,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: untargetedDecoder,
     });
 
@@ -367,7 +367,7 @@ describe('DVM HandlerContext Validation (Story 5.2, Task 3)', () => {
       toon: rawToon,
       meta: dvmMeta,
       amount: 5000n,
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       toonDecoder: mockDecoder,
     });
 
@@ -385,7 +385,7 @@ describe('DVM Pricing Validation (Story 5.2, Task 1.2)', () => {
   // T-5.2-08: DVM job request pays basePricePerByte * toonData.length
   it('[P1] T-5.2-08: DVM event pricing uses basePricePerByte * toonData.length (same as any event)', async () => {
     // Arrange
-    const { encodeEventToToon } = await import('@crosstown/core/toon');
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const { createPricingValidator } = await import('./pricing-validator.js');
 
     const dvmEvent = createDvmJobRequestEvent();
@@ -421,7 +421,7 @@ describe('DVM Pricing Validation (Story 5.2, Task 1.2)', () => {
   // T-5.2-08 amplification: DVM events have no kind-specific pricing override
   it('[P1] T-5.2-08 amplification: DVM kinds have no special pricing (same rate as Kind 1 events)', async () => {
     // Arrange
-    const { encodeEventToToon } = await import('@crosstown/core/toon');
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const { createPricingValidator } = await import('./pricing-validator.js');
 
     const basePricePerByte = 15n;

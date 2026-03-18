@@ -1,6 +1,6 @@
-# @crosstown/sdk
+# @toon-protocol/sdk
 
-The building blocks for creating services that participate in the Crosstown network.
+The building blocks for creating services that participate in the TOON network.
 
 ## What It Does
 
@@ -18,14 +18,14 @@ Incoming ILP packet
 ## Install
 
 ```bash
-npm install @crosstown/sdk
+npm install @toon-protocol/sdk
 ```
 
 ## Quick Example
 
 ```typescript
-import { createNode, fromMnemonic } from '@crosstown/sdk';
-import { ConnectorNode } from '@crosstown/connector';
+import { createNode, fromMnemonic } from '@toon-protocol/sdk';
+import { ConnectorNode } from '@toon-protocol/connector';
 
 // 1. Create an identity
 const identity = fromMnemonic('your twelve word mnemonic phrase here');
@@ -60,7 +60,7 @@ const result = await node.start();
 console.log(`Connected to ${result.peerCount} peers`);
 ```
 
-> **Easier path:** If you just want to run a relay, use [`@crosstown/town`](../town) — it manages the connector externally so you don't need to embed one. The SDK is for building custom services where you control the full pipeline.
+> **Easier path:** If you just want to run a relay, use [`@toon-protocol/town`](../town) — it manages the connector externally so you don't need to embed one. The SDK is for building custom services where you control the full pipeline.
 
 ## Where It Sits
 
@@ -68,9 +68,9 @@ console.log(`Connected to ${result.peerCount} peers`);
 ┌─────────────────────────┐
 │  Your Application       │  ← You write this
 ├─────────────────────────┤
-│  @crosstown/sdk         │  ← Identity, verification, pricing, handlers
+│  @toon-protocol/sdk         │  ← Identity, verification, pricing, handlers
 ├─────────────────────────┤
-│  @crosstown/core        │  ← Bootstrap, discovery, peering
+│  @toon-protocol/core        │  ← Bootstrap, discovery, peering
 ├─────────────────────────┤
 │  ILP Connector          │  ← Payment routing
 └─────────────────────────┘
@@ -108,7 +108,7 @@ See the [SDK Guide](../../docs/sdk-guide.md) for the complete API reference, han
 ## Requirements
 
 - Node.js >= 20
-- `@crosstown/connector` >= 1.6.0 (peer dependency, optional)
+- `@toon-protocol/connector` >= 1.6.0 (peer dependency, optional)
 
 ## License
 

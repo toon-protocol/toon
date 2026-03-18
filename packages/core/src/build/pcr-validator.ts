@@ -15,7 +15,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import type { NixBuildResult } from './nix-builder.js';
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ export interface VerifyOptions {
  * Error thrown when PCR reproducibility verification fails (builds diverge).
  * Contains both build results in the error message for CI debugging.
  */
-export class PcrReproducibilityError extends CrosstownError {
+export class PcrReproducibilityError extends ToonError {
   constructor(buildA: NixBuildResult, buildB: NixBuildResult) {
     super(
       `PCR reproducibility check failed: ` +

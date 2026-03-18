@@ -1,11 +1,11 @@
 /**
- * createNode() composition for @crosstown/sdk.
+ * createNode() composition for @toon-protocol/sdk.
  *
  * Wires the full ILP packet processing pipeline:
  *   shallow TOON parse -> Schnorr signature verification -> pricing validation -> handler dispatch
  *
  * Provides start() / stop() lifecycle management by delegating to
- * the core CrosstownNode composition (embedded mode) or manual HTTP
+ * the core ToonNode composition (embedded mode) or manual HTTP
  * composition (standalone mode).
  *
  * ## Deployment Modes
@@ -23,15 +23,15 @@ import type {
   HandlePacketRequest,
   HandlePacketResponse,
   ConnectorChannelClient,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import type {
   KnownPeer,
   BootstrapResult,
   BootstrapEventListener,
-} from '@crosstown/core';
-import type { SettlementConfig } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SettlementConfig } from '@toon-protocol/core';
 import {
-  createCrosstownNode,
+  createToonNode,
   BootstrapService,
   createDiscoveryTracker,
   createHttpIlpClient,
@@ -42,20 +42,20 @@ import {
   buildJobFeedbackEvent,
   buildJobResultEvent,
   parseJobResult,
-} from '@crosstown/core';
-import type { DvmJobStatus, IlpSendResult } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
   IlpClient,
   ConnectorAdminClient,
   DiscoveryTracker,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import {
   shallowParseToon,
   decodeEventFromToon,
   encodeEventToToon,
-} from '@crosstown/core/toon';
+} from '@toon-protocol/core/toon';
 
-import type { SkillDescriptor } from '@crosstown/core';
+import type { SkillDescriptor } from '@toon-protocol/core';
 import { fromSecretKey } from './identity.js';
 import { HandlerRegistry, type Handler } from './handler-registry.js';
 import { createHandlerContext } from './handler-context.js';
@@ -110,7 +110,7 @@ export interface NodeConfig {
 
   // --- Network ---
 
-  /** ILP address (default: 'g.crosstown.local') */
+  /** ILP address (default: 'g.toon.local') */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
   btpEndpoint?: string;
@@ -181,7 +181,7 @@ export interface PublishEventResult {
 }
 
 /**
- * A fully wired Crosstown node with lifecycle management.
+ * A fully wired TOON node with lifecycle management.
  */
 export interface ServiceNode {
   /** Nostr x-only public key (32 bytes, 64 hex chars) */
@@ -305,7 +305,7 @@ export interface ServiceNode {
  *   4. Handler dispatch (route to kind-specific or default handler)
  *
  * Supports two deployment modes:
- * - **Embedded** (`connector`): Uses createCrosstownNode for zero-latency
+ * - **Embedded** (`connector`): Uses createToonNode for zero-latency
  *   packet delivery via direct function calls.
  * - **Standalone** (`connectorUrl` + `handlerPort`): Starts an HTTP server
  *   to receive packets and uses HTTP clients for the connector API.
@@ -453,7 +453,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       // eslint-disable-next-line no-control-regex
       const sanitize = (s: string) => s.replace(/[\x00-\x1f\x7f]/g, '');
       console.log(
-        '[crosstown:dev]',
+        '[toon:dev]',
         `kind=${meta.kind}`,
         `pubkey=${meta.pubkey.substring(0, 16)}...`,
         `amount=${sanitize(request.amount)}`,
@@ -537,7 +537,7 @@ export function createNode(config: NodeConfig): ServiceNode {
 
   // ILP info shared between both modes
   const ilpInfo = {
-    ilpAddress: config.ilpAddress ?? 'g.crosstown.local',
+    ilpAddress: config.ilpAddress ?? 'g.toon.local',
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
@@ -560,8 +560,8 @@ export function createNode(config: NodeConfig): ServiceNode {
   let doStop: () => Promise<void>;
 
   if (embeddedMode) {
-    // --- EMBEDDED MODE: delegate to createCrosstownNode ---
-    const crosstownNode = createCrosstownNode({
+    // --- EMBEDDED MODE: delegate to createToonNode ---
+    const toonNode = createToonNode({
       connector: config.connector as NonNullable<typeof config.connector>,
       handlePacket: pipelinedHandler,
       secretKey: config.secretKey,
@@ -575,10 +575,10 @@ export function createNode(config: NodeConfig): ServiceNode {
       ardriveEnabled: config.ardriveEnabled,
     });
 
-    ilpClient = crosstownNode.ilpClient;
-    channelClient = crosstownNode.channelClient;
-    bootstrapServiceInstance = crosstownNode.bootstrapService;
-    discoveryTrackerInstance = crosstownNode.discoveryTracker;
+    ilpClient = toonNode.ilpClient;
+    channelClient = toonNode.channelClient;
+    bootstrapServiceInstance = toonNode.bootstrapService;
+    discoveryTrackerInstance = toonNode.discoveryTracker;
     adminClient = {
       addPeer: () => Promise.resolve(),
       removePeer: () => Promise.resolve(),
@@ -586,8 +586,8 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     trackerRef.current = discoveryTrackerInstance;
 
-    doStart = async () => crosstownNode.start();
-    doStop = async () => crosstownNode.stop();
+    doStart = async () => toonNode.start();
+    doStop = async () => toonNode.stop();
   } else {
     // --- STANDALONE MODE: manual composition with HTTP clients ---
     const connectorUrl = config.connectorUrl as string;

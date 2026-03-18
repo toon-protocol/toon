@@ -44,9 +44,9 @@ import {
   createNode,
   type ServiceNode,
   type HandlerContext,
-} from '@crosstown/sdk';
-import { ConnectorNode, createLogger } from '@crosstown/connector';
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+} from '@toon-protocol/sdk';
+import { ConnectorNode, createLogger } from '@toon-protocol/connector';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import {
   createWalletClient,
   http,
@@ -120,7 +120,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     nostrSecretKey = generateSecretKey();
     nostrPubkey = getPublicKey(nostrSecretKey);
-    const testIlpAddress = `g.crosstown.test.${nostrPubkey.slice(0, 8)}`;
+    const testIlpAddress = `g.toon.test.${nostrPubkey.slice(0, 8)}`;
 
     const connectorLogger = createLogger('test-connector', 'warn');
     connector = new ConnectorNode(
@@ -165,7 +165,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     // -------------------------------------------------------------------
     // Phase 4: Register peer1 with routes for BOTH peer1 and peer2
-    // Multi-hop: traffic for g.crosstown.peer2 is forwarded via peer1,
+    // Multi-hop: traffic for g.toon.peer2 is forwarded via peer1,
     // who then routes it to peer2 via its own BTP connection.
     // -------------------------------------------------------------------
     await connector.registerPeer({
@@ -173,8 +173,8 @@ describe('Docker SDK Publish Event E2E', () => {
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [
-        { prefix: 'g.crosstown.peer1' },
-        { prefix: 'g.crosstown.peer2' },
+        { prefix: 'g.toon.peer1' },
+        { prefix: 'g.toon.peer2' },
       ],
     });
 
@@ -293,7 +293,7 @@ describe('Docker SDK Publish Event E2E', () => {
     );
 
     const publishResult = await node.publishEvent(event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     expect(publishResult.success).toBe(true);
@@ -337,13 +337,13 @@ describe('Docker SDK Publish Event E2E', () => {
     );
 
     const smallResult = await node.publishEvent(smallEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(smallResult.success).toBe(true);
     publishedEventIds.push(smallEvent.id);
 
     const largeResult = await node.publishEvent(largeEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(largeResult.success).toBe(true);
     publishedEventIds.push(largeEvent.id);
@@ -367,7 +367,7 @@ describe('Docker SDK Publish Event E2E', () => {
     );
 
     const publishResult = await node.publishEvent(event, {
-      destination: 'g.crosstown.peer2',
+      destination: 'g.toon.peer2',
     });
 
     expect(publishResult.success).toBe(true);
@@ -406,7 +406,7 @@ describe('Docker SDK Publish Event E2E', () => {
       );
 
       const result = await node.publishEvent(event, {
-        destination: 'g.crosstown.peer2',
+        destination: 'g.toon.peer2',
       });
       expect(result.success).toBe(true);
       events.push(event);
@@ -445,7 +445,7 @@ describe('Docker SDK Publish Event E2E', () => {
     );
 
     const result = await node.publishEvent(event, {
-      destination: 'g.crosstown.peer2',
+      destination: 'g.toon.peer2',
     });
     expect(result.success).toBe(true);
     publishedEventIds.push(event.id);

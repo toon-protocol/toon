@@ -1,5 +1,5 @@
 import { decode } from '@toon-format/toon';
-import { ToonError } from './decoder.js';
+import { ToonDecodeError } from './decoder.js';
 import { isValidHex } from './validate.js';
 
 /**
@@ -28,7 +28,7 @@ export interface ToonRoutingMeta {
  *
  * @param data - The TOON-encoded Uint8Array
  * @returns Routing metadata with the original raw bytes
- * @throws ToonError if the data cannot be parsed or required routing fields are missing/invalid
+ * @throws ToonDecodeError if the data cannot be parsed or required routing fields are missing/invalid
  */
 export function shallowParseToon(data: Uint8Array): ToonRoutingMeta {
   let decoded: unknown;
@@ -36,42 +36,42 @@ export function shallowParseToon(data: Uint8Array): ToonRoutingMeta {
     const toonString = new TextDecoder().decode(data);
     decoded = decode(toonString);
   } catch (error) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       `Failed to parse TOON data: ${error instanceof Error ? error.message : String(error)}`,
       error instanceof Error ? error : undefined
     );
   }
 
   if (typeof decoded !== 'object' || decoded === null) {
-    throw new ToonError('Decoded TOON value is not an object');
+    throw new ToonDecodeError('Decoded TOON value is not an object');
   }
 
   const obj = decoded as Record<string, unknown>;
 
   // Validate kind (number, integer)
   if (typeof obj['kind'] !== 'number' || !Number.isInteger(obj['kind'])) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Missing or invalid routing field: kind must be an integer'
     );
   }
 
   // Validate pubkey (64-char hex)
   if (!isValidHex(obj['pubkey'], 64)) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Missing or invalid routing field: pubkey must be a 64-character hex string'
     );
   }
 
   // Validate id (64-char hex)
   if (!isValidHex(obj['id'], 64)) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Missing or invalid routing field: id must be a 64-character hex string'
     );
   }
 
   // Validate sig (128-char hex)
   if (!isValidHex(obj['sig'], 128)) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Missing or invalid routing field: sig must be a 128-character hex string'
     );
   }

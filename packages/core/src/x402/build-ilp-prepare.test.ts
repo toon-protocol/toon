@@ -63,14 +63,14 @@ describe('buildIlpPrepare() Packet Equivalence (Story 5.2)', () => {
 
     // Build ILP PREPARE packet (same function used by both paths)
     const ilpPacket = buildIlpPrepare({
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       amount,
       data: toonData,
     });
 
     // Simulate x402 path: also uses buildIlpPrepare with same inputs
     const x402Packet = buildIlpPrepare({
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       amount,
       data: toonData,
     });
@@ -100,7 +100,7 @@ describe('buildIlpPrepare() Packet Equivalence (Story 5.2)', () => {
 
     // Both paths use the same packet construction
     const packet = buildIlpPrepare({
-      destination: 'g.crosstown.relay',
+      destination: 'g.toon.relay',
       amount,
       data: toonData,
     });

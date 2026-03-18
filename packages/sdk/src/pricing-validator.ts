@@ -1,11 +1,11 @@
 /**
- * Pricing validator for @crosstown/sdk.
+ * Pricing validator for @toon-protocol/sdk.
  *
  * Validates that incoming ILP payments meet the required price based on
  * TOON payload size and configured price per byte.
  */
 
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 
 export interface PricingValidatorConfig {
   basePricePerByte?: bigint;

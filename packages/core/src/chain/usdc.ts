@@ -44,7 +44,7 @@ export const MOCK_USDC_ADDRESS =
  * USDC uses 6 decimals (1 USDC = 1,000,000 micro-units).
  *
  * This differs from most ERC-20 tokens which use 18 decimals.
- * All pricing amounts in the Crosstown protocol are denominated
+ * All pricing amounts in the TOON protocol are denominated
  * in USDC micro-units when using USDC as the settlement token.
  */
 export const USDC_DECIMALS = 6 as const;
