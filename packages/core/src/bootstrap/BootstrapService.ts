@@ -34,6 +34,7 @@ import type {
   BootstrapEvent,
   BootstrapEventListener,
   IlpClient,
+  IlpSendResult,
 } from './types.js';
 
 /**
@@ -502,7 +503,7 @@ export class BootstrapService {
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
     // Send announce via ILP — use claim-attached path when available
-    let ilpResult: import('./types.js').IlpSendResult;
+    let ilpResult: IlpSendResult;
     if (
       this.claimSigner &&
       result.channelId &&

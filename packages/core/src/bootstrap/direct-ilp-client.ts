@@ -88,7 +88,7 @@ export interface DirectRuntimeClientConfig {
  */
 export function createDirectIlpClient(
   connector: ConnectorNodeLike,
-  config?: DirectRuntimeClientConfig
+  _config?: DirectRuntimeClientConfig
 ): IlpClient {
   return {
     async sendIlpPacket(params: {

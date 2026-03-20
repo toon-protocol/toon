@@ -644,7 +644,9 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     doStart = async () => {
       // Dynamic import to keep @toon-protocol/connector as optional peer dep
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports
       let ConnectorNodeClass: typeof import('@toon-protocol/connector').ConnectorNode;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports
       let createConnectorLogger: typeof import('@toon-protocol/connector').createLogger;
       try {
         const mod = await import('@toon-protocol/connector');

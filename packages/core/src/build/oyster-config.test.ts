@@ -59,11 +59,6 @@ const ATTESTATION_SERVER_PATH = 'docker/src/attestation-server.ts';
 /** Expected service names in docker-compose-oyster.yml (2 services, NOT 3). */
 const EXPECTED_SERVICES = ['toon', 'attestation-server'];
 
-/** Expected port mappings per service. */
-const EXPECTED_PORTS: Record<string, number[]> = {
-  toon: [3100, 7100], // BLS HTTP + Relay WS
-  'attestation-server': [1300], // Attestation HTTP
-};
 
 /** Expected supervisord program names and priorities (2 programs, NOT 3). */
 const EXPECTED_PROGRAMS: Record<string, { priority: number; command: string }> =
