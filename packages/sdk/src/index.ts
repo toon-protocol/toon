@@ -69,6 +69,14 @@ export type {
 export { buildSkillDescriptor } from './skill-descriptor.js';
 export type { BuildSkillDescriptorConfig } from './skill-descriptor.js';
 
+// Workflow orchestrator (Story 6.1)
+export { WorkflowOrchestrator } from './workflow-orchestrator.js';
+export type {
+  WorkflowState,
+  WorkflowEventStore,
+  WorkflowOrchestratorOptions,
+} from './workflow-orchestrator.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 

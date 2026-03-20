@@ -93,3 +93,12 @@ export const TEXT_TO_SPEECH_KIND = 5300;
  * Optional provider support -- not all nodes are required to handle this kind.
  */
 export const TRANSLATION_KIND = 5302;
+
+/**
+ * Workflow Chain definition (kind 10040).
+ * Replaceable event defining a multi-step DVM pipeline where each step's
+ * output feeds into the next step's input. Uses a unique `d` tag per
+ * workflow instance for NIP-33 parameterized replaceable semantics.
+ * In the TOON-specific replaceable range (10032-10099).
+ */
+export const WORKFLOW_CHAIN_KIND = 10040;

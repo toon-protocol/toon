@@ -46,3 +46,11 @@ export {
   type ParsedJobResult,
   type ParsedJobFeedback,
 } from './dvm.js';
+export {
+  buildWorkflowDefinitionEvent,
+  parseWorkflowDefinition,
+  WORKFLOW_CHAIN_KIND,
+  type WorkflowStep,
+  type WorkflowDefinitionParams,
+  type ParsedWorkflowDefinition,
+} from './workflow.js';

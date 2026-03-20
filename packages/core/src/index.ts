@@ -64,6 +64,12 @@ export {
   type ParsedJobRequest,
   type ParsedJobResult,
   type ParsedJobFeedback,
+  buildWorkflowDefinitionEvent,
+  parseWorkflowDefinition,
+  WORKFLOW_CHAIN_KIND,
+  type WorkflowStep,
+  type WorkflowDefinitionParams,
+  type ParsedWorkflowDefinition,
 } from './events/index.js';
 
 // Peer discovery
