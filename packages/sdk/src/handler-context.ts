@@ -82,7 +82,10 @@ export function createHandlerContext(
       // The sender uses condition = SHA-256(SHA-256(raw_toon_bytes)) and the
       // connector validates SHA-256(fulfillment) == condition.
       const toonBytes = Buffer.from(options.toon, 'base64');
-      const fulfillment = createHash('sha256').update(toonBytes).digest().toString('base64');
+      const fulfillment = createHash('sha256')
+        .update(toonBytes)
+        .digest()
+        .toString('base64');
       return {
         accept: true,
         fulfillment,

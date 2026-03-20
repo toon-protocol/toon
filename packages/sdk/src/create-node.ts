@@ -699,7 +699,8 @@ export function createNode(config: NodeConfig): ServiceNode {
       await autoCreatedConnector.start();
 
       // Now wire the real connector into createToonNode
-      const connector = autoCreatedConnector as unknown as EmbeddableConnectorLike;
+      const connector =
+        autoCreatedConnector as unknown as EmbeddableConnectorLike;
       const toonNode = createToonNode({
         connector,
         handlePacket: pipelinedHandler,
@@ -901,7 +902,11 @@ export function createNode(config: NodeConfig): ServiceNode {
       return evmAddress;
     },
     get connector() {
-      return config.connector ?? (autoCreatedConnector as unknown as EmbeddableConnectorLike) ?? null;
+      return (
+        config.connector ??
+        (autoCreatedConnector as unknown as EmbeddableConnectorLike) ??
+        null
+      );
     },
     get channelClient() {
       return channelClient;

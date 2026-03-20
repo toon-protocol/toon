@@ -98,9 +98,7 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
   };
 }
 
-function createMockIlpClient(
-  result: Partial<IlpSendResult> = {}
-): IlpClient & {
+function createMockIlpClient(result: Partial<IlpSendResult> = {}): IlpClient & {
   sendIlpPacket: ReturnType<typeof vi.fn>;
   sendIlpPacketWithClaim: ReturnType<typeof vi.fn>;
 } {

@@ -59,7 +59,6 @@ const ATTESTATION_SERVER_PATH = 'docker/src/attestation-server.ts';
 /** Expected service names in docker-compose-oyster.yml (2 services, NOT 3). */
 const EXPECTED_SERVICES = ['toon', 'attestation-server'];
 
-
 /** Expected supervisord program names and priorities (2 programs, NOT 3). */
 const EXPECTED_PROGRAMS: Record<string, { priority: number; command: string }> =
   {
@@ -240,7 +239,8 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     expect(toonEnv.BLS_PORT).toBe(3100);
     expect(toonEnv.WS_PORT).toBe(7100);
 
-    const attestationEnv = compose.services['attestation-server'].environment || {};
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
     expect(attestationEnv.ATTESTATION_PORT).toBe(1300);
   });
 
@@ -912,8 +912,13 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
 
     // Act -- collect configured ports from environment variables
     const toonEnv = compose.services.toon.environment || {};
-    const attestationEnv = compose.services['attestation-server'].environment || {};
-    const allPorts = [toonEnv.BLS_PORT, toonEnv.WS_PORT, attestationEnv.ATTESTATION_PORT];
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
+    const allPorts = [
+      toonEnv.BLS_PORT,
+      toonEnv.WS_PORT,
+      attestationEnv.ATTESTATION_PORT,
+    ];
 
     // Assert -- no duplicate ports
     const uniquePorts = new Set(allPorts);
@@ -928,8 +933,13 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
 
     // Act -- collect configured ports from environment variables
     const toonEnv = compose.services.toon.environment || {};
-    const attestationEnv = compose.services['attestation-server'].environment || {};
-    const allPorts = [toonEnv.BLS_PORT, toonEnv.WS_PORT, attestationEnv.ATTESTATION_PORT];
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
+    const allPorts = [
+      toonEnv.BLS_PORT,
+      toonEnv.WS_PORT,
+      attestationEnv.ATTESTATION_PORT,
+    ];
 
     // Assert -- all required ports present
     expect(allPorts).toContain(3100);

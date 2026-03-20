@@ -122,7 +122,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.chainId).toBe(ARBITRUM_SEPOLIA_CHAIN_ID);
       expect(config.rpcUrl).toBe(ARBITRUM_SEPOLIA_RPC);
       expect(config.usdcAddress).toBe(ARBITRUM_SEPOLIA_USDC);
-      expect(config.tokenNetworkAddress).toBe('0x91d62b1F7C5d1129A64EE3915c480DBF288B1cBa');
+      expect(config.tokenNetworkAddress).toBe(
+        '0x91d62b1F7C5d1129A64EE3915c480DBF288B1cBa'
+      );
       expect(config.name).toBe('arbitrum-sepolia');
     });
 
