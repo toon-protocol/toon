@@ -77,6 +77,13 @@ export type {
   WorkflowOrchestratorOptions,
 } from './workflow-orchestrator.js';
 
+// Swarm coordinator (Story 6.2)
+export { SwarmCoordinator } from './swarm-coordinator.js';
+export type {
+  SwarmState,
+  SwarmCoordinatorOptions,
+} from './swarm-coordinator.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 

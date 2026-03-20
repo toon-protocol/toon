@@ -70,6 +70,14 @@ export {
   type WorkflowStep,
   type WorkflowDefinitionParams,
   type ParsedWorkflowDefinition,
+  buildSwarmRequestEvent,
+  buildSwarmSelectionEvent,
+  parseSwarmRequest,
+  parseSwarmSelection,
+  type SwarmRequestParams,
+  type SwarmSelectionParams,
+  type ParsedSwarmRequest,
+  type ParsedSwarmSelection,
 } from './events/index.js';
 
 // Peer discovery

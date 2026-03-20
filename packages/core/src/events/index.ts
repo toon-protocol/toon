@@ -54,3 +54,13 @@ export {
   type WorkflowDefinitionParams,
   type ParsedWorkflowDefinition,
 } from './workflow.js';
+export {
+  buildSwarmRequestEvent,
+  buildSwarmSelectionEvent,
+  parseSwarmRequest,
+  parseSwarmSelection,
+  type SwarmRequestParams,
+  type SwarmSelectionParams,
+  type ParsedSwarmRequest,
+  type ParsedSwarmSelection,
+} from './swarm.js';
