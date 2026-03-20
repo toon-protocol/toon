@@ -56,6 +56,9 @@ const ARBITRUM_ONE_CHAIN_ID = 42161;
 /** Anvil deterministic TokenNetwork address. */
 const ANVIL_TOKEN_NETWORK = '0xCafac3dD18aC6c6e92c921884f9E4176737C052c';
 
+/** Anvil deterministic TokenNetworkRegistry address. */
+const ANVIL_REGISTRY_ADDRESS = '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512';
+
 /** Arbitrum Sepolia public RPC endpoint. */
 const ARBITRUM_SEPOLIA_RPC = 'https://sepolia-rollup.arbitrum.io/rpc';
 
@@ -109,6 +112,7 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.rpcUrl).toBe('http://localhost:8545');
       expect(config.usdcAddress).toBe(MOCK_USDC_ADDRESS);
       expect(config.tokenNetworkAddress).toBe(ANVIL_TOKEN_NETWORK);
+      expect(config.registryAddress).toBe(ANVIL_REGISTRY_ADDRESS);
       expect(config.name).toBe('anvil');
     });
 
@@ -118,7 +122,7 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.chainId).toBe(ARBITRUM_SEPOLIA_CHAIN_ID);
       expect(config.rpcUrl).toBe(ARBITRUM_SEPOLIA_RPC);
       expect(config.usdcAddress).toBe(ARBITRUM_SEPOLIA_USDC);
-      expect(config.tokenNetworkAddress).toBe('');
+      expect(config.tokenNetworkAddress).toBe('0x91d62b1F7C5d1129A64EE3915c480DBF288B1cBa');
       expect(config.name).toBe('arbitrum-sepolia');
     });
 
@@ -174,6 +178,16 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.chainId).toBe(ANVIL_CHAIN_ID); // other fields unchanged
       expect(config.rpcUrl).toBe('http://localhost:8545'); // other fields unchanged
     });
+
+    it('[P1] TOON_REGISTRY_ADDRESS env var overrides preset registryAddress', () => {
+      const customRegistry = '0xDeadBeefDeadBeefDeadBeefDeadBeefDeadBeef';
+      vi.stubEnv('TOON_REGISTRY_ADDRESS', customRegistry);
+
+      const config = resolveChainConfig('anvil');
+
+      expect(config.registryAddress).toBe(customRegistry);
+      expect(config.chainId).toBe(ANVIL_CHAIN_ID); // other fields unchanged
+    });
   });
 
   // --------------------------------------------------------------------------
@@ -221,18 +235,20 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   // 3.2-UNIT-004 [P2]: Preset type completeness
   // --------------------------------------------------------------------------
   describe('Preset type completeness (3.2-UNIT-004)', () => {
-    it('[P2] ChainPreset has all required fields: chainId, rpcUrl, usdcAddress, tokenNetworkAddress, name', () => {
+    it('[P2] ChainPreset has all required fields: chainId, rpcUrl, usdcAddress, tokenNetworkAddress, registryAddress, name', () => {
       const config: ChainPreset = resolveChainConfig('anvil');
 
       expect(config).toHaveProperty('chainId');
       expect(config).toHaveProperty('rpcUrl');
       expect(config).toHaveProperty('usdcAddress');
       expect(config).toHaveProperty('tokenNetworkAddress');
+      expect(config).toHaveProperty('registryAddress');
       expect(config).toHaveProperty('name');
       expect(typeof config.chainId).toBe('number');
       expect(typeof config.rpcUrl).toBe('string');
       expect(typeof config.usdcAddress).toBe('string');
       expect(typeof config.tokenNetworkAddress).toBe('string');
+      expect(typeof config.registryAddress).toBe('string');
       expect(typeof config.name).toBe('string');
     });
 

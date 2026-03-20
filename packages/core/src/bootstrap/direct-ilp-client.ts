@@ -65,21 +65,15 @@ export interface ConnectorNodeLike {
 
 /**
  * Configuration options for the direct runtime client.
+ *
+ * @deprecated toonDecoder is no longer used for condition computation.
+ * Execution condition is computed directly from raw data bytes:
+ *   condition = SHA-256(SHA-256(raw_data_bytes))
  */
 export interface DirectRuntimeClientConfig {
   /**
-   * Optional callback for extracting the Nostr event ID from TOON-encoded data.
-   *
-   * When provided, the client computes
-   * `executionCondition = SHA256(SHA256(event.id))` and passes it to
-   * `sendPacket()`.
-   *
-   * When omitted, no executionCondition is set (connector uses its default).
-   *
-   * Note: this is intentionally a narrower type than
-   * `BootstrapServiceConfig.toonDecoder` (which returns a full `NostrEvent`).
-   * Only the `id` field is needed for condition computation, so the interface
-   * is minimal.
+   * @deprecated No longer used. Execution condition is computed from raw data
+   * bytes to match the connector's PaymentHandlerAdapter.
    */
   toonDecoder?: (bytes: Uint8Array) => { id: string };
 }
@@ -110,13 +104,15 @@ export function createDirectIlpClient(
         // Convert base64 data to Uint8Array
         const data = Uint8Array.from(Buffer.from(params.data, 'base64'));
 
-        // Compute execution condition if toonDecoder is provided and data is non-empty.
+        // Compute execution condition from raw TOON data bytes.
+        // The receiving connector's PaymentHandlerAdapter computes:
+        //   fulfillment = SHA-256(raw_data_bytes)
+        // So condition = SHA-256(fulfillment) = SHA-256(SHA-256(raw_data_bytes)).
         // Empty data signals a pure ILP value transfer (e.g., DVM compute settlement)
         // where no TOON event payload exists -- skip condition computation.
         let executionCondition: Uint8Array | undefined;
-        if (config?.toonDecoder && data.length > 0) {
-          const decoded = config.toonDecoder(data);
-          const fulfillment = createHash('sha256').update(decoded.id).digest();
+        if (data.length > 0) {
+          const fulfillment = createHash('sha256').update(data).digest();
           executionCondition = createHash('sha256')
             .update(fulfillment)
             .digest();

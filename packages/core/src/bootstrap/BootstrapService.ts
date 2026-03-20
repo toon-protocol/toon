@@ -501,12 +501,25 @@ export class BootstrapService {
     // Calculate amount: base price per byte * TOON byte length
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
-    // Send announce via ILP (through connector routing)
-    const ilpResult = await this.ilpClient.sendIlpPacket({
-      destination: result.peerInfo.ilpAddress,
-      amount,
-      data: base64Toon,
-    });
+    // Send announce via ILP — use claim-attached path when available
+    let ilpResult: import('./types.js').IlpSendResult;
+    if (
+      this.claimSigner &&
+      result.channelId &&
+      this.ilpClient.sendIlpPacketWithClaim
+    ) {
+      const claim = await this.claimSigner(result.channelId, BigInt(amount));
+      ilpResult = await this.ilpClient.sendIlpPacketWithClaim(
+        { destination: result.peerInfo.ilpAddress, amount, data: base64Toon },
+        claim
+      );
+    } else {
+      ilpResult = await this.ilpClient.sendIlpPacket({
+        destination: result.peerInfo.ilpAddress,
+        amount,
+        data: base64Toon,
+      });
+    }
 
     if (ilpResult.accepted) {
       console.log(

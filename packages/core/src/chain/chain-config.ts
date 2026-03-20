@@ -38,6 +38,8 @@ export interface ChainPreset {
   usdcAddress: string;
   /** TokenNetwork contract address for USDC on this chain. */
   tokenNetworkAddress: string;
+  /** TokenNetworkRegistry contract address on this chain. */
+  registryAddress: string;
 }
 
 // ---------- Presets ----------
@@ -56,13 +58,15 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     rpcUrl: 'http://localhost:8545',
     usdcAddress: MOCK_USDC_ADDRESS,
     tokenNetworkAddress: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
+    registryAddress: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512',
   },
   'arbitrum-sepolia': {
     name: 'arbitrum-sepolia',
     chainId: 421614,
     rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    tokenNetworkAddress: '',
+    tokenNetworkAddress: '0x91d62b1F7C5d1129A64EE3915c480DBF288B1cBa',
+    registryAddress: '',
   },
   'arbitrum-one': {
     name: 'arbitrum-one',
@@ -70,6 +74,7 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     rpcUrl: 'https://arb1.arbitrum.io/rpc',
     usdcAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
     tokenNetworkAddress: '',
+    registryAddress: '',
   },
 };
 
@@ -85,6 +90,7 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
  * 3. Looks up the chain name in `CHAIN_PRESETS`
  * 4. `TOON_RPC_URL` env var overrides the preset's `rpcUrl`
  * 5. `TOON_TOKEN_NETWORK` env var overrides the preset's `tokenNetworkAddress`
+ * 6. `TOON_REGISTRY_ADDRESS` env var overrides the preset's `registryAddress`
  *
  * Returns a defensive copy -- callers can mutate the result without
  * affecting the shared preset objects.
@@ -120,6 +126,12 @@ export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
   const envTokenNetwork = process.env['TOON_TOKEN_NETWORK'];
   if (envTokenNetwork) {
     resolved.tokenNetworkAddress = envTokenNetwork;
+  }
+
+  // 6. TOON_REGISTRY_ADDRESS env var overrides preset registryAddress
+  const envRegistryAddress = process.env['TOON_REGISTRY_ADDRESS'];
+  if (envRegistryAddress) {
+    resolved.registryAddress = envRegistryAddress;
   }
 
   return resolved;
