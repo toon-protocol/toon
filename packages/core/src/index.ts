@@ -78,6 +78,10 @@ export {
   type SwarmSelectionParams,
   type ParsedSwarmRequest,
   type ParsedSwarmSelection,
+  AttestedResultVerifier,
+  hasRequireAttestation,
+  type AttestedResultVerificationOptions,
+  type AttestedResultVerificationResult,
 } from './events/index.js';
 
 // Peer discovery

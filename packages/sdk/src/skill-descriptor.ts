@@ -8,8 +8,12 @@
  * with pre-DVM kind:10035 events).
  */
 
+import { ToonError } from '@toon-protocol/core';
 import type { SkillDescriptor } from '@toon-protocol/core';
 import type { HandlerRegistry } from './handler-registry.js';
+
+/** Regex for 64-char lowercase hex string. */
+const HEX_64_REGEX = /^[0-9a-f]{64}$/;
 
 /** Configuration for building a skill descriptor. */
 export interface BuildSkillDescriptorConfig {
@@ -27,6 +31,13 @@ export interface BuildSkillDescriptorConfig {
   inputSchema?: Record<string, unknown>;
   /** Available AI models. */
   models?: string[];
+  /** TEE attestation metadata for the skill descriptor. */
+  attestation?: {
+    /** 64-char hex event ID of the provider's latest kind:10033 attestation event. */
+    eventId: string;
+    /** Enclave image hash for the TEE environment. */
+    enclaveImageHash: string;
+  };
 }
 
 /**
@@ -49,6 +60,16 @@ export function buildSkillDescriptor(
   const dvmKinds = registry.getDvmKinds();
   if (dvmKinds.length === 0) {
     return undefined;
+  }
+
+  // Validate attestation eventId if provided
+  if (config.attestation !== undefined) {
+    if (!HEX_64_REGEX.test(config.attestation.eventId)) {
+      throw new ToonError(
+        'Skill descriptor attestation eventId must be a 64-character lowercase hex string',
+        'DVM_SKILL_INVALID_ATTESTATION_EVENT_ID'
+      );
+    }
   }
 
   const basePricePerByte = config.basePricePerByte ?? 10n;
@@ -75,6 +96,13 @@ export function buildSkillDescriptor(
 
   if (config.models !== undefined) {
     descriptor.models = config.models;
+  }
+
+  if (config.attestation !== undefined) {
+    descriptor.attestation = {
+      eventId: config.attestation.eventId,
+      enclaveImageHash: config.attestation.enclaveImageHash,
+    };
   }
 
   return descriptor;

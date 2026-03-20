@@ -64,3 +64,9 @@ export {
   type ParsedSwarmRequest,
   type ParsedSwarmSelection,
 } from './swarm.js';
+export {
+  AttestedResultVerifier,
+  hasRequireAttestation,
+  type AttestedResultVerificationOptions,
+  type AttestedResultVerificationResult,
+} from './attested-result-verifier.js';
