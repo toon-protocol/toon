@@ -1,11 +1,11 @@
 /**
- * Verification pipeline for @crosstown/sdk.
+ * Verification pipeline for @toon-protocol/sdk.
  *
  * Verifies Schnorr signatures on incoming TOON payloads before dispatching
  * to handlers. In dev mode, verification is skipped.
  */
 
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { hexToBytes } from '@noble/hashes/utils.js';
 

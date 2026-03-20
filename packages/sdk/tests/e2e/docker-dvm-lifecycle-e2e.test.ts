@@ -36,9 +36,9 @@ import {
   createNode,
   type ServiceNode,
   type HandlerContext,
-} from '@crosstown/sdk';
-import { ConnectorNode, createLogger } from '@crosstown/connector';
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+} from '@toon-protocol/sdk';
+import { ConnectorNode, createLogger } from '@toon-protocol/connector';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import {
   TEXT_GENERATION_KIND,
   buildJobRequestEvent,
@@ -46,7 +46,7 @@ import {
   parseServiceDiscovery,
   buildServiceDiscoveryEvent,
   JOB_FEEDBACK_KIND,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
 import {
   ANVIL_RPC,
@@ -93,7 +93,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     providerSecretKey = generateSecretKey();
     customerSecretKey = generateSecretKey();
     const nostrPubkey = getPublicKey(nodeSecretKey);
-    const testIlpAddress = `g.crosstown.test.lifecycle.${nostrPubkey.slice(0, 8)}`;
+    const testIlpAddress = `g.toon.test.lifecycle.${nostrPubkey.slice(0, 8)}`;
 
     const connectorLogger = createLogger('test-lifecycle-connector', 'warn');
     connector = new ConnectorNode(
@@ -142,8 +142,8 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [
-        { prefix: 'g.crosstown.peer1' },
-        { prefix: 'g.crosstown.peer2' },
+        { prefix: 'g.toon.peer1' },
+        { prefix: 'g.toon.peer2' },
       ],
     });
 
@@ -186,7 +186,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       'processing',
       undefined,
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -221,7 +221,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       'error',
       'GPU out of memory',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -251,7 +251,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
         TEST_CUSTOMER_PUBKEY,
         status,
         `Status detail: ${status}`,
-        { destination: 'g.crosstown.peer1' }
+        { destination: 'g.toon.peer1' }
       );
 
       expect(result.success).toBe(true);
@@ -283,7 +283,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       '3000000',
       'Here is the AI-generated text result for your query.',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -334,7 +334,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       '7500000',
       complexContent,
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -359,7 +359,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       computeAmount,
       'Result data',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -403,7 +403,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     // TOON data and will reject, but the method should not throw.
     const result = await node.settleCompute(
       resultEvent,
-      'g.crosstown.peer1'
+      'g.toon.peer1'
     );
 
     expect(result).toBeDefined();
@@ -429,7 +429,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
 
     const settleResult = await node.settleCompute(
       resultEvent,
-      'g.crosstown.peer1'
+      'g.toon.peer1'
     );
     expect(settleResult).toBeDefined();
 
@@ -444,7 +444,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       nodeSecretKey
     );
     const publishResult = await node.publishEvent(requestEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(publishResult.success).toBe(true);
 
@@ -475,7 +475,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       customerSecretKey
     );
     const publishResult = await node.publishEvent(requestEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(publishResult.success).toBe(true);
 
@@ -492,7 +492,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       requestEvent.pubkey,
       'processing',
       undefined,
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(feedbackResult.success).toBe(true);
 
@@ -509,7 +509,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       requestEvent.pubkey,
       '3000000',
       'Quantum computing is a paradigm that uses quantum bits...',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(resultPublishResult.success).toBe(true);
 
@@ -534,7 +534,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
 
     const settlementResult = await node.settleCompute(
       resultEvent,
-      'g.crosstown.peer1'
+      'g.toon.peer1'
     );
     expect(settlementResult).toBeDefined();
   });
@@ -551,7 +551,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       customerPubkey,
       'processing',
       undefined,
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(feedbackResult.success).toBe(true);
 
@@ -561,7 +561,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       customerPubkey,
       '2000000',
       'Result content',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(resultResult.success).toBe(true);
 
@@ -605,7 +605,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       customerSecretKey
     );
     await node.publishEvent(requestEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     // Publish result referencing the request
@@ -614,7 +614,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       requestEvent.pubkey,
       '3000000',
       'Result referencing original request',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(resultResult.success).toBe(true);
 
@@ -644,7 +644,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       customerSecretKey
     );
     const publishResult = await node.publishEvent(requestEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(publishResult.success).toBe(true);
 
@@ -661,7 +661,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       requestEvent.pubkey,
       'error',
       'GPU out of memory',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
     expect(feedbackResult.success).toBe(true);
 
@@ -704,7 +704,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     // Settle to peer2 — routed through peer1
     const result = await node.settleCompute(
       resultEvent,
-      'g.crosstown.peer2'
+      'g.toon.peer2'
     );
 
     // Method executes and returns valid IlpSendResult
@@ -720,7 +720,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     if (skipIfNotReady(servicesReady)) return;
 
     // Build a kind:10035 service discovery event
-    const providerIlpAddress = 'g.crosstown.peer1';
+    const providerIlpAddress = 'g.toon.peer1';
     const discoveryEvent = buildServiceDiscoveryEvent(
       {
         serviceType: 'dvm-provider',
@@ -784,7 +784,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       '5000000',
       jsonContent,
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);
@@ -813,7 +813,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       TEST_CUSTOMER_PUBKEY,
       originalAmount,
       'Result for amount test',
-      { destination: 'g.crosstown.peer1' }
+      { destination: 'g.toon.peer1' }
     );
 
     expect(result.success).toBe(true);

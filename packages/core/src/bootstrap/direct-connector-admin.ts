@@ -3,7 +3,7 @@ import type { ConnectorAdminClient } from './types.js';
 
 /**
  * Parameters for registering a peer on the connector.
- * Maps to ConnectorNode.registerPeer() params in @crosstown/connector.
+ * Maps to ConnectorNode.registerPeer() params in @toon-protocol/connector.
  */
 export interface RegisterPeerParams {
   id: string;
@@ -16,7 +16,7 @@ export interface RegisterPeerParams {
 /**
  * Structural interface for ConnectorNode admin methods.
  *
- * This is a structural interface — consumers pass an `@crosstown/connector`
+ * This is a structural interface — consumers pass an `@toon-protocol/connector`
  * ConnectorNode instance without importing it as a dependency. The ConnectorNode's
  * `registerPeer()` and `removePeer()` methods match this shape, allowing
  * zero-dependency coupling for embedded mode.
@@ -39,8 +39,8 @@ export interface ConnectorAdminLike {
  *
  * @example
  * ```typescript
- * import { ConnectorNode } from '@crosstown/connector';
- * import { createDirectConnectorAdmin } from '@crosstown/core/bootstrap';
+ * import { ConnectorNode } from '@toon-protocol/connector';
+ * import { createDirectConnectorAdmin } from '@toon-protocol/core/bootstrap';
  *
  * const connector = new ConnectorNode({ ... });
  * const adminClient = createDirectConnectorAdmin(connector);

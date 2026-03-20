@@ -1028,18 +1028,18 @@ describe('AC gap-filling: attestation event coverage', () => {
 
   // --------------------------------------------------------------------------
   // T-4.2-29 [P0]: Export verification -- TEE_ATTESTATION_KIND and TeeAttestation
-  //                 importable from @crosstown/core (AC #5)
+  //                 importable from @toon-protocol/core (AC #5)
   // --------------------------------------------------------------------------
-  describe('@crosstown/core exports attestation types (T-4.2-29)', () => {
+  describe('@toon-protocol/core exports attestation types (T-4.2-29)', () => {
     it('[P0] TEE_ATTESTATION_KIND is importable and equals 10033', async () => {
-      // Arrange: dynamically import from @crosstown/core to verify top-level export
+      // Arrange: dynamically import from @toon-protocol/core to verify top-level export
       const core = await import('../index.js');
 
       // Assert: TEE_ATTESTATION_KIND is exported and equals 10033
       expect(core.TEE_ATTESTATION_KIND).toBe(10033);
     });
 
-    it('[P0] buildAttestationEvent is importable from @crosstown/core', async () => {
+    it('[P0] buildAttestationEvent is importable from @toon-protocol/core', async () => {
       // Arrange
       const core = await import('../index.js');
 
@@ -1047,7 +1047,7 @@ describe('AC gap-filling: attestation event coverage', () => {
       expect(typeof core.buildAttestationEvent).toBe('function');
     });
 
-    it('[P0] parseAttestation is importable from @crosstown/core', async () => {
+    it('[P0] parseAttestation is importable from @toon-protocol/core', async () => {
       // Arrange
       const core = await import('../index.js');
 
@@ -1055,7 +1055,7 @@ describe('AC gap-filling: attestation event coverage', () => {
       expect(typeof core.parseAttestation).toBe('function');
     });
 
-    it('[P0] TeeAttestation type is exported from @crosstown/core (AC #5)', async () => {
+    it('[P0] TeeAttestation type is exported from @toon-protocol/core (AC #5)', async () => {
       // Arrange: import the TeeAttestation type from the core index
       // Since TypeScript types are erased at runtime, we verify the interface
       // contract by constructing a value that satisfies TeeAttestation and
@@ -1226,5 +1226,5 @@ describe('AC gap-filling: attestation event coverage', () => {
 // ============================================================================
 // Tests: attestation health endpoint
 // NOTE: T-4.2-06 health tests are in packages/town/src/health.test.ts because
-// core cannot import from @crosstown/town (boundary rule: town is a leaf node).
+// core cannot import from @toon-protocol/town (boundary rule: town is a leaf node).
 // ============================================================================

@@ -68,7 +68,7 @@ export const JOB_FEEDBACK_KIND = 7000;
 
 /**
  * Text Generation DVM kind (kind 5100).
- * Reference DVM kind for the Crosstown protocol. Used for general-purpose
+ * Reference DVM kind for the TOON protocol. Used for general-purpose
  * text generation tasks (e.g., LLM inference, summarization, Q&A).
  */
 export const TEXT_GENERATION_KIND = 5100;

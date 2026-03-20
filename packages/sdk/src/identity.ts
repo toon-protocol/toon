@@ -1,5 +1,5 @@
 /**
- * Unified identity module for @crosstown/sdk.
+ * Unified identity module for @toon-protocol/sdk.
  *
  * Derives both a Nostr pubkey (x-only Schnorr, BIP-340) and an EVM address
  * (Keccak-256) from a single secp256k1 private key, following the NIP-06

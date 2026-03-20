@@ -1,5 +1,5 @@
 /**
- * @crosstown/core
+ * @toon-protocol/core
  *
  * Core library for Nostr-based ILP peer discovery.
  */
@@ -33,11 +33,7 @@ export type {
 } from './types.js';
 
 // Error classes
-export {
-  CrosstownError,
-  InvalidEventError,
-  PeerDiscoveryError,
-} from './errors.js';
+export { ToonError, InvalidEventError, PeerDiscoveryError } from './errors.js';
 
 // Event parsers and builders
 export {
@@ -144,10 +140,10 @@ export {
 
 // Compose - embedded connector orchestration
 export {
-  createCrosstownNode,
-  type CrosstownNodeConfig,
-  type CrosstownNode,
-  type CrosstownNodeStartResult,
+  createToonNode,
+  type ToonNodeConfig,
+  type ToonNode,
+  type ToonNodeStartResult,
   type EmbeddableConnectorLike,
   type PacketHandler,
   type HandlePacketRequest,
@@ -162,7 +158,7 @@ export {
   encodeEventToToonString,
   ToonEncodeError,
   decodeEventFromToon,
-  ToonError,
+  ToonDecodeError,
   shallowParseToon,
   type ToonRoutingMeta,
 } from './toon/index.js';
@@ -227,5 +223,5 @@ export {
 } from './logger.js';
 
 // NIP-34: Git stuff
-// NOTE: Import from '@crosstown/core/nip34' to use Git integration
+// NOTE: Import from '@toon-protocol/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed

@@ -52,7 +52,7 @@ function generateFulfillment(eventId) {
 }
 
 // Helper: Create ILP PREPARE packet
-function createILPPrepare(event, destination = 'g.crosstown') {
+function createILPPrepare(event, destination = 'g.toon') {
   const toonData = encodeEventToToon(event);
   const dataBuffer = Buffer.from(toonData, 'utf-8');
 
@@ -209,7 +209,7 @@ async function submitPatch(repoName) {
   console.log(`\n🔧 Step 4: Submitting patch via NIP-34 (kind:1617)...`);
 
   const patchContent = `From 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a Mon Sep 17 00:00:00 2001
-From: Peer2 <peer2@crosstown.test>
+From: Peer2 <peer2@toon.test>
 Date: ${new Date().toISOString()}
 Subject: [PATCH] Add initial README
 
@@ -296,7 +296,7 @@ README should explain how to submit patches via NIP-34 events.
 README is minimal.
 
 **Environment:**
-- Crosstown version: 1.0.0
+- TOON version: 1.0.0
 - NIP-34 support: Enabled
 - ILP gating: Active`;
 

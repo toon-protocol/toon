@@ -52,7 +52,7 @@ vi.mock('node:child_process', () => ({
       _opts: Record<string, unknown>,
       callback: (error: Error | null, stdout: string, stderr: string) => void
     ) => {
-      callback(null, '/nix/store/abc123-crosstown-docker-image.tar.gz\n', '');
+      callback(null, '/nix/store/abc123-toon-docker-image.tar.gz\n', '');
     }
   ),
 }));
@@ -80,7 +80,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       // For real file paths, delegate to the actual implementation
       return actual.readFile(filePath, encoding as BufferEncoding);
     }),
-    mkdtemp: vi.fn(async () => '/tmp/crosstown-nix-mock'),
+    mkdtemp: vi.fn(async () => '/tmp/toon-nix-mock'),
     cp: vi.fn(async () => undefined),
     writeFile: vi.fn(async () => undefined),
     rm: vi.fn(async () => undefined),
@@ -135,7 +135,7 @@ function createNixBuildResult(
     pcr0: 'a1b2c3d4'.repeat(12), // 96 hex chars
     pcr1: 'e5f6a7b8'.repeat(12),
     pcr2: 'c9d0e1f2'.repeat(12),
-    imagePath: '/nix/store/abc123-crosstown-docker-image.tar.gz',
+    imagePath: '/nix/store/abc123-toon-docker-image.tar.gz',
     buildTimestamp: 1767225600,
     ...overrides,
   };
@@ -158,7 +158,7 @@ function createBuildPair(identical: boolean): {
         pcr0: 'deadbeef'.repeat(12),
         pcr1: 'cafebabe'.repeat(12),
         pcr2: 'f00dcafe'.repeat(12),
-        imagePath: '/nix/store/xyz789-crosstown-docker-image.tar.gz',
+        imagePath: '/nix/store/xyz789-toon-docker-image.tar.gz',
       });
 
   return { buildA, buildB };
@@ -849,7 +849,7 @@ describe('T-4.5-04: CI pipeline PCR reproducibility verification', () => {
     expect(result.reproducible).toBe(true);
   });
 
-  // Gap test: PcrReproducibilityError extends CrosstownError with correct code.
+  // Gap test: PcrReproducibilityError extends ToonError with correct code.
   it('T-4.5-04j: PcrReproducibilityError has correct name and error code', () => {
     // Arrange
     const buildA = createNixBuildResult();
@@ -900,7 +900,7 @@ describe('T-4.5-04: CI pipeline PCR reproducibility verification', () => {
 
 // ===========================================================================
 // T-4.5-05 [P1]: Barrel exports -- all build module exports importable from
-// @crosstown/core (AC #5)
+// @toon-protocol/core (AC #5)
 // ===========================================================================
 
 describe('T-4.5-05: Barrel exports -- build module public API', () => {
@@ -951,7 +951,7 @@ describe('T-4.5-05: Barrel exports -- build module public API', () => {
     expect(typeof buildModule.PcrReproducibilityError).toBe('function');
   });
 
-  it('T-4.5-05f: all build module exports are re-exported from @crosstown/core', async () => {
+  it('T-4.5-05f: all build module exports are re-exported from @toon-protocol/core', async () => {
     // Arrange & Act -- import from the top-level core barrel
     const coreModule = await import('../index.js');
 
@@ -1040,15 +1040,15 @@ describe('T-4.5-06: Nix flake configuration and gitignore', () => {
     expect(hasResultEntry).toBe(true);
   });
 
-  it('T-4.5-06g: flake.nix sets NODE_ENV=production and creates non-root crosstown user', () => {
+  it('T-4.5-06g: flake.nix sets NODE_ENV=production and creates non-root toon user', () => {
     // Arrange -- these are defined in docker/Dockerfile.nix
     const dockerfileNixPath = resolveFromRoot(DOCKERFILE_NIX_PATH);
     const content = readFileSync(dockerfileNixPath, 'utf-8');
 
     // Assert -- NODE_ENV=production
     expect(content).toMatch(/NODE_ENV.*production/);
-    // Assert -- crosstown user reference
-    expect(content).toMatch(/crosstown/);
+    // Assert -- toon user reference
+    expect(content).toMatch(/toon/);
   });
 
   it('T-4.5-06h: flake.nix CMD uses supervisord', () => {
@@ -1062,7 +1062,7 @@ describe('T-4.5-06: Nix flake configuration and gitignore', () => {
   });
 
   // Gap test: Dockerfile.nix must contain the same runtime components as Dockerfile.oyster.
-  // AC #6 specifies parity with Node.js 20, supervisord, non-root crosstown user, ports.
+  // AC #6 specifies parity with Node.js 20, supervisord, non-root toon user, ports.
   it('T-4.5-06i: Dockerfile.nix has parity with Dockerfile.oyster runtime components', () => {
     // Arrange -- read both files
     const dockerfileNixPath = resolveFromRoot(DOCKERFILE_NIX_PATH);
@@ -1078,9 +1078,9 @@ describe('T-4.5-06: Nix flake configuration and gitignore', () => {
     expect(nixContent).toMatch(/supervisor/i);
     expect(oysterContent).toMatch(/supervisor/i);
 
-    // Assert -- both reference a non-root crosstown user
-    expect(nixContent).toMatch(/crosstown/);
-    expect(oysterContent).toMatch(/crosstown/);
+    // Assert -- both reference a non-root toon user
+    expect(nixContent).toMatch(/toon/);
+    expect(oysterContent).toMatch(/toon/);
 
     // Assert -- both reference uid 1001
     expect(nixContent).toMatch(/1001/);

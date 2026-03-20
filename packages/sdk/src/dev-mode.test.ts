@@ -21,11 +21,14 @@ import type {
   HandlePacketRequest,
   HandlePacketResponse,
   EmbeddableConnectorLike,
-} from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
 
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/core/toon';
+import {
+  encodeEventToToon,
+  decodeEventFromToon,
+} from '@toon-protocol/core/toon';
 
 // ---------------------------------------------------------------------------
 // Mock Embedded Connector (same pattern as create-node.test.ts)
@@ -195,10 +198,10 @@ describe('Dev Mode', () => {
         data: toonBase64,
       });
 
-      // Assert -- console.log was called with [crosstown:dev] prefix and packet details
+      // Assert -- console.log was called with [toon:dev] prefix and packet details
       expect(consoleSpy).toHaveBeenCalled();
       const logCalls = consoleSpy.mock.calls.flat().join(' ');
-      expect(logCalls).toContain('[crosstown:dev]');
+      expect(logCalls).toContain('[toon:dev]');
       expect(logCalls).toContain('kind=');
       expect(logCalls).toContain('pubkey=');
       expect(logCalls).toContain('amount=');
@@ -393,7 +396,7 @@ describe('Dev Mode', () => {
     await node.stop();
   });
 
-  it('[P0] production mode does not log packets with [crosstown:dev] prefix', async () => {
+  it('[P0] production mode does not log packets with [toon:dev] prefix', async () => {
     // Arrange -- no devMode set (defaults to false)
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const handlerFn = vi.fn(async (ctx: HandlerContext) => ctx.accept());
@@ -431,9 +434,9 @@ describe('Dev Mode', () => {
       // Assert -- event was accepted (proves full pipeline ran, not just early reject)
       expect(handlerFn).toHaveBeenCalled();
 
-      // Assert -- no [crosstown:dev] log in production mode
+      // Assert -- no [toon:dev] log in production mode
       const logCalls = consoleSpy.mock.calls.flat().join(' ');
-      expect(logCalls).not.toContain('[crosstown:dev]');
+      expect(logCalls).not.toContain('[toon:dev]');
     } finally {
       // Cleanup -- restore console.log even if assertions fail
       consoleSpy.mockRestore();

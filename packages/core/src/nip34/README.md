@@ -1,21 +1,21 @@
 # NIP-34: Git Stuff
 
-ILP-gated Git infrastructure for Crosstown, implementing [NIP-34](https://github.com/nostr-protocol/nips/blob/master/34.md) for decentralized code collaboration.
+ILP-gated Git infrastructure for TOON, implementing [NIP-34](https://github.com/nostr-protocol/nips/blob/master/34.md) for decentralized code collaboration.
 
 ## Overview
 
-This module enables Crosstown to provide Git infrastructure alongside relay infrastructure, both gated by ILP micropayments. Users submit NIP-34 events (repository announcements, patches, pull requests, issues) via ILP payments, and Crosstown executes the corresponding Git operations on a Forgejo instance.
+This module enables TOON to provide Git infrastructure alongside relay infrastructure, both gated by ILP micropayments. Users submit NIP-34 events (repository announcements, patches, pull requests, issues) via ILP payments, and TOON executes the corresponding Git operations on a Forgejo instance.
 
 ## Architecture
 
 ```
-User creates NIP-34 event → Sends to Crosstown relay (with ILP payment)
+User creates NIP-34 event → Sends to TOON relay (with ILP payment)
 → BLS validates payment → Stores event → NIP34Handler processes event
 → Executes Git operation on Forgejo
 ```
 
 **Git Reads:** Public, free (standard Git protocol)
-**Git Writes:** Mediated through NIP-34 events → ILP payment → Crosstown → Forgejo
+**Git Writes:** Mediated through NIP-34 events → ILP payment → TOON → Forgejo
 
 ## Setup
 
@@ -40,7 +40,7 @@ Access Forgejo UI: http://localhost:3003
 
 1. Log in to Forgejo: http://localhost:3003
 2. Go to **Settings → Applications → Generate New Token**
-3. Name: "Crosstown Integration"
+3. Name: "TOON Integration"
 4. Scopes: `write:repository`, `write:issue`, `write:user`
 5. Save the token
 
@@ -51,7 +51,7 @@ Add to your `.env`:
 ```bash
 FORGEJO_URL=http://forgejo:3000
 FORGEJO_TOKEN=your-api-token-here
-FORGEJO_OWNER=crosstown
+FORGEJO_OWNER=toon
 ```
 
 ## Usage
@@ -59,15 +59,15 @@ FORGEJO_OWNER=crosstown
 ### Initialize NIP-34 Handler
 
 ```typescript
-import { NIP34Handler } from '@crosstown/core';
+import { NIP34Handler } from '@toon-protocol/core';
 
 const nip34Handler = new NIP34Handler({
   forgejoUrl: process.env.FORGEJO_URL!,
   forgejoToken: process.env.FORGEJO_TOKEN!,
   defaultOwner: process.env.FORGEJO_OWNER!,
   gitConfig: {
-    userName: 'Crosstown Node',
-    userEmail: 'node@crosstown.nostr',
+    userName: 'TOON Node',
+    userEmail: 'node@toon.nostr',
   },
   verbose: true,
 });
@@ -76,7 +76,7 @@ const nip34Handler = new NIP34Handler({
 ### Integrate with BLS
 
 ```typescript
-import { BusinessLogicServer } from '@crosstown/bls';
+import { BusinessLogicServer } from '@toon-protocol/bls';
 
 const bls = new BusinessLogicServer(
   {
@@ -111,7 +111,7 @@ const bls = new BusinessLogicServer(
 
 **Git Operation:**
 
-- Creates repository: `http://forgejo:3003/crosstown/my-repo`
+- Creates repository: `http://forgejo:3003/toon/my-repo`
 
 ### Patch Submission (kind 1617)
 
@@ -274,7 +274,7 @@ This is necessary because Forgejo (like Gitea) doesn't expose a Git Database API
 
    ```bash
    # User publishes NIP-34 event (kind 30617) with ILP payment
-   # Crosstown validates payment and stores event
+   # TOON validates payment and stores event
    # NIP34Handler creates repo in Forgejo
    ```
 
@@ -283,13 +283,13 @@ This is necessary because Forgejo (like Gitea) doesn't expose a Git Database API
    ```bash
    git format-patch HEAD~1 > patch.diff
    # User publishes NIP-34 event (kind 1617) with patch content
-   # Crosstown applies patch and creates PR in Forgejo
+   # TOON applies patch and creates PR in Forgejo
    ```
 
 3. **User reads repository:**
    ```bash
    # Free, public access via standard Git protocol
-   git clone http://localhost:3003/crosstown/my-repo.git
+   git clone http://localhost:3003/toon/my-repo.git
    ```
 
 ## Deployment
@@ -300,7 +300,7 @@ Your `docker-compose-testnet.yml` already includes Forgejo. Just ensure environm
 # .env
 FORGEJO_URL=http://forgejo:3000
 FORGEJO_TOKEN=<your-token>
-FORGEJO_OWNER=crosstown
+FORGEJO_OWNER=toon
 ```
 
 Then start the stack:

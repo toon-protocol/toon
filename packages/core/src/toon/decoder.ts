@@ -1,15 +1,15 @@
 import { decode } from '@toon-format/toon';
 import type { NostrEvent } from 'nostr-tools/pure';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import { isValidHex } from './validate.js';
 
 /**
  * Error thrown when TOON decoding or validation fails.
  */
-export class ToonError extends CrosstownError {
+export class ToonDecodeError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'TOON_DECODE_ERROR', cause);
-    this.name = 'ToonError';
+    this.name = 'ToonDecodeError';
   }
 }
 
@@ -18,46 +18,50 @@ export class ToonError extends CrosstownError {
  */
 function validateNostrEvent(obj: unknown): asserts obj is NostrEvent {
   if (typeof obj !== 'object' || obj === null) {
-    throw new ToonError('Decoded value is not an object');
+    throw new ToonDecodeError('Decoded value is not an object');
   }
 
   const event = obj as Record<string, unknown>;
 
   // Validate id (64-char hex)
   if (!isValidHex(event['id'], 64)) {
-    throw new ToonError('Invalid event id: must be a 64-character hex string');
+    throw new ToonDecodeError(
+      'Invalid event id: must be a 64-character hex string'
+    );
   }
 
   // Validate pubkey (64-char hex)
   if (!isValidHex(event['pubkey'], 64)) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Invalid event pubkey: must be a 64-character hex string'
     );
   }
 
   // Validate kind (number)
   if (typeof event['kind'] !== 'number' || !Number.isInteger(event['kind'])) {
-    throw new ToonError('Invalid event kind: must be an integer');
+    throw new ToonDecodeError('Invalid event kind: must be an integer');
   }
 
   // Validate content (string)
   if (typeof event['content'] !== 'string') {
-    throw new ToonError('Invalid event content: must be a string');
+    throw new ToonDecodeError('Invalid event content: must be a string');
   }
 
   // Validate tags (array of string arrays)
   const tags = event['tags'];
   if (!Array.isArray(tags)) {
-    throw new ToonError('Invalid event tags: must be an array');
+    throw new ToonDecodeError('Invalid event tags: must be an array');
   }
   for (let i = 0; i < tags.length; i++) {
     const tag = tags[i];
     if (!Array.isArray(tag)) {
-      throw new ToonError(`Invalid event tags[${i}]: must be an array`);
+      throw new ToonDecodeError(`Invalid event tags[${i}]: must be an array`);
     }
     for (let j = 0; j < tag.length; j++) {
       if (typeof tag[j] !== 'string') {
-        throw new ToonError(`Invalid event tags[${i}][${j}]: must be a string`);
+        throw new ToonDecodeError(
+          `Invalid event tags[${i}][${j}]: must be a string`
+        );
       }
     }
   }
@@ -67,12 +71,12 @@ function validateNostrEvent(obj: unknown): asserts obj is NostrEvent {
     typeof event['created_at'] !== 'number' ||
     !Number.isInteger(event['created_at'])
   ) {
-    throw new ToonError('Invalid event created_at: must be an integer');
+    throw new ToonDecodeError('Invalid event created_at: must be an integer');
   }
 
   // Validate sig (128-char hex)
   if (!isValidHex(event['sig'], 128)) {
-    throw new ToonError(
+    throw new ToonDecodeError(
       'Invalid event sig: must be a 128-character hex string'
     );
   }
@@ -85,7 +89,7 @@ function validateNostrEvent(obj: unknown): asserts obj is NostrEvent {
  *
  * @param data - The TOON-encoded Uint8Array
  * @returns The decoded NostrEvent
- * @throws ToonError if decoding or validation fails
+ * @throws ToonDecodeError if decoding or validation fails
  */
 export function decodeEventFromToon(data: Uint8Array): NostrEvent {
   try {
@@ -94,10 +98,10 @@ export function decodeEventFromToon(data: Uint8Array): NostrEvent {
     validateNostrEvent(decoded);
     return decoded;
   } catch (error) {
-    if (error instanceof ToonError) {
+    if (error instanceof ToonDecodeError) {
       throw error;
     }
-    throw new ToonError(
+    throw new ToonDecodeError(
       `Failed to decode TOON data: ${error instanceof Error ? error.message : String(error)}`,
       error instanceof Error ? error : undefined
     );

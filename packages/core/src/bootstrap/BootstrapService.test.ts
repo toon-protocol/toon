@@ -98,16 +98,19 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
   };
 }
 
-function createMockIlpClient(
-  result: Partial<IlpSendResult> = {}
-): IlpClient & { sendIlpPacket: ReturnType<typeof vi.fn> } {
+function createMockIlpClient(result: Partial<IlpSendResult> = {}): IlpClient & {
+  sendIlpPacket: ReturnType<typeof vi.fn>;
+  sendIlpPacketWithClaim: ReturnType<typeof vi.fn>;
+} {
+  const defaultResult = {
+    accepted: true,
+    fulfillment: 'test-fulfillment',
+    data: undefined,
+    ...result,
+  };
   return {
-    sendIlpPacket: vi.fn().mockResolvedValue({
-      accepted: true,
-      fulfillment: 'test-fulfillment',
-      data: undefined,
-      ...result,
-    }),
+    sendIlpPacket: vi.fn().mockResolvedValue(defaultResult),
+    sendIlpPacketWithClaim: vi.fn().mockResolvedValue(defaultResult),
   };
 }
 
@@ -568,6 +571,119 @@ describe('BootstrapService', () => {
       expect(announced.peerId).toBe(`nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`);
       expect(announced.eventId).toMatch(/^[0-9a-f]{64}$/);
     }
+  });
+
+  it('should use sendIlpPacketWithClaim when claimSigner and channelId are present', async () => {
+    const admin = createMockConnectorAdmin();
+    const runtime = createMockIlpClient();
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const events: BootstrapEvent[] = [];
+    const service = new BootstrapService(
+      {
+        knownPeers: [createKnownPeer()],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        basePricePerByte: 10n,
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setConnectorAdmin(admin);
+    service.setIlpClient(runtime);
+    service.setClaimSigner(async (_channelId: string, _amount: bigint) => ({
+      type: 'mock-claim',
+    }));
+    service.on((event) => events.push(event));
+
+    const bootstrapPromise = service.bootstrap();
+    await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+
+    // Simulate relay response with settlement-capable peer info
+    const peerInfoWithSettlement: IlpPeerInfo = {
+      ...VALID_PEER_INFO,
+      supportedChains: ['evm:anvil:31337'],
+      settlementAddresses: { 'evm:anvil:31337': '0x1234' },
+    };
+    simulateRelayResponse(peerInfoWithSettlement);
+
+    await bootstrapPromise;
+
+    // Without a channelId from settlement, should fall back to sendIlpPacket
+    // (no channelClient was configured, so no channel was opened)
+    expect(runtime.sendIlpPacket).toHaveBeenCalled();
+    expect(runtime.sendIlpPacketWithClaim).not.toHaveBeenCalled();
+  });
+
+  it('should use sendIlpPacketWithClaim when channelId exists from bootstrap result', async () => {
+    const admin = createMockConnectorAdmin();
+    const runtime = createMockIlpClient();
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const mockChannelClient = {
+      openChannel: vi.fn().mockResolvedValue({ channelId: '0xchannel123' }),
+    };
+
+    const events: BootstrapEvent[] = [];
+    const service = new BootstrapService(
+      {
+        knownPeers: [createKnownPeer()],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        basePricePerByte: 10n,
+        settlementInfo: {
+          supportedChains: ['evm:anvil:31337'],
+          settlementAddresses: { 'evm:anvil:31337': '0xself' },
+          preferredTokens: { 'evm:anvil:31337': '0xtoken' },
+          tokenNetworks: { 'evm:anvil:31337': '0xtokennet' },
+        },
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setConnectorAdmin(admin);
+    service.setIlpClient(runtime);
+    service.setChannelClient(mockChannelClient);
+    service.setClaimSigner(async (_channelId: string, _amount: bigint) => ({
+      type: 'mock-claim',
+    }));
+    service.on((event) => events.push(event));
+
+    const bootstrapPromise = service.bootstrap();
+    await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+
+    // Peer info with settlement support so channel can be opened
+    const peerInfoWithSettlement: IlpPeerInfo = {
+      ...VALID_PEER_INFO,
+      supportedChains: ['evm:anvil:31337'],
+      settlementAddresses: { 'evm:anvil:31337': '0xpeer' },
+      tokenNetworks: { 'evm:anvil:31337': '0xtokennet' },
+    };
+    simulateRelayResponse(peerInfoWithSettlement);
+
+    await bootstrapPromise;
+
+    // With channelId + claimSigner + sendIlpPacketWithClaim, should use claim path
+    expect(runtime.sendIlpPacketWithClaim).toHaveBeenCalled();
+    expect(runtime.sendIlpPacket).not.toHaveBeenCalled();
+
+    // Verify the claim was passed
+    const claimCall = runtime.sendIlpPacketWithClaim.mock.calls[0];
+    expect(claimCall?.[1]).toEqual({ type: 'mock-claim' });
+
+    // Verify bootstrap:announced event
+    const announced = events.find((e) => e.type === 'bootstrap:announced');
+    expect(announced).toBeDefined();
   });
 
   it('should emit bootstrap:announce-failed on announce rejection', async () => {

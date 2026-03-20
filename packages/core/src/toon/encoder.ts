@@ -1,11 +1,11 @@
 import { encode } from '@toon-format/toon';
 import type { NostrEvent } from 'nostr-tools/pure';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 
 /**
  * Error thrown when TOON encoding fails.
  */
-export class ToonEncodeError extends CrosstownError {
+export class ToonEncodeError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'TOON_ENCODE_ERROR', cause);
     this.name = 'ToonEncodeError';

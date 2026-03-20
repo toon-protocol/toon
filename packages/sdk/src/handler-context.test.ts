@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHandlerContext } from './handler-context.js';
 import type { NostrEvent } from 'nostr-tools/pure';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 
 // Story 1.3: HandlerContext with TOON Passthrough and Lazy Decode
 

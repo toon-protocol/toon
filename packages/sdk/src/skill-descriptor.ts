@@ -8,7 +8,7 @@
  * with pre-DVM kind:10035 events).
  */
 
-import type { SkillDescriptor } from '@crosstown/core';
+import type { SkillDescriptor } from '@toon-protocol/core';
 import type { HandlerRegistry } from './handler-registry.js';
 
 /** Configuration for building a skill descriptor. */
@@ -17,7 +17,7 @@ export interface BuildSkillDescriptorConfig {
   basePricePerByte?: bigint;
   /** Per-kind pricing overrides (kind number -> price in USDC micro-units). */
   kindPricing?: Record<number, bigint>;
-  /** Service name override (default: 'crosstown-dvm'). */
+  /** Service name override (default: 'toon-dvm'). */
   name?: string;
   /** Schema version override (default: '1.0'). */
   version?: string;
@@ -65,7 +65,7 @@ export function buildSkillDescriptor(
   }
 
   const descriptor: SkillDescriptor = {
-    name: config.name ?? 'crosstown-dvm',
+    name: config.name ?? 'toon-dvm',
     version: config.version ?? '1.0',
     kinds: dvmKinds,
     features: config.features ?? [],

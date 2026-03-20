@@ -1,5 +1,5 @@
 /**
- * Shared ILP PREPARE packet construction for the Crosstown protocol.
+ * Shared ILP PREPARE packet construction for the TOON protocol.
  *
  * This function is the **single point of truth** for constructing ILP PREPARE
  * packet parameters. Both the x402 `/publish` handler and the existing
@@ -15,7 +15,7 @@
  * Parameters for constructing an ILP PREPARE packet.
  */
 export interface BuildIlpPrepareParams {
-  /** ILP destination address (e.g., "g.crosstown.target-relay"). */
+  /** ILP destination address (e.g., "g.toon.target-relay"). */
   destination: string;
   /** Payment amount in ILP units (bigint). */
   amount: bigint;

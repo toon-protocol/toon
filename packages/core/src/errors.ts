@@ -1,17 +1,17 @@
 /**
- * Custom error classes for @crosstown/core.
+ * Custom error classes for @toon-protocol/core.
  */
 
 /**
- * Base error class for all crosstown errors.
+ * Base error class for all toon errors.
  * Provides a consistent error interface with error codes and cause chaining.
  */
-export class CrosstownError extends Error {
+export class ToonError extends Error {
   public readonly code: string;
 
   constructor(message: string, code: string, cause?: Error) {
     super(message, { cause });
-    this.name = 'CrosstownError';
+    this.name = 'ToonError';
     this.code = code;
   }
 }
@@ -20,7 +20,7 @@ export class CrosstownError extends Error {
  * Error thrown when parsing a Nostr event fails.
  * Used for malformed events, wrong kind, invalid JSON, or missing required fields.
  */
-export class InvalidEventError extends CrosstownError {
+export class InvalidEventError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'INVALID_EVENT', cause);
     this.name = 'InvalidEventError';
@@ -31,7 +31,7 @@ export class InvalidEventError extends CrosstownError {
  * Error thrown when peer discovery fails.
  * Used for invalid pubkeys or relay failures.
  */
-export class PeerDiscoveryError extends CrosstownError {
+export class PeerDiscoveryError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'PEER_DISCOVERY_FAILED', cause);
     this.name = 'PeerDiscoveryError';

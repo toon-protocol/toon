@@ -1,7 +1,7 @@
 {
-  "name": "@crosstown/sdk",
-  "version": "0.1.4",
-  "description": "Crosstown SDK for building ILP-gated Nostr services",
+  "name": "@toon-protocol/sdk",
+  "version": "0.2.0",
+  "description": "TOON SDK for building ILP-gated Nostr services",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -25,7 +25,7 @@
     "test:watch": "vitest"
   },
   "keywords": [
-    "crosstown",
+    "toon",
     "nostr",
     "ilp",
     "interledger",
@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ALLiDoizCode/crosstown.git",
+    "url": "https://github.com/toon-protocol/town.git",
     "directory": "packages/sdk"
   },
   "author": "ALLiDoizCode",
@@ -45,24 +45,24 @@
     "access": "public"
   },
   "dependencies": {
-    "@crosstown/core": "workspace:*",
     "@noble/curves": "^2.0.0",
     "@noble/hashes": "^2.0.0",
     "@scure/bip32": "^2.0.0",
     "@scure/bip39": "^2.0.0",
+    "@toon-protocol/core": "workspace:*",
     "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
-    "@crosstown/connector": ">=1.7.0"
+    "@toon-protocol/connector": ">=1.7.0"
   },
   "peerDependenciesMeta": {
-    "@crosstown/connector": {
+    "@toon-protocol/connector": {
       "optional": true
     }
   },
   "devDependencies": {
-    "@crosstown/connector": "^1.7.1",
-    "@crosstown/relay": "workspace:*",
+    "@toon-protocol/connector": "^1.8.1",
+    "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
     "tsup": "^8.0.0",

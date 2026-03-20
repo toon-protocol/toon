@@ -39,8 +39,8 @@ import type {
   SendPacketParams,
   SendPacketResult,
   RegisterPeerParams,
-} from '@crosstown/core';
-// DVM constants available from @crosstown/core:
+} from '@toon-protocol/core';
+// DVM constants available from @toon-protocol/core:
 // JOB_FEEDBACK_KIND, TEXT_GENERATION_KIND -- used by the implementation under test.
 
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ const TEST_REQUEST_EVENT_ID = 'b'.repeat(64);
 const TEST_CUSTOMER_PUBKEY = 'cd'.repeat(32);
 
 /** Deterministic provider ILP address */
-const TEST_PROVIDER_ILP_ADDRESS = 'g.crosstown.provider.node-a';
+const TEST_PROVIDER_ILP_ADDRESS = 'g.toon.provider.node-a';
 
 /** Fixed timestamp for deterministic test data */
 const FIXED_CREATED_AT = 1700000000;
@@ -163,7 +163,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
       TEST_CUSTOMER_PUBKEY,
       'processing',
       undefined,
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert -- publish succeeded
@@ -195,7 +195,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
       TEST_CUSTOMER_PUBKEY,
       'processing',
       '50% complete',
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert
@@ -225,7 +225,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
       TEST_CUSTOMER_PUBKEY,
       'error',
       'GPU out of memory',
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert
@@ -255,7 +255,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
       TEST_CUSTOMER_PUBKEY,
       'processing',
       undefined,
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert -- amount should be basePricePerByte * toonData.length
@@ -290,7 +290,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
         TEST_CUSTOMER_PUBKEY,
         'processing',
         undefined,
-        { destination: 'g.crosstown.relay' }
+        { destination: 'g.toon.relay' }
       )
     ).rejects.toThrow(NodeError);
   });
@@ -323,7 +323,7 @@ describe('publishResult() unit tests (Story 5.3, Task 1.2/1.6)', () => {
       TEST_CUSTOMER_PUBKEY,
       '3000000',
       'Here is the generated text result',
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert -- publish succeeded
@@ -355,7 +355,7 @@ describe('publishResult() unit tests (Story 5.3, Task 1.2/1.6)', () => {
       TEST_CUSTOMER_PUBKEY,
       '5000000',
       'https://example.com/generated-image.png',
-      { destination: 'g.crosstown.relay', kind: 6200 }
+      { destination: 'g.toon.relay', kind: 6200 }
     );
 
     // Assert
@@ -385,7 +385,7 @@ describe('publishResult() unit tests (Story 5.3, Task 1.2/1.6)', () => {
       TEST_CUSTOMER_PUBKEY,
       '3000000',
       'Result content',
-      { destination: 'g.crosstown.relay' }
+      { destination: 'g.toon.relay' }
     );
 
     // Assert -- amount should be basePricePerByte * toonData.length
@@ -418,7 +418,7 @@ describe('publishResult() unit tests (Story 5.3, Task 1.2/1.6)', () => {
         TEST_CUSTOMER_PUBKEY,
         '3000000',
         'Result content',
-        { destination: 'g.crosstown.relay' }
+        { destination: 'g.toon.relay' }
       )
     ).rejects.toThrow(NodeError);
   });
@@ -701,7 +701,7 @@ describe('settleCompute() unit tests (Story 5.3, Task 1.3/1.7-1.11)', () => {
     // Act
     const result = await node.settleCompute(
       resultEvent,
-      'g.crosstown.nonexistent.provider'
+      'g.toon.nonexistent.provider'
     );
 
     // Assert -- settlement was rejected (not accepted)
@@ -923,7 +923,7 @@ describe('settleCompute() service discovery address extraction (Story 5.3, Task 
     // parseServiceDiscovery() -> ilpAddress extraction that feeds into it.
 
     // Import parseServiceDiscovery from core
-    const { parseServiceDiscovery } = await import('@crosstown/core');
+    const { parseServiceDiscovery } = await import('@toon-protocol/core');
 
     // Arrange -- create a mock kind:10035 event with all required fields
     const discoveryEvent: NostrEvent = {
@@ -933,7 +933,7 @@ describe('settleCompute() service discovery address extraction (Story 5.3, Task 
       kind: 10035,
       content: JSON.stringify({
         serviceType: 'dvm-provider',
-        ilpAddress: 'g.crosstown.provider.node-a',
+        ilpAddress: 'g.toon.provider.node-a',
         pricing: {
           basePricePerByte: 10,
           currency: 'USDC',
@@ -952,6 +952,6 @@ describe('settleCompute() service discovery address extraction (Story 5.3, Task 
 
     // Assert
     expect(parsed).not.toBeNull();
-    expect(parsed?.ilpAddress).toBe('g.crosstown.provider.node-a');
+    expect(parsed?.ilpAddress).toBe('g.toon.provider.node-a');
   });
 });

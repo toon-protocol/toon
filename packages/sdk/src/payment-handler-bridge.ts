@@ -1,5 +1,5 @@
 /**
- * Payment handler bridge for @crosstown/sdk.
+ * Payment handler bridge for @toon-protocol/sdk.
  *
  * Bridges between ILP packet handling and the handler registry,
  * using isTransit to distinguish fire-and-forget from await semantics.
@@ -7,7 +7,7 @@
 
 import type { HandlerRegistry } from './handler-registry.js';
 import { createHandlerContext } from './handler-context.js';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 
 export interface PaymentHandlerBridgeConfig {
   registry: HandlerRegistry;

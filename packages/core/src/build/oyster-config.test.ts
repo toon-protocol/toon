@@ -57,21 +57,15 @@ const DOCKERFILE_OYSTER_PATH = 'docker/Dockerfile.oyster';
 const ATTESTATION_SERVER_PATH = 'docker/src/attestation-server.ts';
 
 /** Expected service names in docker-compose-oyster.yml (2 services, NOT 3). */
-const EXPECTED_SERVICES = ['crosstown', 'attestation-server'];
-
-/** Expected port mappings per service. */
-const EXPECTED_PORTS: Record<string, number[]> = {
-  crosstown: [3100, 7100], // BLS HTTP + Relay WS
-  'attestation-server': [1300], // Attestation HTTP
-};
+const EXPECTED_SERVICES = ['toon', 'attestation-server'];
 
 /** Expected supervisord program names and priorities (2 programs, NOT 3). */
 const EXPECTED_PROGRAMS: Record<string, { priority: number; command: string }> =
   {
-    crosstown: { priority: 10, command: 'node /app/dist/entrypoint-town.js' },
+    toon: { priority: 10, command: 'node /app/entrypoint-sdk.js' },
     attestation: {
       priority: 20,
-      command: 'node /app/dist/attestation-server.js',
+      command: 'node /app/attestation-server.js',
     },
   };
 
@@ -94,7 +88,7 @@ function resolveFromRoot(relativePath: string): string {
 // ===========================================================================
 
 describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
-  it('T-4.1-01a: defines exactly 2 services: crosstown and attestation-server', async () => {
+  it('T-4.1-01a: defines exactly 2 services: toon and attestation-server', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
@@ -105,27 +99,28 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
 
     // Assert -- exactly 2 services with correct names
     expect(serviceNames).toHaveLength(2);
-    expect(serviceNames).toContain('crosstown');
+    expect(serviceNames).toContain('toon');
     expect(serviceNames).toContain('attestation-server');
   });
 
-  it('T-4.1-01b: crosstown service exposes BLS port 3100 and Relay port 7100', async () => {
+  it('T-4.1-01b: toon service uses network_mode host (ports exposed directly)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
     // Act
-    const crosstown = compose.services.crosstown;
-    const ports = crosstown.ports || [];
-    const portStrings = ports.map((p: string | number) => String(p));
+    const toon = compose.services.toon;
 
-    // Assert -- both BLS and Relay ports present
-    expect(portStrings.some((p: string) => p.includes('3100'))).toBe(true);
-    expect(portStrings.some((p: string) => p.includes('7100'))).toBe(true);
+    // Assert -- network_mode: host exposes all ports directly (no port mappings needed)
+    expect(toon.network_mode).toBe('host');
+    // BLS_PORT and WS_PORT set via environment
+    const env = toon.environment || {};
+    expect(env.BLS_PORT).toBe(3100);
+    expect(env.WS_PORT).toBe(7100);
   });
 
-  it('T-4.1-01c: attestation-server service exposes attestation port 1300', async () => {
+  it('T-4.1-01c: attestation-server service uses network_mode host with ATTESTATION_PORT 1300', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
@@ -133,24 +128,24 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
 
     // Act
     const attestation = compose.services['attestation-server'];
-    const ports = attestation.ports || [];
-    const portStrings = ports.map((p: string | number) => String(p));
 
-    // Assert -- attestation port present
-    expect(portStrings.some((p: string) => p.includes('1300'))).toBe(true);
+    // Assert -- network_mode: host, attestation port set via environment
+    expect(attestation.network_mode).toBe('host');
+    const env = attestation.environment || {};
+    expect(env.ATTESTATION_PORT).toBe(1300);
   });
 
-  it('T-4.1-01d: crosstown service uses crosstown:optimized image', async () => {
+  it('T-4.1-01d: toon service uses GHCR oyster image', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
     // Act
-    const crosstown = compose.services.crosstown;
+    const toon = compose.services.toon;
 
-    // Assert -- image references crosstown:optimized
-    expect(crosstown.image).toBe('crosstown:optimized');
+    // Assert -- image references the GHCR oyster image
+    expect(toon.image).toBe('ghcr.io/allidoizcode/toon:oyster');
   });
 
   it('T-4.1-01e: all services have image or build defined', async () => {
@@ -169,15 +164,15 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     }
   });
 
-  it('T-4.1-01f: crosstown service includes required environment variables', async () => {
+  it('T-4.1-01f: toon service includes required environment variables', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
     // Act
-    const crosstown = compose.services.crosstown;
-    const env = crosstown.environment || {};
+    const toon = compose.services.toon;
+    const env = toon.environment || {};
     // Environment can be an object or array of strings
     const envKeys = Array.isArray(env)
       ? env.map((e: string) => e.split('=')[0])
@@ -223,7 +218,7 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     const attestation = compose.services['attestation-server'];
 
     // Assert -- attestation-server must have an explicit command override
-    // because the base image (crosstown:optimized) CMD is entrypoint-town.js,
+    // because the base image (toon:optimized) CMD is entrypoint-town.js,
     // not attestation-server.js. Without this, the service would run the wrong
     // entrypoint.
     expect(attestation.command).toBeDefined();
@@ -233,28 +228,20 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     expect(commandStr).toContain('attestation-server.js');
   });
 
-  it('T-4.1-01i: each service exposes the correct expected ports', async () => {
+  it('T-4.1-01i: each service configures the correct expected ports via environment', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act & Assert -- verify each service's ports match EXPECTED_PORTS
-    for (const [serviceName, expectedPorts] of Object.entries(EXPECTED_PORTS)) {
-      const service = compose.services[serviceName];
-      const ports = (service.ports || []).map((p: string | number) =>
-        String(p)
-      );
-      for (const expectedPort of expectedPorts) {
-        const found = ports.some((p: string) =>
-          p.includes(String(expectedPort))
-        );
-        expect(
-          found,
-          `Service "${serviceName}" must expose port ${expectedPort}`
-        ).toBe(true);
-      }
-    }
+    // Assert -- with network_mode: host, ports are configured via environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    expect(toonEnv.BLS_PORT).toBe(3100);
+    expect(toonEnv.WS_PORT).toBe(7100);
+
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
+    expect(attestationEnv.ATTESTATION_PORT).toBe(1300);
   });
 
   it('T-4.1-01j: compose file is valid YAML parseable by oyster-cvm CLI', async () => {
@@ -277,7 +264,7 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
 // ===========================================================================
 
 describe('T-4.1-02: supervisord.conf structure', () => {
-  it('T-4.1-02a: defines exactly 2 programs: crosstown and attestation', async () => {
+  it('T-4.1-02a: defines exactly 2 programs: toon and attestation', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
@@ -290,23 +277,23 @@ describe('T-4.1-02: supervisord.conf structure', () => {
 
     // Assert -- exactly 2 programs
     expect(programNames).toHaveLength(2);
-    expect(programNames).toContain('crosstown');
+    expect(programNames).toContain('toon');
     expect(programNames).toContain('attestation');
   });
 
-  it('T-4.1-02b: crosstown program has priority=10', async () => {
+  it('T-4.1-02b: toon program has priority=10', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
 
-    // Act -- extract priority from [program:crosstown] section
-    const crosstownMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?priority=(\d+)/
+    // Act -- extract priority from [program:toon] section
+    const toonMatch = confContent.match(
+      /\[program:toon\][\s\S]*?priority=(\d+)/
     );
 
     // Assert
-    expect(crosstownMatch).not.toBeNull();
-    expect(Number(crosstownMatch![1])).toBe(10);
+    expect(toonMatch).not.toBeNull();
+    expect(Number(toonMatch![1])).toBe(10);
   });
 
   it('T-4.1-02c: attestation program has priority=20', async () => {
@@ -324,45 +311,41 @@ describe('T-4.1-02: supervisord.conf structure', () => {
     expect(Number(attestationMatch![1])).toBe(20);
   });
 
-  it('T-4.1-02d: crosstown starts before attestation (lower priority number)', async () => {
+  it('T-4.1-02d: toon starts before attestation (lower priority number)', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
 
     // Act
-    const crosstownMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?priority=(\d+)/
+    const toonMatch = confContent.match(
+      /\[program:toon\][\s\S]*?priority=(\d+)/
     );
     const attestationMatch = confContent.match(
       /\[program:attestation\][\s\S]*?priority=(\d+)/
     );
 
-    // Assert -- crosstown priority < attestation priority
-    expect(crosstownMatch).not.toBeNull();
+    // Assert -- toon priority < attestation priority
+    expect(toonMatch).not.toBeNull();
     expect(attestationMatch).not.toBeNull();
-    const crosstownPriority = Number(crosstownMatch![1]);
+    const toonPriority = Number(toonMatch![1]);
     const attestationPriority = Number(attestationMatch![1]);
-    expect(crosstownPriority).toBeLessThan(attestationPriority);
+    expect(toonPriority).toBeLessThan(attestationPriority);
   });
 
-  it('T-4.1-02e: crosstown command is node /app/dist/entrypoint-town.js', async () => {
+  it('T-4.1-02e: toon command is node /app/entrypoint-sdk.js', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
 
-    // Act -- extract command from [program:crosstown] section
-    const crosstownMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?command=(.+)/
-    );
+    // Act -- extract command from [program:toon] section
+    const toonMatch = confContent.match(/\[program:toon\][\s\S]*?command=(.+)/);
 
-    // Assert
-    expect(crosstownMatch).not.toBeNull();
-    expect(crosstownMatch![1]!.trim()).toBe(
-      'node /app/dist/entrypoint-town.js'
-    );
+    // Assert -- esbuild bundles output directly to /app/ (no dist/ subdirectory)
+    expect(toonMatch).not.toBeNull();
+    expect(toonMatch![1]!.trim()).toBe('node /app/entrypoint-sdk.js');
   });
 
-  it('T-4.1-02f: attestation command is node /app/dist/attestation-server.js', async () => {
+  it('T-4.1-02f: attestation command is node /app/attestation-server.js', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
@@ -372,31 +355,31 @@ describe('T-4.1-02: supervisord.conf structure', () => {
       /\[program:attestation\][\s\S]*?command=(.+)/
     );
 
-    // Assert
+    // Assert -- esbuild bundles output directly to /app/ (no dist/ subdirectory)
     expect(attestationMatch).not.toBeNull();
     expect(attestationMatch![1]!.trim()).toBe(
-      'node /app/dist/attestation-server.js'
+      'node /app/attestation-server.js'
     );
   });
 
-  it('T-4.1-02g: both programs run as crosstown user', async () => {
+  it('T-4.1-02g: both programs run as toon user', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
 
     // Act -- extract user= from both program sections
-    const crosstownUserMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?user=(\w+)/
+    const toonUserMatch = confContent.match(
+      /\[program:toon\][\s\S]*?user=(\w+)/
     );
     const attestationUserMatch = confContent.match(
       /\[program:attestation\][\s\S]*?user=(\w+)/
     );
 
-    // Assert -- both must be 'crosstown' user
-    expect(crosstownUserMatch).not.toBeNull();
+    // Assert -- both must be 'toon' user
+    expect(toonUserMatch).not.toBeNull();
     expect(attestationUserMatch).not.toBeNull();
-    expect(crosstownUserMatch![1]).toBe('crosstown');
-    expect(attestationUserMatch![1]).toBe('crosstown');
+    expect(toonUserMatch![1]).toBe('toon');
+    expect(attestationUserMatch![1]).toBe('toon');
   });
 
   it('T-4.1-02h: supervisord runs in nodaemon mode', async () => {
@@ -729,19 +712,19 @@ describe('T-4.1-07: vsock proxy compatibility', () => {
 // ===========================================================================
 
 describe('T-4.1-11: supervisord.conf process reliability', () => {
-  it('T-4.1-11a: crosstown program has autorestart=true', async () => {
+  it('T-4.1-11a: toon program has autorestart=true', async () => {
     // Arrange
     const confPath = resolveFromRoot(SUPERVISORD_PATH);
     const confContent = await fs.readFile(confPath, 'utf-8');
 
-    // Act -- extract autorestart from [program:crosstown] section
-    const crosstownMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?autorestart=(\w+)/
+    // Act -- extract autorestart from [program:toon] section
+    const toonMatch = confContent.match(
+      /\[program:toon\][\s\S]*?autorestart=(\w+)/
     );
 
     // Assert -- autorestart must be enabled for CVM reliability
-    expect(crosstownMatch).not.toBeNull();
-    expect(crosstownMatch![1]).toBe('true');
+    expect(toonMatch).not.toBeNull();
+    expect(toonMatch![1]).toBe('true');
   });
 
   it('T-4.1-11b: attestation program has autorestart=true', async () => {
@@ -802,13 +785,13 @@ describe('T-4.1-12: Dockerfile.oyster build and security', () => {
     expect(content).toMatch(/FROM.*AS\s+builder/i);
   });
 
-  it('T-4.1-12c: creates non-root crosstown user (UID 1001)', async () => {
+  it('T-4.1-12c: creates non-root toon user (UID 1001)', async () => {
     // Arrange
     const dockerfilePath = resolveFromRoot(DOCKERFILE_OYSTER_PATH);
     const content = await fs.readFile(dockerfilePath, 'utf-8');
 
-    // Assert -- adduser for crosstown with UID 1001
-    expect(content).toMatch(/adduser.*crosstown/);
+    // Assert -- adduser for toon with UID 1001
+    expect(content).toMatch(/adduser.*toon/);
     expect(content).toMatch(/1001/);
   });
 
@@ -893,24 +876,16 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
     }
   });
 
-  it('T-4.1-13c: all port mappings use string format (host:container)', async () => {
+  it('T-4.1-13c: all services use network_mode host (no explicit port mappings)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act & Assert -- all port entries must be parseable as "host:container"
+    // Act & Assert -- with network_mode: host, no explicit port mappings needed
     for (const name of EXPECTED_SERVICES) {
       const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        // Must contain a colon separating host and container ports
-        expect(
-          portStr,
-          `Port mapping "${portStr}" in service "${name}" must use host:container format`
-        ).toMatch(/^\d+:\d+$/);
-      }
+      expect(service.network_mode).toBe('host');
     }
   });
 
@@ -921,58 +896,54 @@ describe('T-4.1-13: compose file oyster-cvm compatibility', () => {
     const compose = yaml.parse(composeContent);
 
     // Act
-    const crosstownImage = compose.services.crosstown.image;
+    const toonImage = compose.services.toon.image;
     const attestationImage = compose.services['attestation-server'].image;
 
-    // Assert -- both use crosstown:optimized
-    expect(crosstownImage).toBe('crosstown:optimized');
-    expect(attestationImage).toBe('crosstown:optimized');
+    // Assert -- both use the same GHCR oyster image
+    expect(toonImage).toBe('ghcr.io/allidoizcode/toon:oyster');
+    expect(attestationImage).toBe('ghcr.io/allidoizcode/toon:oyster');
   });
 
-  it('T-4.1-13e: no port conflicts between services', async () => {
+  it('T-4.1-13e: no port conflicts between services (environment-configured ports are unique)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act -- collect all host ports from all services
-    const allHostPorts: number[] = [];
-    for (const name of EXPECTED_SERVICES) {
-      const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        const hostPort = parseInt(portStr.split(':')[0]!, 10);
-        allHostPorts.push(hostPort);
-      }
-    }
+    // Act -- collect configured ports from environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
+    const allPorts = [
+      toonEnv.BLS_PORT,
+      toonEnv.WS_PORT,
+      attestationEnv.ATTESTATION_PORT,
+    ];
 
-    // Assert -- no duplicate host ports
-    const uniquePorts = new Set(allHostPorts);
-    expect(uniquePorts.size).toBe(allHostPorts.length);
+    // Assert -- no duplicate ports
+    const uniquePorts = new Set(allPorts);
+    expect(uniquePorts.size).toBe(allPorts.length);
   });
 
-  it('T-4.1-13f: all three required ports are exposed (3100, 7100, 1300)', async () => {
+  it('T-4.1-13f: all three required ports are configured (3100, 7100, 1300)', async () => {
     // Arrange
     const composePath = resolveFromRoot(COMPOSE_PATH);
     const composeContent = await fs.readFile(composePath, 'utf-8');
     const compose = yaml.parse(composeContent);
 
-    // Act -- collect all host ports across all services
-    const allHostPorts: number[] = [];
-    for (const name of EXPECTED_SERVICES) {
-      const service = compose.services[name];
-      const ports = service.ports || [];
-      for (const port of ports) {
-        const portStr = String(port);
-        const hostPort = parseInt(portStr.split(':')[0]!, 10);
-        allHostPorts.push(hostPort);
-      }
-    }
+    // Act -- collect configured ports from environment variables
+    const toonEnv = compose.services.toon.environment || {};
+    const attestationEnv =
+      compose.services['attestation-server'].environment || {};
+    const allPorts = [
+      toonEnv.BLS_PORT,
+      toonEnv.WS_PORT,
+      attestationEnv.ATTESTATION_PORT,
+    ];
 
     // Assert -- all required ports present
-    expect(allHostPorts).toContain(3100);
-    expect(allHostPorts).toContain(7100);
-    expect(allHostPorts).toContain(1300);
+    expect(allPorts).toContain(3100);
+    expect(allPorts).toContain(7100);
+    expect(allPorts).toContain(1300);
   });
 });

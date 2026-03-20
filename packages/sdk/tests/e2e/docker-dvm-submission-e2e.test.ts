@@ -34,16 +34,16 @@ import {
   createNode,
   type ServiceNode,
   type HandlerContext,
-} from '@crosstown/sdk';
-import { ConnectorNode, createLogger } from '@crosstown/connector';
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+} from '@toon-protocol/sdk';
+import { ConnectorNode, createLogger } from '@toon-protocol/connector';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import {
   TEXT_GENERATION_KIND,
   IMAGE_GENERATION_KIND,
   TEXT_TO_SPEECH_KIND,
   buildJobRequestEvent,
   parseJobRequest,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
 import {
   ANVIL_RPC,
@@ -154,7 +154,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     nostrSecretKey = generateSecretKey();
     eventSecretKey = generateSecretKey();
     const nostrPubkey = getPublicKey(nostrSecretKey);
-    const testIlpAddress = `g.crosstown.test.dvm.${nostrPubkey.slice(0, 8)}`;
+    const testIlpAddress = `g.toon.test.dvm.${nostrPubkey.slice(0, 8)}`;
 
     const connectorLogger = createLogger('test-dvm-connector', 'warn');
     connector = new ConnectorNode(
@@ -202,7 +202,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       id: 'peer1',
       url: PEER1_BTP_URL,
       authToken: '',
-      routes: [{ prefix: 'g.crosstown.peer1' }],
+      routes: [{ prefix: 'g.toon.peer1' }],
     });
 
     // Wait for BTP connection
@@ -238,7 +238,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const dvmEvent = createDvmJobRequestViaBuilder(eventSecretKey);
 
     const result = await node.publishEvent(dvmEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     expect(result.success).toBe(true);
@@ -266,7 +266,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const dvmEvent = createDvmJobRequestViaBuilder(eventSecretKey);
 
     const result = await node.publishEvent(dvmEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(result.success).toBe(true);
 
@@ -314,7 +314,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       Buffer.from('not-valid-dvm-toon-data')
     );
     const probe1Result = await connector.sendPacket({
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
       amount: 99999n,
       data: corruptData,
     });
@@ -337,7 +337,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     tampered[tampIdx] = (tampered[tampIdx] ?? 0) ^ 0xff;
 
     const probe2Result = await connector.sendPacket({
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
       amount: BigInt(validBytes.length) * 10n,
       data: tampered,
     });
@@ -357,7 +357,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const requiredAmount = BigInt(goodBytes.length) * 10n;
 
     const probe3Result = await connector.sendPacket({
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
       amount: requiredAmount / 2n,
       data: goodBytes,
     });
@@ -374,7 +374,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     // Probe 4: Valid TOON + valid sig + correct payment → event on relay
     const validDvmEvent = createDvmJobRequestViaBuilder(eventSecretKey);
     const validResult = await node.publishEvent(validDvmEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(validResult.success).toBe(true);
 
@@ -395,7 +395,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
 
     const dvmEvent = createDvmJobRequestViaBuilder(eventSecretKey);
     await node.publishEvent(dvmEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     const storedEvent = await waitForEventOnRelay(
@@ -425,7 +425,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const complexEvent = createComplexDvmJobRequest(eventSecretKey);
 
     const result = await node.publishEvent(complexEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(result.success).toBe(true);
 
@@ -504,7 +504,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const complexEvent = createComplexDvmJobRequest(eventSecretKey);
 
     await node.publishEvent(complexEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     const storedEvent = await waitForEventOnRelay(
@@ -535,7 +535,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     );
 
     const result = await node.publishEvent(event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(result.success).toBe(true);
 
@@ -568,7 +568,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       ]
     );
     const textResult = await node.publishEvent(text5100.event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(textResult.success).toBe(true);
 
@@ -590,7 +590,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       ]
     );
     const imageResult = await node.publishEvent(image5200.event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(imageResult.success).toBe(true);
 
@@ -613,7 +613,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       ]
     );
     const ttsResult = await node.publishEvent(tts5300.event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     // Docker peer has a default handler; it accepts all events
     expect(ttsResult.success).toBe(true);
@@ -629,7 +629,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const dvmEvent = createDvmJobRequestViaBuilder(eventSecretKey);
 
     const result = await node.publishEvent(dvmEvent, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(result.success).toBe(true);
 
@@ -679,7 +679,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     );
 
     await node.publishEvent(event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
 
     // waitForEventOnRelay decodes TOON internally — success means TOON-decodable
@@ -706,7 +706,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       ['output', 'text/plain'],
     ]);
     const textResult = await node.publishEvent(text.event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(textResult.success).toBe(true);
 
@@ -717,7 +717,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       ['output', 'image/png'],
     ]);
     const imageResult = await node.publishEvent(image.event, {
-      destination: 'g.crosstown.peer1',
+      destination: 'g.toon.peer1',
     });
     expect(imageResult.success).toBe(true);
 

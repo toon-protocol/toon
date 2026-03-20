@@ -32,9 +32,9 @@ import { AttestationBootstrap } from './AttestationBootstrap.js';
  */
 function createSeedRelayList(): string[] {
   return [
-    'wss://seed1.crosstown.example',
-    'wss://seed2.crosstown.example',
-    'wss://seed3.crosstown.example',
+    'wss://seed1.toon.example',
+    'wss://seed2.toon.example',
+    'wss://seed3.toon.example',
   ];
 }
 
@@ -57,7 +57,7 @@ function createValidAttestationEvent(): NostrEvent {
       version: '1.0.0',
     }),
     tags: [
-      ['relay', 'wss://seed1.crosstown.example'],
+      ['relay', 'wss://seed1.toon.example'],
       ['chain', '42161'],
       ['expiry', String(Math.floor(Date.now() / 1000) + 3600)],
     ],
@@ -148,9 +148,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
       mockSubscribePeers.mock.invocationCallOrder[0]!;
     expect(attestationCallOrder).toBeLessThan(subscribePeersCallOrder);
     expect(mockVerifier.verify).toHaveBeenCalledWith(attestationEvent);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
     expect(result.mode).toBe('attested');
   });
 
@@ -186,21 +184,19 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     // Assert — should have tried both seed relays
     expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
     expect(mockQueryAttestation).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
+      'wss://seed1.toon.example'
     );
     expect(mockQueryAttestation).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
+      'wss://seed2.toon.example'
     );
 
     // Should only subscribe to peers from the second (valid) relay
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     // Fallback succeeded — mode is attested via second relay
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
   });
 
   // ---------------------------------------------------------------------------
@@ -209,7 +205,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
   // ---------------------------------------------------------------------------
   it('proceeds to kind:10032 peer discovery when attestation is valid (T-4.6-03)', async () => {
     // Arrange
-    const seedRelays = ['wss://seed1.crosstown.example'];
+    const seedRelays = ['wss://seed1.toon.example'];
     const validEvent = createValidAttestationEvent();
     const peerInfoEvent = createPeerInfoEvent(validEvent.pubkey);
 
@@ -230,11 +226,9 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Assert — peer discovery proceeded and found peers
     expect(mockVerifier.verify).toHaveBeenCalledWith(validEvent);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
     expect(result.discoveredPeers).toHaveLength(1);
-    expect(result.attestedSeedRelay).toBe('wss://seed1.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed1.toon.example');
     // AC #3: result must include mode: 'attested'
     expect(result.mode).toBe('attested');
   });
@@ -316,20 +310,18 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     // Assert — full flow completed
     // Step 1: Connected to seed relay
     expect(mockQueryAttestation).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
+      'wss://seed1.toon.example'
     );
 
     // Step 2: Verified attestation
     expect(mockVerifier.verify).toHaveBeenCalledWith(validAttestation);
 
     // Step 3: Subscribed to kind:10032 peer discovery
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed1.toon.example');
 
     // Step 4: Found peers
     expect(result.discoveredPeers).toHaveLength(1);
-    expect(result.attestedSeedRelay).toBe('wss://seed1.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed1.toon.example');
     expect(result.mode).toBe('attested');
 
     // Verify lifecycle events were emitted in order
@@ -361,7 +353,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
   // ---------------------------------------------------------------------------
   // T-4.6-06b [P1]: Top-level barrel re-export — AttestationBootstrap
-  //   importable from @crosstown/core (AC #6)
+  //   importable from @toon-protocol/core (AC #6)
   // ---------------------------------------------------------------------------
   it('re-exports AttestationBootstrap from top-level core barrel (T-4.6-06b)', async () => {
     // Arrange & Act — import from top-level core index
@@ -377,7 +369,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
   // ---------------------------------------------------------------------------
   it('off() unregisters event listener (T-4.6-06c)', async () => {
     // Arrange
-    const seedRelays = ['wss://seed1.crosstown.example'];
+    const seedRelays = ['wss://seed1.toon.example'];
     const validEvent = createValidAttestationEvent();
 
     const mockQueryAttestation = vi.fn().mockResolvedValue(validEvent);
@@ -437,21 +429,19 @@ describe('AttestationBootstrap (Story 4.6)', () => {
     // Assert — fell back to second relay
     expect(mockQueryAttestation).toHaveBeenCalledTimes(2);
     expect(mockQueryAttestation).toHaveBeenCalledWith(
-      'wss://seed1.crosstown.example'
+      'wss://seed1.toon.example'
     );
     expect(mockQueryAttestation).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
+      'wss://seed2.toon.example'
     );
 
     // Only the second relay should have been subscribed to
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     // Result is attested (second relay succeeded)
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
   });
 
   // ---------------------------------------------------------------------------
@@ -495,12 +485,10 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Only the second relay was subscribed to
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
   });
 
   // ---------------------------------------------------------------------------
@@ -539,7 +527,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Second relay succeeded
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
     expect(result.discoveredPeers).toHaveLength(1);
   });
 
@@ -584,12 +572,10 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Only the second relay should have subscribePeers called
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
-    expect(mockSubscribePeers).toHaveBeenCalledWith(
-      'wss://seed2.crosstown.example'
-    );
+    expect(mockSubscribePeers).toHaveBeenCalledWith('wss://seed2.toon.example');
 
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed2.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed2.toon.example');
     expect(result.discoveredPeers).toHaveLength(1);
   });
 
@@ -626,9 +612,9 @@ describe('AttestationBootstrap (Story 4.6)', () => {
       (e) => e.type === 'attestation:verification-failed'
     );
     expect(failedEvents).toHaveLength(3);
-    expect(failedEvents[0]!['relayUrl']).toBe('wss://seed1.crosstown.example');
-    expect(failedEvents[1]!['relayUrl']).toBe('wss://seed2.crosstown.example');
-    expect(failedEvents[2]!['relayUrl']).toBe('wss://seed3.crosstown.example');
+    expect(failedEvents[0]!['relayUrl']).toBe('wss://seed1.toon.example');
+    expect(failedEvents[1]!['relayUrl']).toBe('wss://seed2.toon.example');
+    expect(failedEvents[2]!['relayUrl']).toBe('wss://seed3.toon.example');
 
     // Assert — seed-connected emitted for each relay
     const connectedEvents = events.filter(
@@ -663,7 +649,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
   // ---------------------------------------------------------------------------
   it('handles VerificationResult object from verifier (T-4.6-11)', async () => {
     // Arrange
-    const seedRelays = ['wss://seed1.crosstown.example'];
+    const seedRelays = ['wss://seed1.toon.example'];
     const validEvent = createValidAttestationEvent();
     const peerInfoEvent = createPeerInfoEvent(validEvent.pubkey);
 
@@ -689,7 +675,7 @@ describe('AttestationBootstrap (Story 4.6)', () => {
 
     // Assert — VerificationResult.valid was normalized correctly
     expect(result.mode).toBe('attested');
-    expect(result.attestedSeedRelay).toBe('wss://seed1.crosstown.example');
+    expect(result.attestedSeedRelay).toBe('wss://seed1.toon.example');
     expect(result.discoveredPeers).toHaveLength(1);
     expect(mockSubscribePeers).toHaveBeenCalledTimes(1);
   });
@@ -781,7 +767,7 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
   // T-4.1-01 [P1]: docker-compose-oyster.yml defines correct services, ports,
   //                  images
   // ---------------------------------------------------------------------------
-  // Corrected from original ATDD stub: 2 services (crosstown, attestation-server),
+  // Corrected from original ATDD stub: 2 services (toon, attestation-server),
   // NOT 3 (relay, connector, attestation). The connector is external, not managed
   // by this compose file. Ports: BLS 3100, Relay 7100, Attestation 1300.
   // This stub remains skipped as the GREEN tests are in oyster-config.test.ts.
@@ -801,13 +787,13 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     // Assert — exactly 2 services (connector is external)
     const serviceNames = Object.keys(compose.services);
     expect(serviceNames).toHaveLength(2);
-    expect(serviceNames).toContain('crosstown');
+    expect(serviceNames).toContain('toon');
     expect(serviceNames).toContain('attestation-server');
 
-    // Assert — crosstown service exposes BLS port 3100 and Relay port 7100
-    const crosstownPorts = compose.services.crosstown.ports;
-    expect(crosstownPorts).toContainEqual(expect.stringContaining('3100'));
-    expect(crosstownPorts).toContainEqual(expect.stringContaining('7100'));
+    // Assert — toon service exposes BLS port 3100 and Relay port 7100
+    const toonPorts = compose.services.toon.ports;
+    expect(toonPorts).toContainEqual(expect.stringContaining('3100'));
+    expect(toonPorts).toContainEqual(expect.stringContaining('7100'));
 
     // Assert — attestation-server exposes port 1300
     const attestationPorts = compose.services['attestation-server'].ports;
@@ -823,11 +809,11 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
 
   // ---------------------------------------------------------------------------
   // T-4.1-02 [P1]: supervisord.conf defines correct process priorities
-  //                  (crosstown=10, attestation=20)
+  //                  (toon=10, attestation=20)
   // ---------------------------------------------------------------------------
-  // Corrected from original ATDD stub: 2 programs (crosstown=10, attestation=20),
+  // Corrected from original ATDD stub: 2 programs (toon=10, attestation=20),
   // NOT 3 (relay=10, connector=20, attestation=30). The connector is external.
-  // The crosstown program runs the full node (BLS + Relay + Bootstrap).
+  // The toon program runs the full node (BLS + Relay + Bootstrap).
   // This stub remains skipped as the GREEN tests are in oyster-config.test.ts.
   it.skip('supervisord.conf defines correct process priorities (T-4.1-02)', async () => {
     // Arrange — read supervisord.conf
@@ -841,8 +827,8 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     const confContent = await fs.readFile(confPath, 'utf-8');
 
     // Act — parse priority values from each [program:*] section
-    const crosstownPriorityMatch = confContent.match(
-      /\[program:crosstown\][\s\S]*?priority=(\d+)/
+    const toonPriorityMatch = confContent.match(
+      /\[program:toon\][\s\S]*?priority=(\d+)/
     );
     const attestationPriorityMatch = confContent.match(
       /\[program:attestation\][\s\S]*?priority=(\d+)/
@@ -853,17 +839,17 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     expect(programMatches).toHaveLength(2);
 
     // Assert — priorities correct
-    expect(crosstownPriorityMatch).not.toBeNull();
+    expect(toonPriorityMatch).not.toBeNull();
     expect(attestationPriorityMatch).not.toBeNull();
 
-    const crosstownPriority = Number(crosstownPriorityMatch![1]);
+    const toonPriority = Number(toonPriorityMatch![1]);
     const attestationPriority = Number(attestationPriorityMatch![1]);
 
-    expect(crosstownPriority).toBe(10);
+    expect(toonPriority).toBe(10);
     expect(attestationPriority).toBe(20);
 
-    // Assert — crosstown starts first (lower priority number)
-    expect(crosstownPriority).toBeLessThan(attestationPriority);
+    // Assert — toon starts first (lower priority number)
+    expect(toonPriority).toBeLessThan(attestationPriority);
   });
 
   // ---------------------------------------------------------------------------
@@ -909,7 +895,7 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
   // ---------------------------------------------------------------------------
   // T-4.1-04 [P1]: Oyster CVM deployment — both processes running and healthy
   // ---------------------------------------------------------------------------
-  // Corrected from original ATDD stub: 2 processes (crosstown on 3100+7100,
+  // Corrected from original ATDD stub: 2 processes (toon on 3100+7100,
   // attestation on 1300), NOT 3. The connector is external.
   //
   // NOTE: This test requires a running Oyster CVM testnet (the full Docker image
@@ -919,9 +905,9 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
   it.skip('Oyster CVM deployment — both processes running and healthy (T-4.1-04)', async () => {
     // Arrange — mock health check functions for each supervisord process.
     // In a real E2E run these would hit the actual container endpoints.
-    // crosstown process owns both BLS (3100) and Relay (7100)
-    const mockCrosstownHealth = vi.fn().mockResolvedValue({
-      process: 'crosstown',
+    // toon process owns both BLS (3100) and Relay (7100)
+    const mockTOONHealth = vi.fn().mockResolvedValue({
+      process: 'toon',
       status: 'healthy',
       blsPort: 3100,
       relayPort: 7100,
@@ -933,16 +919,16 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     });
 
     // Act — query health for both processes
-    const [crosstownHealth, attestationHealth] = await Promise.all([
-      mockCrosstownHealth(),
+    const [toonHealth, attestationHealth] = await Promise.all([
+      mockTOONHealth(),
       mockAttestationHealth(),
     ]);
 
-    // Assert — crosstown process is running (BLS + Relay)
-    expect(crosstownHealth.process).toBe('crosstown');
-    expect(crosstownHealth.status).toBe('healthy');
-    expect(crosstownHealth.blsPort).toBe(3100);
-    expect(crosstownHealth.relayPort).toBe(7100);
+    // Assert — toon process is running (BLS + Relay)
+    expect(toonHealth.process).toBe('toon');
+    expect(toonHealth.status).toBe('healthy');
+    expect(toonHealth.blsPort).toBe(3100);
+    expect(toonHealth.relayPort).toBe(7100);
 
     // Assert — attestation server is running on port 1300
     expect(attestationHealth.process).toBe('attestation');
@@ -950,7 +936,7 @@ describe('Oyster CVM Packaging (Story 4.1)', () => {
     expect(attestationHealth.port).toBe(1300);
 
     // Assert — both health checks were called exactly once
-    expect(mockCrosstownHealth).toHaveBeenCalledTimes(1);
+    expect(mockTOONHealth).toHaveBeenCalledTimes(1);
     expect(mockAttestationHealth).toHaveBeenCalledTimes(1);
   });
 });

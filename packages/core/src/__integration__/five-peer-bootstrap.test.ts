@@ -14,14 +14,14 @@ import {
   BusinessLogicServer,
   encodeEventToToon,
   decodeEventFromToon,
-} from '@crosstown/relay';
+} from '@toon-protocol/relay';
 import {
-  createCrosstownNode,
+  createToonNode,
   type EmbeddableConnectorLike,
   type HandlePacketRequest,
   type HandlePacketResponse,
 } from '../compose.js';
-import type { CrosstownNode } from '../compose.js';
+import type { ToonNode } from '../compose.js';
 import type {
   SendPacketParams,
   SendPacketResult,
@@ -49,7 +49,7 @@ interface PeerFixture {
   relayUrl: string;
   btpEndpoint: string;
   connector: MockConnectorWithRouter;
-  node?: CrosstownNode;
+  node?: ToonNode;
   events: BootstrapEvent[];
 }
 
@@ -306,7 +306,7 @@ describe('Five-Peer Bootstrap Integration', () => {
     );
     peers[0]!.eventStore.store(genesisEvent);
 
-    // Create CrosstownNode instances
+    // Create ToonNode instances
     for (let i = 0; i < PEER_COUNT; i++) {
       const peer = peers[i]!;
 
@@ -341,7 +341,7 @@ describe('Five-Peer Bootstrap Integration', () => {
               },
             ];
 
-      const node = createCrosstownNode({
+      const node = createToonNode({
         connector: peer.connector,
         handlePacket,
         secretKey: peer.secretKey,
@@ -485,9 +485,9 @@ describe('Five-Peer Bootstrap Integration', () => {
     }
   });
 
-  it('CrosstownNode exposes channelClient when connector has channel methods', () => {
+  it('ToonNode exposes channelClient when connector has channel methods', () => {
     // MockConnectorWithRouter implements openChannel() and getChannelState(),
-    // so createCrosstownNode() should detect them and create a channelClient.
+    // so createToonNode() should detect them and create a channelClient.
     for (let i = 0; i < PEER_COUNT; i++) {
       expect(peers[i]!.node!.channelClient).not.toBeNull();
       expect(peers[i]!.node!.channelClient!.openChannel).toBeInstanceOf(

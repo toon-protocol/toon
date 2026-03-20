@@ -9,7 +9,7 @@
  * attestation fails, KMS seed becomes inaccessible, and the relay loses its
  * identity -- creating a cryptographic binding: identity proves code integrity.
  *
- * This module lives in @crosstown/core (not SDK) because Docker entrypoints
+ * This module lives in @toon-protocol/core (not SDK) because Docker entrypoints
  * import from core. It does NOT include EVM address derivation (SDK concern).
  */
 
@@ -17,7 +17,7 @@ import { validateMnemonic, mnemonicToSeedSync } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { HDKey } from '@scure/bip32';
 import { getPublicKey } from 'nostr-tools/pure';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 
 // ---------- Error Class ----------
 
@@ -26,7 +26,7 @@ import { CrosstownError } from '../errors.js';
  * Signals that the enclave cannot derive its identity -- this is a
  * security-critical condition that must NEVER fall back to random keys.
  */
-export class KmsIdentityError extends CrosstownError {
+export class KmsIdentityError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'KMS_IDENTITY_ERROR', cause);
     this.name = 'KmsIdentityError';

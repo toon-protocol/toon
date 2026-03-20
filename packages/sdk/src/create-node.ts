@@ -1,11 +1,11 @@
 /**
- * createNode() composition for @crosstown/sdk.
+ * createNode() composition for @toon-protocol/sdk.
  *
  * Wires the full ILP packet processing pipeline:
  *   shallow TOON parse -> Schnorr signature verification -> pricing validation -> handler dispatch
  *
  * Provides start() / stop() lifecycle management by delegating to
- * the core CrosstownNode composition (embedded mode) or manual HTTP
+ * the core ToonNode composition (embedded mode) or manual HTTP
  * composition (standalone mode).
  *
  * ## Deployment Modes
@@ -23,15 +23,15 @@ import type {
   HandlePacketRequest,
   HandlePacketResponse,
   ConnectorChannelClient,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import type {
   KnownPeer,
   BootstrapResult,
   BootstrapEventListener,
-} from '@crosstown/core';
-import type { SettlementConfig } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SettlementConfig } from '@toon-protocol/core';
 import {
-  createCrosstownNode,
+  createToonNode,
   BootstrapService,
   createDiscoveryTracker,
   createHttpIlpClient,
@@ -42,20 +42,20 @@ import {
   buildJobFeedbackEvent,
   buildJobResultEvent,
   parseJobResult,
-} from '@crosstown/core';
-import type { DvmJobStatus, IlpSendResult } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
   IlpClient,
   ConnectorAdminClient,
   DiscoveryTracker,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import {
   shallowParseToon,
   decodeEventFromToon,
   encodeEventToToon,
-} from '@crosstown/core/toon';
+} from '@toon-protocol/core/toon';
 
-import type { SkillDescriptor } from '@crosstown/core';
+import type { SkillDescriptor } from '@toon-protocol/core';
 import { fromSecretKey } from './identity.js';
 import { HandlerRegistry, type Handler } from './handler-registry.js';
 import { createHandlerContext } from './handler-context.js';
@@ -78,13 +78,14 @@ const MAX_PAYLOAD_BASE64_LENGTH = 1_048_576;
 /**
  * Configuration for creating a ServiceNode via createNode().
  *
- * Supports two deployment modes:
- * - **Embedded** (`connector`): Pass an EmbeddableConnectorLike directly for
- *   zero-latency packet delivery.
+ * Supports three deployment modes:
+ * - **Default** (no connector args): Auto-creates an embedded ConnectorNode via
+ *   dynamic import. Requires `@toon-protocol/connector` as peer dependency.
+ * - **Embedded** (`connector`): Pass a pre-configured EmbeddableConnectorLike.
  * - **Standalone** (`connectorUrl` + `handlerPort`): Connect to an external
  *   connector via HTTP. The SDK starts an HTTP server to receive packets.
  *
- * Provide `connector` OR (`connectorUrl` + `handlerPort`), not both.
+ * Provide `connector` OR (`connectorUrl` + `handlerPort`), or neither (auto-create).
  */
 export interface NodeConfig {
   /** 32-byte secp256k1 secret key */
@@ -93,9 +94,13 @@ export interface NodeConfig {
   /** Chain preset name (default: 'anvil'). See resolveChainConfig(). */
   chain?: string;
 
-  // --- Connector (exactly one mode required) ---
+  // --- Connector (optional — defaults to auto-created embedded connector) ---
 
-  /** Embedded connector instance for zero-latency mode. */
+  /**
+   * Embedded connector instance for zero-latency mode.
+   * If neither `connector` nor `connectorUrl` is provided, an embedded
+   * ConnectorNode is auto-created (requires @toon-protocol/connector peer dep).
+   */
   connector?: EmbeddableConnectorLike;
   /**
    * External connector admin URL for standalone mode (e.g., "http://localhost:8081").
@@ -108,9 +113,22 @@ export interface NodeConfig {
    */
   handlerPort?: number;
 
+  /**
+   * BTP server port for the auto-created embedded connector (default: 3000).
+   * Only used when neither `connector` nor `connectorUrl` is provided.
+   */
+  btpServerPort?: number;
+
+  /**
+   * EVM private key for settlement infrastructure.
+   * Only used when auto-creating an embedded connector.
+   * If not set, the identity's secp256k1 key is used.
+   */
+  settlementPrivateKey?: string;
+
   // --- Network ---
 
-  /** ILP address (default: 'g.crosstown.local') */
+  /** ILP address (default: 'g.toon.local') */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
   btpEndpoint?: string;
@@ -181,7 +199,7 @@ export interface PublishEventResult {
 }
 
 /**
- * A fully wired Crosstown node with lifecycle management.
+ * A fully wired TOON node with lifecycle management.
  */
 export interface ServiceNode {
   /** Nostr x-only public key (32 bytes, 64 hex chars) */
@@ -305,7 +323,7 @@ export interface ServiceNode {
  *   4. Handler dispatch (route to kind-specific or default handler)
  *
  * Supports two deployment modes:
- * - **Embedded** (`connector`): Uses createCrosstownNode for zero-latency
+ * - **Embedded** (`connector`): Uses createToonNode for zero-latency
  *   packet delivery via direct function calls.
  * - **Standalone** (`connectorUrl` + `handlerPort`): Starts an HTTP server
  *   to receive packets and uses HTTP clients for the connector API.
@@ -322,17 +340,13 @@ export function createNode(config: NodeConfig): ServiceNode {
       'NodeConfig: provide either connector or connectorUrl, not both'
     );
   }
-  if (!hasConnector && !hasConnectorUrl) {
-    throw new NodeError(
-      'NodeConfig: one of connector or connectorUrl is required'
-    );
-  }
   if (hasConnectorUrl && config.handlerPort === undefined) {
     throw new NodeError(
       'NodeConfig: handlerPort is required when using connectorUrl (standalone mode)'
     );
   }
-  const embeddedMode = hasConnector;
+  const autoCreateConnector = !hasConnector && !hasConnectorUrl;
+  const embeddedMode = hasConnector || autoCreateConnector;
 
   // 0b. Resolve chain config and auto-populate settlementInfo if not set
   const chainConfig = resolveChainConfig(config.chain);
@@ -453,7 +467,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       // eslint-disable-next-line no-control-regex
       const sanitize = (s: string) => s.replace(/[\x00-\x1f\x7f]/g, '');
       console.log(
-        '[crosstown:dev]',
+        '[toon:dev]',
         `kind=${meta.kind}`,
         `pubkey=${meta.pubkey.substring(0, 16)}...`,
         `amount=${sanitize(request.amount)}`,
@@ -537,7 +551,7 @@ export function createNode(config: NodeConfig): ServiceNode {
 
   // ILP info shared between both modes
   const ilpInfo = {
-    ilpAddress: config.ilpAddress ?? 'g.crosstown.local',
+    ilpAddress: config.ilpAddress ?? 'g.toon.local',
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
@@ -559,9 +573,13 @@ export function createNode(config: NodeConfig): ServiceNode {
   }>;
   let doStop: () => Promise<void>;
 
-  if (embeddedMode) {
-    // --- EMBEDDED MODE: delegate to createCrosstownNode ---
-    const crosstownNode = createCrosstownNode({
+  // Track auto-created connector for cleanup
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let autoCreatedConnector: any = null;
+
+  if (embeddedMode && hasConnector) {
+    // --- EMBEDDED MODE (user-provided connector): delegate to createToonNode ---
+    const toonNode = createToonNode({
       connector: config.connector as NonNullable<typeof config.connector>,
       handlePacket: pipelinedHandler,
       secretKey: config.secretKey,
@@ -575,10 +593,10 @@ export function createNode(config: NodeConfig): ServiceNode {
       ardriveEnabled: config.ardriveEnabled,
     });
 
-    ilpClient = crosstownNode.ilpClient;
-    channelClient = crosstownNode.channelClient;
-    bootstrapServiceInstance = crosstownNode.bootstrapService;
-    discoveryTrackerInstance = crosstownNode.discoveryTracker;
+    ilpClient = toonNode.ilpClient;
+    channelClient = toonNode.channelClient;
+    bootstrapServiceInstance = toonNode.bootstrapService;
+    discoveryTrackerInstance = toonNode.discoveryTracker;
     adminClient = {
       addPeer: () => Promise.resolve(),
       removePeer: () => Promise.resolve(),
@@ -586,8 +604,159 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     trackerRef.current = discoveryTrackerInstance;
 
-    doStart = async () => crosstownNode.start();
-    doStop = async () => crosstownNode.stop();
+    doStart = async () => toonNode.start();
+    doStop = async () => toonNode.stop();
+  } else if (autoCreateConnector) {
+    // --- AUTO-CREATE EMBEDDED MODE: deferred ConnectorNode creation in doStart() ---
+
+    // Create placeholder bootstrap/discovery instances (wired during start)
+    bootstrapServiceInstance = new BootstrapService(
+      {
+        knownPeers: config.knownPeers ?? [],
+        ardriveEnabled: config.ardriveEnabled ?? false,
+        defaultRelayUrl: config.relayUrl ?? '',
+        settlementInfo: effectiveSettlementInfo,
+        ownIlpAddress: ilpInfo.ilpAddress,
+        toonEncoder: encoder,
+        toonDecoder: decoder,
+        basePricePerByte: config.basePricePerByte ?? 10n,
+      },
+      config.secretKey,
+      ilpInfo
+    );
+
+    discoveryTrackerInstance = createDiscoveryTracker({
+      secretKey: config.secretKey,
+      settlementInfo: effectiveSettlementInfo,
+    });
+
+    // Placeholder clients (replaced during start)
+    ilpClient = {
+      sendIlpPacket: () =>
+        Promise.reject(new NodeError('Node not started. Call start() first.')),
+    };
+    adminClient = {
+      addPeer: () => Promise.resolve(),
+      removePeer: () => Promise.resolve(),
+    };
+
+    trackerRef.current = discoveryTrackerInstance;
+
+    doStart = async () => {
+      // Dynamic import to keep @toon-protocol/connector as optional peer dep
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+      let ConnectorNodeClass: typeof import('@toon-protocol/connector').ConnectorNode;
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+      let createConnectorLogger: typeof import('@toon-protocol/connector').createLogger;
+      try {
+        const mod = await import('@toon-protocol/connector');
+        ConnectorNodeClass = mod.ConnectorNode;
+        createConnectorLogger = mod.createLogger;
+      } catch {
+        throw new NodeError(
+          'Auto-create connector requires @toon-protocol/connector as a peer dependency. ' +
+            'Install it with: pnpm add @toon-protocol/connector'
+        );
+      }
+
+      const nodeId = `toon-${pubkey.slice(0, 16)}`;
+      const btpServerPort = config.btpServerPort ?? 3000;
+      const connectorLogger = createConnectorLogger(nodeId, 'warn');
+
+      // Derive settlement private key from identity if not explicitly set
+      let settlementPrivateKey = config.settlementPrivateKey;
+      if (!settlementPrivateKey) {
+        const keyBuffer = Buffer.from(config.secretKey);
+        settlementPrivateKey = `0x${keyBuffer.toString('hex')}`;
+        keyBuffer.fill(0);
+      }
+
+      const hasSettlementAddresses =
+        chainConfig.registryAddress && chainConfig.tokenNetworkAddress;
+
+      autoCreatedConnector = new ConnectorNodeClass(
+        {
+          nodeId,
+          btpServerPort,
+          environment: 'development' as const,
+          deploymentMode: 'embedded' as const,
+          peers: [],
+          routes: [],
+          localDelivery: { enabled: false },
+          ...(hasSettlementAddresses && {
+            settlementInfra: {
+              enabled: true,
+              rpcUrl: chainConfig.rpcUrl,
+              registryAddress: chainConfig.registryAddress,
+              tokenAddress: chainConfig.usdcAddress,
+              privateKey: settlementPrivateKey,
+            },
+          }),
+        },
+        connectorLogger
+      );
+
+      await autoCreatedConnector.start();
+
+      // Now wire the real connector into createToonNode
+      const connector =
+        autoCreatedConnector as unknown as EmbeddableConnectorLike;
+      const toonNode = createToonNode({
+        connector,
+        handlePacket: pipelinedHandler,
+        secretKey: config.secretKey,
+        ilpInfo,
+        toonEncoder: encoder,
+        toonDecoder: decoder,
+        relayUrl: config.relayUrl,
+        knownPeers: config.knownPeers,
+        settlementInfo: effectiveSettlementInfo,
+        basePricePerByte: config.basePricePerByte,
+        ardriveEnabled: config.ardriveEnabled,
+      });
+
+      // Replace placeholder clients with real ones
+      ilpClient = toonNode.ilpClient;
+      channelClient = toonNode.channelClient;
+
+      // Wire bootstrap and discovery with the real admin client
+      bootstrapServiceInstance.setIlpClient(toonNode.ilpClient);
+      bootstrapServiceInstance.setConnectorAdmin({
+        addPeer: () => Promise.resolve(),
+        removePeer: () => Promise.resolve(),
+      });
+      if (toonNode.channelClient) {
+        bootstrapServiceInstance.setChannelClient(toonNode.channelClient);
+      }
+
+      discoveryTrackerInstance.setConnectorAdmin({
+        addPeer: () => Promise.resolve(),
+        removePeer: () => Promise.resolve(),
+      });
+      if (toonNode.channelClient) {
+        discoveryTrackerInstance.setChannelClient(toonNode.channelClient);
+      }
+
+      trackerRef.current = discoveryTrackerInstance;
+
+      // Add self-route
+      autoCreatedConnector.addRoute({
+        prefix: ilpInfo.ilpAddress,
+        nextHop: nodeId,
+        priority: 100,
+      });
+
+      // Start the toonNode (wires packet handler, runs bootstrap)
+      const result = await toonNode.start();
+      return result;
+    };
+
+    doStop = async () => {
+      if (autoCreatedConnector) {
+        await autoCreatedConnector.stop();
+        autoCreatedConnector = null;
+      }
+    };
   } else {
     // --- STANDALONE MODE: manual composition with HTTP clients ---
     const connectorUrl = config.connectorUrl as string;
@@ -733,7 +902,11 @@ export function createNode(config: NodeConfig): ServiceNode {
       return evmAddress;
     },
     get connector() {
-      return config.connector ?? null;
+      return (
+        config.connector ??
+        (autoCreatedConnector as unknown as EmbeddableConnectorLike) ??
+        null
+      );
     },
     get channelClient() {
       return channelClient;

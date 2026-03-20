@@ -1,5 +1,5 @@
 /**
- * Structured logging for the Crosstown protocol.
+ * Structured logging for the TOON protocol.
  *
  * Provides JSON-formatted log output with contextual fields for:
  * - TEE enclave observability (component, enclaveType)
@@ -61,7 +61,7 @@ export interface LogEntry {
  * Usage:
  * ```typescript
  * const log = createLogger({ component: 'bootstrap' });
- * log.info('Peer registered', { peerId: 'abc', ilpAddress: 'g.crosstown.peer' });
+ * log.info('Peer registered', { peerId: 'abc', ilpAddress: 'g.toon.peer' });
  * log.error('Bootstrap failed', { error: err.message });
  *
  * // Child logger with additional context

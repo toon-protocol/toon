@@ -15,7 +15,7 @@ import {
   type Hex,
 } from 'viem';
 import WebSocket from 'ws';
-import { decodeEventFromToon } from '@crosstown/relay';
+import { decodeEventFromToon } from '@toon-protocol/relay';
 
 // ---------------------------------------------------------------------------
 // Constants (Docker SDK E2E ports — see docker-compose-sdk-e2e.yml)

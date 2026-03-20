@@ -7,7 +7,7 @@
  * - Faucet distributes mock USDC instead of AGENT
  * - All references to "AGENT" token replaced with "USDC"
  * - Pricing denomination is USDC micro-units (6 decimals)
- * - USDC constants re-exported from @crosstown/core public API
+ * - USDC constants re-exported from @toon-protocol/core public API
  * - BLS/Docker source files also free of AGENT references
  * - Deploy scripts reference USDC in user-facing output
  * - basePricePerByte documentation updated to USDC denomination
@@ -190,7 +190,7 @@ describe('Story 3.1: USDC Token Migration', () => {
       //
       // BLS entrypoint.ts is excluded because it uses the address as a
       // runtime fallback (the BLS package is a Docker service that doesn't
-      // import from @crosstown/core at runtime). The address there is
+      // import from @toon-protocol/core at runtime). The address there is
       // documented as "Mock USDC (Anvil deterministic address)".
       const scanDirs = [
         resolve(monoRoot, 'packages/core/src'),
@@ -323,11 +323,11 @@ describe('Story 3.1: USDC Token Migration', () => {
   // ==========================================================================
 
   // --------------------------------------------------------------------------
-  // T-3.1-07 [P2]: USDC constants re-exported from @crosstown/core public API
+  // T-3.1-07 [P2]: USDC constants re-exported from @toon-protocol/core public API
   // AC: #1, #4 — downstream packages must be able to import USDC config
   // --------------------------------------------------------------------------
   describe('USDC public API re-exports (T-3.1-07)', () => {
-    it('[P2] @crosstown/core index.ts re-exports all USDC constants', () => {
+    it('[P2] @toon-protocol/core index.ts re-exports all USDC constants', () => {
       // Arrange — read the core package index.ts
       const indexPath = resolve(monoRoot, 'packages/core/src/index.ts');
       const indexSource = readFileSync(indexPath, 'utf-8');

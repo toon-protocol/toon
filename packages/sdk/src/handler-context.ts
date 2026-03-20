@@ -1,16 +1,17 @@
 /**
- * Handler context for @crosstown/sdk.
+ * Handler context for @toon-protocol/sdk.
  *
  * Provides a context object passed to kind-based handlers with methods
  * for accessing TOON data, shallow-parsed metadata, and accept/reject actions.
  */
 
+import { createHash } from 'crypto';
 import type { NostrEvent } from 'nostr-tools/pure';
-import type { ToonRoutingMeta } from '@crosstown/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import type {
   HandlePacketAcceptResponse,
   HandlePacketRejectResponse,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
 // Re-export core response types so SDK consumers don't need to import from core
 export type { HandlePacketAcceptResponse, HandlePacketRejectResponse };
@@ -76,12 +77,18 @@ export function createHandlerContext(
       return cachedEvent;
     },
     accept(metadata?: Record<string, unknown>): HandlePacketAcceptResponse {
-      // Placeholder fulfillment for SDK handler context. In production, the BLS
-      // computes the real fulfillment as SHA-256(eventId). SDK users building
-      // custom handlers should override this with a cryptographically valid value.
+      // Compute fulfillment = SHA-256(raw_toon_bytes).
+      // Matches the connector's PaymentHandlerAdapter.computeFulfillmentFromData().
+      // The sender uses condition = SHA-256(SHA-256(raw_toon_bytes)) and the
+      // connector validates SHA-256(fulfillment) == condition.
+      const toonBytes = Buffer.from(options.toon, 'base64');
+      const fulfillment = createHash('sha256')
+        .update(toonBytes)
+        .digest()
+        .toString('base64');
       return {
         accept: true,
-        fulfillment: 'default-fulfillment',
+        fulfillment,
         ...(metadata ? { metadata } : {}),
       };
     },

@@ -3,7 +3,7 @@
  *
  * Kind 10036 is a NIP-16 replaceable event (kind 10000-19999) published to
  * public Nostr relays. Relays store only the latest event per `pubkey + kind`.
- * The `d` tag with value `crosstown-seed-list` is included as a content marker
+ * The `d` tag with value `toon-seed-list` is included as a content marker
  * for filtering.
  *
  * Seed relay list events advertise relay nodes that can serve as bootstrap
@@ -58,7 +58,7 @@ function isValidPubkey(pubkey: unknown): pubkey is string {
 
 /**
  * Builds a kind:10036 Seed Relay List event (NIP-16 replaceable).
- * Uses 'd' tag with value 'crosstown-seed-list' for replaceable event pattern.
+ * Uses 'd' tag with value 'toon-seed-list' for replaceable event pattern.
  *
  * @param secretKey - The secret key to sign the event with.
  * @param entries - The seed relay entries to include.
@@ -72,7 +72,7 @@ export function buildSeedRelayListEvent(
     {
       kind: SEED_RELAY_LIST_KIND,
       content: JSON.stringify(entries),
-      tags: [['d', 'crosstown-seed-list']],
+      tags: [['d', 'toon-seed-list']],
       created_at: Math.floor(Date.now() / 1000),
     },
     secretKey

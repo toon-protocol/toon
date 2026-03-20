@@ -21,7 +21,7 @@ const GRAPHQL_QUERY = `
 query {
   transactions(
     tags: [
-      { name: "App-Name", values: ["crosstown"] },
+      { name: "App-Name", values: ["toon"] },
       { name: "type", values: ["ilp-peer-info"] }
     ],
     first: 100
@@ -155,7 +155,7 @@ async function publishPeerInfo(
       fileSizeFactory: () => Buffer.byteLength(json, 'utf-8'),
       dataItemOpts: {
         tags: [
-          { name: 'App-Name', value: 'crosstown' },
+          { name: 'App-Name', value: 'toon' },
           { name: 'type', value: 'ilp-peer-info' },
           { name: 'pubkey', value: pubkey },
           { name: 'version', value: '1' },

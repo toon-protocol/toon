@@ -14,7 +14,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools/filter';
 import { getPublicKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import { GenesisPeerLoader, ArDrivePeerRegistry } from '../discovery/index.js';
 import type { GenesisPeer } from '../discovery/index.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
@@ -34,12 +34,13 @@ import type {
   BootstrapEvent,
   BootstrapEventListener,
   IlpClient,
+  IlpSendResult,
 } from './types.js';
 
 /**
  * Error thrown when bootstrap operations fail.
  */
-export class BootstrapError extends CrosstownError {
+export class BootstrapError extends ToonError {
   constructor(message: string, cause?: Error) {
     super(message, 'BOOTSTRAP_FAILED', cause);
     this.name = 'BootstrapError';
@@ -501,12 +502,25 @@ export class BootstrapService {
     // Calculate amount: base price per byte * TOON byte length
     const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
 
-    // Send announce via ILP (through connector routing)
-    const ilpResult = await this.ilpClient.sendIlpPacket({
-      destination: result.peerInfo.ilpAddress,
-      amount,
-      data: base64Toon,
-    });
+    // Send announce via ILP — use claim-attached path when available
+    let ilpResult: IlpSendResult;
+    if (
+      this.claimSigner &&
+      result.channelId &&
+      this.ilpClient.sendIlpPacketWithClaim
+    ) {
+      const claim = await this.claimSigner(result.channelId, BigInt(amount));
+      ilpResult = await this.ilpClient.sendIlpPacketWithClaim(
+        { destination: result.peerInfo.ilpAddress, amount, data: base64Toon },
+        claim
+      );
+    } else {
+      ilpResult = await this.ilpClient.sendIlpPacket({
+        destination: result.peerInfo.ilpAddress,
+        amount,
+        data: base64Toon,
+      });
+    }
 
     if (ilpResult.accepted) {
       console.log(

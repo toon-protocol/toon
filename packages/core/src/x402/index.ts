@@ -1,5 +1,5 @@
 /**
- * x402 protocol support for Crosstown.
+ * x402 protocol support for TOON.
  *
  * Provides the shared `buildIlpPrepare()` function used by both the x402
  * HTTP on-ramp and the ILP-native rail to construct identical ILP PREPARE

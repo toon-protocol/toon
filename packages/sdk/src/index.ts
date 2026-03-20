@@ -1,7 +1,7 @@
 /**
- * @crosstown/sdk
+ * @toon-protocol/sdk
  *
- * SDK for building ILP-gated Nostr services on the Crosstown protocol.
+ * SDK for building ILP-gated Nostr services on the TOON protocol.
  */
 
 // Identity module
@@ -70,7 +70,10 @@ export { buildSkillDescriptor } from './skill-descriptor.js';
 export type { BuildSkillDescriptorConfig } from './skill-descriptor.js';
 
 // Re-export types from core for convenience
-export type { SkillDescriptor } from '@crosstown/core';
+export type { SkillDescriptor } from '@toon-protocol/core';
 
 // Re-export bootstrap types for lifecycle event listeners
-export type { BootstrapEvent, BootstrapEventListener } from '@crosstown/core';
+export type {
+  BootstrapEvent,
+  BootstrapEventListener,
+} from '@toon-protocol/core';

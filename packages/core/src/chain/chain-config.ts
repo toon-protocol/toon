@@ -1,5 +1,5 @@
 /**
- * Multi-environment chain configuration for Crosstown relay nodes.
+ * Multi-environment chain configuration for TOON relay nodes.
  *
  * Provides chain presets for three deployment environments:
  * - **anvil** (local dev): Deterministic Anvil addresses, localhost RPC
@@ -7,14 +7,14 @@
  * - **arbitrum-one** (production): Native USDC on Arbitrum One
  *
  * Environment variable overrides:
- * - `CROSSTOWN_CHAIN` overrides the config-level chain parameter
- * - `CROSSTOWN_RPC_URL` overrides the preset RPC endpoint
- * - `CROSSTOWN_TOKEN_NETWORK` overrides the preset TokenNetwork address
+ * - `TOON_CHAIN` overrides the config-level chain parameter
+ * - `TOON_RPC_URL` overrides the preset RPC endpoint
+ * - `TOON_TOKEN_NETWORK` overrides the preset TokenNetwork address
  *
  * @module
  */
 
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 import { MOCK_USDC_ADDRESS } from './usdc.js';
 
 // ---------- Types ----------
@@ -38,6 +38,8 @@ export interface ChainPreset {
   usdcAddress: string;
   /** TokenNetwork contract address for USDC on this chain. */
   tokenNetworkAddress: string;
+  /** TokenNetworkRegistry contract address on this chain. */
+  registryAddress: string;
 }
 
 // ---------- Presets ----------
@@ -56,13 +58,15 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     rpcUrl: 'http://localhost:8545',
     usdcAddress: MOCK_USDC_ADDRESS,
     tokenNetworkAddress: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
+    registryAddress: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512',
   },
   'arbitrum-sepolia': {
     name: 'arbitrum-sepolia',
     chainId: 421614,
     rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    tokenNetworkAddress: '',
+    tokenNetworkAddress: '0x91d62b1F7C5d1129A64EE3915c480DBF288B1cBa',
+    registryAddress: '',
   },
   'arbitrum-one': {
     name: 'arbitrum-one',
@@ -70,6 +74,7 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     rpcUrl: 'https://arb1.arbitrum.io/rpc',
     usdcAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
     tokenNetworkAddress: '',
+    registryAddress: '',
   },
 };
 
@@ -80,28 +85,29 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
  * variable overrides applied.
  *
  * Resolution order:
- * 1. `CROSSTOWN_CHAIN` env var overrides the `chain` parameter
+ * 1. `TOON_CHAIN` env var overrides the `chain` parameter
  * 2. Defaults to `'anvil'` if neither is provided
  * 3. Looks up the chain name in `CHAIN_PRESETS`
- * 4. `CROSSTOWN_RPC_URL` env var overrides the preset's `rpcUrl`
- * 5. `CROSSTOWN_TOKEN_NETWORK` env var overrides the preset's `tokenNetworkAddress`
+ * 4. `TOON_RPC_URL` env var overrides the preset's `rpcUrl`
+ * 5. `TOON_TOKEN_NETWORK` env var overrides the preset's `tokenNetworkAddress`
+ * 6. `TOON_REGISTRY_ADDRESS` env var overrides the preset's `registryAddress`
  *
  * Returns a defensive copy -- callers can mutate the result without
  * affecting the shared preset objects.
  *
  * @param chain - Chain name to resolve (default: 'anvil')
  * @returns Resolved chain preset with env var overrides applied
- * @throws CrosstownError if the chain name is not recognized
+ * @throws ToonError if the chain name is not recognized
  */
 export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
-  // 1. CROSSTOWN_CHAIN env var overrides the parameter
-  const envChain = process.env['CROSSTOWN_CHAIN'];
+  // 1. TOON_CHAIN env var overrides the parameter
+  const envChain = process.env['TOON_CHAIN'];
   const name = envChain || chain || 'anvil';
 
   // 2. Look up the chain name in presets
   const preset = CHAIN_PRESETS[name as ChainName];
   if (!preset) {
-    throw new CrosstownError(
+    throw new ToonError(
       `Unknown chain "${name}". Valid chains: anvil, arbitrum-sepolia, arbitrum-one`,
       'INVALID_CHAIN'
     );
@@ -110,16 +116,22 @@ export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
   // 3. Create defensive copy
   const resolved: ChainPreset = { ...preset };
 
-  // 4. CROSSTOWN_RPC_URL env var overrides preset rpcUrl
-  const envRpcUrl = process.env['CROSSTOWN_RPC_URL'];
+  // 4. TOON_RPC_URL env var overrides preset rpcUrl
+  const envRpcUrl = process.env['TOON_RPC_URL'];
   if (envRpcUrl) {
     resolved.rpcUrl = envRpcUrl;
   }
 
-  // 5. CROSSTOWN_TOKEN_NETWORK env var overrides preset tokenNetworkAddress
-  const envTokenNetwork = process.env['CROSSTOWN_TOKEN_NETWORK'];
+  // 5. TOON_TOKEN_NETWORK env var overrides preset tokenNetworkAddress
+  const envTokenNetwork = process.env['TOON_TOKEN_NETWORK'];
   if (envTokenNetwork) {
     resolved.tokenNetworkAddress = envTokenNetwork;
+  }
+
+  // 6. TOON_REGISTRY_ADDRESS env var overrides preset registryAddress
+  const envRegistryAddress = process.env['TOON_REGISTRY_ADDRESS'];
+  if (envRegistryAddress) {
+    resolved.registryAddress = envRegistryAddress;
   }
 
   return resolved;
@@ -135,7 +147,7 @@ export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
  * { name: 'TokenNetwork', version: '1', chainId, verifyingContract }
  * ```
  *
- * Since `@crosstown/core` does not depend on viem, the `verifyingContract`
+ * Since `@toon-protocol/core` does not depend on viem, the `verifyingContract`
  * field is typed as `string` (not viem's `Hex`). Consumers in the client
  * package can cast to `Hex` if needed.
  *

@@ -245,27 +245,25 @@ describe('createDirectIlpClient', () => {
       ).rejects.toThrow(BootstrapError);
     });
 
-    describe('executionCondition with toonDecoder', () => {
-      it('should compute executionCondition = SHA256(SHA256(eventId)) when toonDecoder is provided', async () => {
-        const eventId =
-          'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890';
-
-        const toonDecoder = vi.fn().mockReturnValue({ id: eventId });
+    describe('executionCondition from raw data bytes', () => {
+      it('should compute executionCondition = SHA256(SHA256(data)) from raw data bytes', async () => {
+        const toonData = Buffer.from('test-toon-data');
 
         const connector = mockConnector({
           type: 'fulfill',
           fulfillment: new Uint8Array(32),
         });
 
-        const client = createDirectIlpClient(connector, { toonDecoder });
+        const client = createDirectIlpClient(connector);
         await client.sendIlpPacket({
           destination: 'g.peer1',
           amount: '100',
-          data: Buffer.from('test-toon-data').toString('base64'),
+          data: toonData.toString('base64'),
         });
 
-        // Compute expected condition
-        const fulfillment = createHash('sha256').update(eventId).digest();
+        // Compute expected condition: SHA256(SHA256(raw_data_bytes))
+        // Matches connector's PaymentHandlerAdapter.computeFulfillmentFromData()
+        const fulfillment = createHash('sha256').update(toonData).digest();
         const expectedCondition = createHash('sha256')
           .update(fulfillment)
           .digest();
@@ -277,7 +275,7 @@ describe('createDirectIlpClient', () => {
         );
       });
 
-      it('should not set executionCondition when toonDecoder is omitted', async () => {
+      it('should not set executionCondition when data is empty', async () => {
         const connector = mockConnector({
           type: 'fulfill',
           fulfillment: new Uint8Array(32),
@@ -287,7 +285,7 @@ describe('createDirectIlpClient', () => {
         await client.sendIlpPacket({
           destination: 'g.peer1',
           amount: '100',
-          data: Buffer.from('test').toString('base64'),
+          data: '',
         });
 
         const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
@@ -295,10 +293,9 @@ describe('createDirectIlpClient', () => {
         expect(callArgs.executionCondition).toBeUndefined();
       });
 
-      it('should handle toonDecoder throwing gracefully (wraps in BootstrapError)', async () => {
-        const toonDecoder = vi.fn().mockImplementation(() => {
-          throw new Error('Invalid TOON format');
-        });
+      it('should compute executionCondition regardless of toonDecoder presence', async () => {
+        const toonData = Buffer.from('some-data');
+        const toonDecoder = vi.fn().mockReturnValue({ id: 'fake-id' });
 
         const connector = mockConnector({
           type: 'fulfill',
@@ -306,22 +303,26 @@ describe('createDirectIlpClient', () => {
         });
 
         const client = createDirectIlpClient(connector, { toonDecoder });
+        await client.sendIlpPacket({
+          destination: 'g.peer1',
+          amount: '100',
+          data: toonData.toString('base64'),
+        });
 
-        await expect(
-          client.sendIlpPacket({
-            destination: 'g.peer1',
-            amount: '100',
-            data: Buffer.from('bad-data').toString('base64'),
-          })
-        ).rejects.toThrow(BootstrapError);
+        // Condition should be from raw data, not decoded event ID
+        const fulfillment = createHash('sha256').update(toonData).digest();
+        const expectedCondition = createHash('sha256')
+          .update(fulfillment)
+          .digest();
 
-        await expect(
-          client.sendIlpPacket({
-            destination: 'g.peer1',
-            amount: '100',
-            data: Buffer.from('bad-data').toString('base64'),
-          })
-        ).rejects.toThrow(/Direct ILP packet send failed.*Invalid TOON format/);
+        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+          .calls[0]![0] as SendPacketParams;
+        expect(Buffer.from(callArgs.executionCondition!)).toEqual(
+          Buffer.from(expectedCondition)
+        );
+
+        // toonDecoder should NOT have been called for condition computation
+        expect(toonDecoder).not.toHaveBeenCalled();
       });
     });
   });

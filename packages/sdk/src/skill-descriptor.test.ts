@@ -21,7 +21,7 @@ import {
   parseServiceDiscovery,
   buildJobRequestEvent,
   parseJobRequest,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import type {
   ServiceDiscoveryContent,
   SkillDescriptor,
@@ -31,7 +31,7 @@ import type {
   SendPacketParams,
   SendPacketResult,
   RegisterPeerParams,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 import { HandlerRegistry } from './handler-registry.js';
 import { buildSkillDescriptor } from './skill-descriptor.js';
 import { createNode } from './create-node.js';
@@ -78,7 +78,7 @@ function createServiceDiscoveryContentWithSkill(
 ): ServiceDiscoveryContent {
   return {
     serviceType: 'relay',
-    ilpAddress: 'g.crosstown.test-relay',
+    ilpAddress: 'g.toon.test-relay',
     pricing: {
       basePricePerByte: 10,
       currency: 'USDC',
@@ -247,7 +247,7 @@ describe('buildSkillDescriptor()', () => {
 
     // Assert
     expect(result).toBeDefined();
-    expect(result!.name).toBe('crosstown-dvm');
+    expect(result!.name).toBe('toon-dvm');
     expect(result!.version).toBe('1.0');
     expect(result!.features).toEqual([]);
     expect(result!.inputSchema).toEqual({
@@ -474,7 +474,7 @@ describe('Agent discovery flow (T-5.4-08)', () => {
     // Arrange
     const secretKey = generateSecretKey();
     const content = createServiceDiscoveryContentWithSkill({
-      name: 'crosstown-dvm',
+      name: 'toon-dvm',
       version: '1.0',
       kinds: [5100],
       features: ['text-generation', 'streaming'],
@@ -511,7 +511,7 @@ describe('Cross-story integration: schema to request (T-INT-05)', () => {
         return reg;
       })(),
       {
-        name: 'crosstown-dvm',
+        name: 'toon-dvm',
         features: ['text-generation'],
         inputSchema: {
           type: 'object',
@@ -776,7 +776,7 @@ describe('Node publishes kind:10035 with skill descriptor (T-5.4-06)', () => {
     // Act: simulate Town's kind:10035 publication path
     const content: ServiceDiscoveryContent = {
       serviceType: 'relay',
-      ilpAddress: 'g.crosstown.test-provider',
+      ilpAddress: 'g.toon.test-provider',
       pricing: { basePricePerByte: 100, currency: 'USDC' },
       supportedKinds: [1, 5100, 5200, 10032, 10035, 10036],
       capabilities: ['relay'],
@@ -830,7 +830,7 @@ describe('Node publishes kind:10035 with skill descriptor (T-5.4-06)', () => {
     // Act: build kind:10035 without skill (backward compatible)
     const content: ServiceDiscoveryContent = {
       serviceType: 'relay',
-      ilpAddress: 'g.crosstown.test',
+      ilpAddress: 'g.toon.test',
       pricing: { basePricePerByte: 10, currency: 'USDC' },
       supportedKinds: [1, 10032, 10036],
       capabilities: ['relay'],
@@ -847,7 +847,7 @@ describe('Node publishes kind:10035 with skill descriptor (T-5.4-06)', () => {
     expect(parsed!.serviceType).toBe('relay');
   });
 
-  it('[P1] kind:10035 event includes both Crosstown-specific fields and skill descriptor', () => {
+  it('[P1] kind:10035 event includes both TOON-specific fields and skill descriptor', () => {
     // Arrange: full-featured kind:10035 with x402 + skill
     const secretKey = generateSecretKey();
     const connector = createMockConnector();
@@ -867,7 +867,7 @@ describe('Node publishes kind:10035 with skill descriptor (T-5.4-06)', () => {
 
     const content: ServiceDiscoveryContent = {
       serviceType: 'relay',
-      ilpAddress: 'g.crosstown.test',
+      ilpAddress: 'g.toon.test',
       pricing: { basePricePerByte: 10, currency: 'USDC' },
       x402: { enabled: true, endpoint: '/publish' },
       supportedKinds: [1, 5100, 10032, 10035, 10036],
@@ -880,9 +880,9 @@ describe('Node publishes kind:10035 with skill descriptor (T-5.4-06)', () => {
     const event = buildServiceDiscoveryEvent(content, secretKey);
     const parsed = parseServiceDiscovery(event);
 
-    // Assert: all fields present (Crosstown-specific + skill)
+    // Assert: all fields present (TOON-specific + skill)
     expect(parsed).not.toBeNull();
-    expect(parsed!.ilpAddress).toBe('g.crosstown.test');
+    expect(parsed!.ilpAddress).toBe('g.toon.test');
     expect(parsed!.x402).toBeDefined();
     expect(parsed!.x402!.enabled).toBe(true);
     expect(parsed!.x402!.endpoint).toBe('/publish');
@@ -995,7 +995,7 @@ describe('Backward compatibility (T-5.4-12 via buildSkillDescriptor)', () => {
     const secretKey = generateSecretKey();
     const content: ServiceDiscoveryContent = {
       serviceType: 'relay',
-      ilpAddress: 'g.crosstown.test',
+      ilpAddress: 'g.toon.test',
       pricing: { basePricePerByte: 10, currency: 'USDC' },
       supportedKinds: [1, 10032, 10036],
       capabilities: ['relay'],

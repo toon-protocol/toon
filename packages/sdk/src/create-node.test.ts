@@ -3,7 +3,7 @@
  *
  * Tests defaults, config-based handler registration, builder pattern,
  * identity derivation, connector pass-through, lifecycle event forwarding,
- * and peerWith guard behavior using mocked CrosstownNode internals
+ * and peerWith guard behavior using mocked ToonNode internals
  * (no real bootstrap or relay).
  */
 
@@ -18,9 +18,9 @@ import type {
   EmbeddableConnectorLike,
   BootstrapEventListener,
   BootstrapEvent,
-} from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // Mock Connector (minimal)

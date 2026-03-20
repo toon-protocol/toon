@@ -1,22 +1,22 @@
 /**
- * Integration tests for Crosstown Node composition API.
+ * Integration tests for TOON Node composition API.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import type { NostrEvent } from 'nostr-tools/pure';
-import { createCrosstownNode } from './compose.js';
+import { createToonNode } from './compose.js';
 import type {
-  CrosstownNodeConfig,
+  ToonNodeConfig,
   EmbeddableConnectorLike,
   PacketHandler,
 } from './compose.js';
 import type { IlpPeerInfo } from './types.js';
 import { BootstrapService } from './bootstrap/BootstrapService.js';
 
-describe('createCrosstownNode', () => {
+describe('createToonNode', () => {
   let mockConnector: EmbeddableConnectorLike;
   let mockHandlePacket: Mock;
-  let baseConfig: CrosstownNodeConfig;
+  let baseConfig: ToonNodeConfig;
 
   beforeEach(() => {
     // Create mock connector
@@ -62,7 +62,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('returns an object with start, stop, bootstrapService, discoveryTracker', () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     expect(node).toHaveProperty('start');
     expect(node).toHaveProperty('stop');
@@ -73,7 +73,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('start() calls connector.setPacketHandler() with the provided handlePacket callback', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     await node.start();
 
@@ -84,7 +84,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('start() calls bootstrapService.bootstrap() and returns results', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     const result = await node.start();
 
@@ -96,8 +96,8 @@ describe('createCrosstownNode', () => {
     expect(result.channelCount).toBe(0); // No channels
   });
 
-  it('start() returns CrosstownNodeStartResult with peerCount and channelCount', async () => {
-    const node = createCrosstownNode(baseConfig);
+  it('start() returns ToonNodeStartResult with peerCount and channelCount', async () => {
+    const node = createToonNode(baseConfig);
 
     const result = await node.start();
 
@@ -106,22 +106,22 @@ describe('createCrosstownNode', () => {
   });
 
   it('start() called twice throws BootstrapError (double-start guard)', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     await node.start();
 
-    await expect(node.start()).rejects.toThrow('CrosstownNode already started');
+    await expect(node.start()).rejects.toThrow('ToonNode already started');
   });
 
   it('stop() is safe to call when not started (no-op)', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     // Call stop without calling start
     await expect(node.stop()).resolves.toBeUndefined();
   });
 
   it('stop() completes without error after start()', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     await node.start();
     await expect(node.stop()).resolves.toBeUndefined();
@@ -130,7 +130,7 @@ describe('createCrosstownNode', () => {
   it('ILP client is wired correctly to bootstrapService', () => {
     const setClientSpy = vi.spyOn(BootstrapService.prototype, 'setIlpClient');
 
-    createCrosstownNode(baseConfig);
+    createToonNode(baseConfig);
 
     expect(setClientSpy).toHaveBeenCalledTimes(1);
     expect(setClientSpy).toHaveBeenCalledWith(
@@ -146,7 +146,7 @@ describe('createCrosstownNode', () => {
       'setConnectorAdmin'
     );
 
-    createCrosstownNode(baseConfig);
+    createToonNode(baseConfig);
 
     expect(setAdminSpy).toHaveBeenCalledTimes(1);
     expect(setAdminSpy).toHaveBeenCalledWith(
@@ -160,7 +160,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('start() calls addExcludedPubkeys on discoveryTracker with bootstrapped peer pubkeys', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     const addExcludedSpy = vi.spyOn(
       node.discoveryTracker,
@@ -186,13 +186,13 @@ describe('createCrosstownNode', () => {
       },
     };
 
-    const node = createCrosstownNode(failingConfig);
+    const node = createToonNode(failingConfig);
 
-    await expect(node.start()).rejects.toThrow('Failed to start CrosstownNode');
+    await expect(node.start()).rejects.toThrow('Failed to start ToonNode');
   });
 
   it('allows attaching event listeners before start()', async () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
 
     const bootstrapListener = vi.fn();
     const discoveryListener = vi.fn();
@@ -213,7 +213,7 @@ describe('createCrosstownNode', () => {
     const testSecretKey = new Uint8Array(32);
     testSecretKey.fill(0x42); // Valid non-zero secret key
 
-    const minimalConfig: CrosstownNodeConfig = {
+    const minimalConfig: ToonNodeConfig = {
       connector: mockConnector,
       handlePacket: mockHandlePacket as unknown as PacketHandler,
       secretKey: testSecretKey,
@@ -229,20 +229,20 @@ describe('createCrosstownNode', () => {
       ardriveEnabled: false, // Disable to avoid network calls
     };
 
-    const node = createCrosstownNode(minimalConfig);
+    const node = createToonNode(minimalConfig);
 
     await expect(node.start()).resolves.toBeDefined();
   });
 
   it('passes through all config parameters to BootstrapService', () => {
-    const customConfig: CrosstownNodeConfig = {
+    const customConfig: ToonNodeConfig = {
       ...baseConfig,
       basePricePerByte: 42n,
       queryTimeout: 10000,
       defaultRelayUrl: 'ws://custom-relay:7200',
     };
 
-    const node = createCrosstownNode(customConfig);
+    const node = createToonNode(customConfig);
 
     // Verify node is created successfully with custom config
     expect(node).toBeDefined();
@@ -250,13 +250,13 @@ describe('createCrosstownNode', () => {
   });
 
   it('passes through config parameters to discoveryTracker', () => {
-    const customConfig: CrosstownNodeConfig = {
+    const customConfig: ToonNodeConfig = {
       ...baseConfig,
       relayUrl: 'ws://custom-relay:7300',
       basePricePerByte: 99n,
     };
 
-    const node = createCrosstownNode(customConfig);
+    const node = createToonNode(customConfig);
 
     // Verify node is created successfully with custom config
     expect(node).toBeDefined();
@@ -264,7 +264,7 @@ describe('createCrosstownNode', () => {
   });
 
   it('channelClient is null when connector lacks openChannel/getChannelState', () => {
-    const node = createCrosstownNode(baseConfig);
+    const node = createToonNode(baseConfig);
     expect(node.channelClient).toBeNull();
   });
 
@@ -281,7 +281,7 @@ describe('createCrosstownNode', () => {
       }),
     };
 
-    const node = createCrosstownNode({
+    const node = createToonNode({
       ...baseConfig,
       connector: connectorWithChannels,
     });
@@ -305,7 +305,7 @@ describe('createCrosstownNode', () => {
       getChannelState: vi.fn().mockResolvedValue(channelState),
     };
 
-    const node = createCrosstownNode({
+    const node = createToonNode({
       ...baseConfig,
       connector: connectorWithChannels,
     });

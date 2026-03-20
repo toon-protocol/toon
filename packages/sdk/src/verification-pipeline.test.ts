@@ -5,7 +5,7 @@ import {
   getPublicKey,
   finalizeEvent,
 } from 'nostr-tools/pure';
-import { encodeEventToToon, shallowParseToon } from '@crosstown/core/toon';
+import { encodeEventToToon, shallowParseToon } from '@toon-protocol/core/toon';
 
 // ATDD tests for Story 1.4 -- verification pipeline
 

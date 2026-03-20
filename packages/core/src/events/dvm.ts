@@ -6,10 +6,10 @@
  * - Kind 6000-6999: Job results (result kind = request kind + 1000)
  * - Kind 7000: Job feedback (single kind for all status updates)
  *
- * Crosstown adopts NIP-90 kinds for cross-network interoperability with the
+ * TOON adopts NIP-90 kinds for cross-network interoperability with the
  * broader Nostr DVM ecosystem. The `bid` and `amount` tags extend NIP-90
  * with a third element ('usdc') for explicit currency declaration. NIP-90
- * uses satoshis; Crosstown uses USDC micro-units (6 decimals).
+ * uses satoshis; TOON uses USDC micro-units (6 decimals).
  *
  * DVM events are standard Nostr events with specific kinds. They flow
  * through the same SDK processing pipeline as all other events: shallow
@@ -41,7 +41,7 @@ import {
   TEXT_TO_SPEECH_KIND,
   TRANSLATION_KIND,
 } from '../constants.js';
-import { CrosstownError } from '../errors.js';
+import { ToonError } from '../errors.js';
 
 // Re-export constants for convenient co-located imports
 export {
@@ -224,7 +224,7 @@ export interface ParsedJobFeedback {
  * @param params - The job request parameters.
  * @param secretKey - The secret key to sign the event with.
  * @returns A signed Nostr event.
- * @throws CrosstownError if required params are missing or kind is out of range.
+ * @throws ToonError if required params are missing or kind is out of range.
  */
 export function buildJobRequestEvent(
   params: JobRequestParams,
@@ -232,7 +232,7 @@ export function buildJobRequestEvent(
 ): NostrEvent {
   // Validate kind range (5000-5999)
   if (params.kind < 5000 || params.kind > 5999) {
-    throw new CrosstownError(
+    throw new ToonError(
       `Job request kind must be in range 5000-5999, got ${params.kind}`,
       'DVM_INVALID_KIND'
     );
@@ -240,13 +240,13 @@ export function buildJobRequestEvent(
 
   // Validate required input (allow empty string per NIP-90, reject undefined/null)
   if (params.input.data === undefined || params.input.data === null) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job request input data is required',
       'DVM_MISSING_INPUT'
     );
   }
   if (!params.input.type) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job request input type is required',
       'DVM_MISSING_INPUT'
     );
@@ -254,7 +254,7 @@ export function buildJobRequestEvent(
 
   // Validate bid (non-empty string, bigint-compatible)
   if (typeof params.bid !== 'string' || params.bid === '') {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job request bid must be a non-empty string (USDC micro-units)',
       'DVM_INVALID_BID'
     );
@@ -262,7 +262,7 @@ export function buildJobRequestEvent(
 
   // Validate output (non-empty string)
   if (typeof params.output !== 'string' || params.output === '') {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job request output MIME type must be a non-empty string',
       'DVM_MISSING_OUTPUT'
     );
@@ -294,7 +294,7 @@ export function buildJobRequestEvent(
   // Optional: ['p', targetProvider] -- validate hex format if provided
   if (params.targetProvider !== undefined) {
     if (!HEX_64_REGEX.test(params.targetProvider)) {
-      throw new CrosstownError(
+      throw new ToonError(
         'Job request targetProvider must be a 64-character lowercase hex string',
         'DVM_INVALID_PUBKEY'
       );
@@ -335,7 +335,7 @@ export function buildJobRequestEvent(
  * @param params - The job result parameters.
  * @param secretKey - The secret key to sign the event with.
  * @returns A signed Nostr event.
- * @throws CrosstownError if required params are missing or kind is out of range.
+ * @throws ToonError if required params are missing or kind is out of range.
  */
 export function buildJobResultEvent(
   params: JobResultParams,
@@ -343,7 +343,7 @@ export function buildJobResultEvent(
 ): NostrEvent {
   // Validate kind range (6000-6999)
   if (params.kind < 6000 || params.kind > 6999) {
-    throw new CrosstownError(
+    throw new ToonError(
       `Job result kind must be in range 6000-6999, got ${params.kind}`,
       'DVM_INVALID_KIND'
     );
@@ -351,7 +351,7 @@ export function buildJobResultEvent(
 
   // Validate requestEventId (64-char hex)
   if (!HEX_64_REGEX.test(params.requestEventId)) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job result requestEventId must be a 64-character lowercase hex string',
       'DVM_INVALID_EVENT_ID'
     );
@@ -359,7 +359,7 @@ export function buildJobResultEvent(
 
   // Validate customerPubkey (64-char hex)
   if (!HEX_64_REGEX.test(params.customerPubkey)) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job result customerPubkey must be a 64-character lowercase hex string',
       'DVM_INVALID_PUBKEY'
     );
@@ -367,7 +367,7 @@ export function buildJobResultEvent(
 
   // Validate amount (non-empty string, bigint-compatible)
   if (typeof params.amount !== 'string' || params.amount === '') {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job result amount must be a non-empty string (USDC micro-units)',
       'DVM_INVALID_AMOUNT'
     );
@@ -375,7 +375,7 @@ export function buildJobResultEvent(
 
   // Validate content (string)
   if (typeof params.content !== 'string') {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job result content must be a string',
       'DVM_MISSING_CONTENT'
     );
@@ -408,7 +408,7 @@ export function buildJobResultEvent(
  * @param params - The job feedback parameters.
  * @param secretKey - The secret key to sign the event with.
  * @returns A signed Nostr event.
- * @throws CrosstownError if required params are missing or status is invalid.
+ * @throws ToonError if required params are missing or status is invalid.
  */
 export function buildJobFeedbackEvent(
   params: JobFeedbackParams,
@@ -416,7 +416,7 @@ export function buildJobFeedbackEvent(
 ): NostrEvent {
   // Validate requestEventId (64-char hex)
   if (!HEX_64_REGEX.test(params.requestEventId)) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job feedback requestEventId must be a 64-character lowercase hex string',
       'DVM_INVALID_EVENT_ID'
     );
@@ -424,7 +424,7 @@ export function buildJobFeedbackEvent(
 
   // Validate customerPubkey (64-char hex)
   if (!HEX_64_REGEX.test(params.customerPubkey)) {
-    throw new CrosstownError(
+    throw new ToonError(
       'Job feedback customerPubkey must be a 64-character lowercase hex string',
       'DVM_INVALID_PUBKEY'
     );
@@ -432,7 +432,7 @@ export function buildJobFeedbackEvent(
 
   // Validate status
   if (!VALID_STATUSES.has(params.status)) {
-    throw new CrosstownError(
+    throw new ToonError(
       `Job feedback status must be one of: processing, error, success, partial. Got: ${String(params.status)}`,
       'DVM_INVALID_STATUS'
     );
@@ -594,6 +594,11 @@ export function parseJobResult(event: NostrEvent): ParsedJobResult | null {
   if (!amountTag) return null;
   const amount = amountTag[1];
   if (amount === undefined || amount === '') return null;
+
+  // Validate amount is numeric (must be parseable as a non-negative integer).
+  // USDC micro-units are always whole numbers; reject decimals, negatives,
+  // and non-numeric strings to prevent downstream BigInt/arithmetic errors.
+  if (!/^\d+$/.test(amount)) return null;
 
   return {
     kind: event.kind,

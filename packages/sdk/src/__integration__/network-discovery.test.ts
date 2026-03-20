@@ -4,7 +4,7 @@
  * ATDD tests for Story 1.9 -- network discovery and bootstrap integration
  *
  * Tests that the SDK integrates with BootstrapService and DiscoveryTracker from
- * @crosstown/core for automatic peer discovery and network join. Uses real
+ * @toon-protocol/core for automatic peer discovery and network join. Uses real
  * local infrastructure (relay, connector, Anvil) where available, with
  * graceful skip when services are unavailable.
  *
@@ -22,20 +22,23 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSecretKey } from 'nostr-tools/pure';
 import WebSocket from 'ws';
 
-// --- Imports from @crosstown/sdk ---
+// --- Imports from @toon-protocol/sdk ---
 import { createNode, type NodeConfig, type StartResult } from '../index.js';
 
-// --- Imports from @crosstown/core (exists) ---
-import type { BootstrapEvent, EmbeddableConnectorLike } from '@crosstown/core';
-import type { SendPacketParams, SendPacketResult } from '@crosstown/core';
-import type { RegisterPeerParams } from '@crosstown/core';
+// --- Imports from @toon-protocol/core (exists) ---
+import type {
+  BootstrapEvent,
+  EmbeddableConnectorLike,
+} from '@toon-protocol/core';
+import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
+import type { RegisterPeerParams } from '@toon-protocol/core';
 import type {
   HandlePacketRequest,
   HandlePacketResponse,
-} from '@crosstown/core';
+} from '@toon-protocol/core';
 
-// --- Import from @crosstown/relay (exists, for TOON encoding) ---
-import { encodeEventToToon, decodeEventFromToon } from '@crosstown/relay';
+// --- Import from @toon-protocol/relay (exists, for TOON encoding) ---
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 
 // ---------------------------------------------------------------------------
 // Infrastructure Constants
