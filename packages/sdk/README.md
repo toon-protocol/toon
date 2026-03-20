@@ -60,7 +60,7 @@ const result = await node.start();
 console.log(`Connected to ${result.peerCount} peers`);
 ```
 
-> **Easier path:** If you just want to run a relay, use [`@toon-protocol/town`](../town) — it manages the connector externally so you don't need to embed one. The SDK is for building custom services where you control the full pipeline.
+> **Easier path:** If you just want to run a relay, use [`@toon-protocol/town`](../town) — it wraps the SDK with sensible defaults and runs out of the box. The SDK is for building custom services where you control the full pipeline.
 
 ## Where It Sits
 
