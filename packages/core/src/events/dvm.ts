@@ -131,6 +131,8 @@ export interface JobResultParams {
   amount: string;
   /** Result data (text, URL, etc.). */
   content: string;
+  /** Optional 64-char hex event ID of the provider's latest kind:10033 attestation event. */
+  attestationEventId?: string;
 }
 
 /**
@@ -195,6 +197,8 @@ export interface ParsedJobResult {
   amount: string;
   /** Result data from the content field. */
   content: string;
+  /** Optional event ID of the provider's kind:10033 attestation event. */
+  attestationEventId?: string;
 }
 
 /**
@@ -381,11 +385,26 @@ export function buildJobResultEvent(
     );
   }
 
+  // Validate optional attestationEventId (64-char hex)
+  if (params.attestationEventId !== undefined) {
+    if (!HEX_64_REGEX.test(params.attestationEventId)) {
+      throw new ToonError(
+        'Job result attestationEventId must be a 64-character lowercase hex string',
+        'DVM_INVALID_ATTESTATION_EVENT_ID'
+      );
+    }
+  }
+
   const tags: string[][] = [
     ['e', params.requestEventId],
     ['p', params.customerPubkey],
     ['amount', params.amount, 'usdc'],
   ];
+
+  // Optional: ['attestation', attestationEventId] -- TEE attestation reference
+  if (params.attestationEventId !== undefined) {
+    tags.push(['attestation', params.attestationEventId]);
+  }
 
   return finalizeEvent(
     {
@@ -600,13 +619,28 @@ export function parseJobResult(event: NostrEvent): ParsedJobResult | null {
   // and non-numeric strings to prevent downstream BigInt/arithmetic errors.
   if (!/^\d+$/.test(amount)) return null;
 
-  return {
+  // Extract optional 'attestation' tag: ['attestation', eventId]
+  const attestationTag = event.tags.find(
+    (t: string[]) => t[0] === 'attestation'
+  );
+  const attestationEventId = attestationTag?.[1];
+
+  const result: ParsedJobResult = {
     kind: event.kind,
     requestEventId,
     customerPubkey,
     amount,
     content: event.content,
   };
+
+  if (
+    attestationEventId !== undefined &&
+    HEX_64_REGEX.test(attestationEventId)
+  ) {
+    result.attestationEventId = attestationEventId;
+  }
+
+  return result;
 }
 
 /**

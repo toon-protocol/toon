@@ -93,3 +93,28 @@ export const TEXT_TO_SPEECH_KIND = 5300;
  * Optional provider support -- not all nodes are required to handle this kind.
  */
 export const TRANSLATION_KIND = 5302;
+
+/**
+ * Workflow Chain definition (kind 10040).
+ * Replaceable event defining a multi-step DVM pipeline where each step's
+ * output feeds into the next step's input. Uses a unique `d` tag per
+ * workflow instance for NIP-33 parameterized replaceable semantics.
+ * In the TOON-specific replaceable range (10032-10099).
+ */
+export const WORKFLOW_CHAIN_KIND = 10040;
+
+/**
+ * Job Review (kind 31117)
+ * NIP-33 parameterized replaceable event for post-job reviews.
+ * `d` tag = job request event ID enforces one review per job per reviewer.
+ * Rating tag contains integer 1-5. Role tag indicates 'customer' or 'provider'.
+ */
+export const JOB_REVIEW_KIND = 31117;
+
+/**
+ * Web of Trust declaration (kind 30382)
+ * NIP-33 parameterized replaceable event endorsing a provider pubkey.
+ * `d` tag = target provider pubkey enforces one WoT declaration per
+ * declarer per target. Used for reputation scoring sybil defense.
+ */
+export const WEB_OF_TRUST_KIND = 30382;

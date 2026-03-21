@@ -14,6 +14,7 @@
 import { finalizeEvent } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import { SERVICE_DISCOVERY_KIND } from '../constants.js';
+import type { ReputationScore } from './reputation.js';
 
 // Re-export the constant for convenient co-located imports
 export { SERVICE_DISCOVERY_KIND };
@@ -48,6 +49,8 @@ export interface SkillDescriptor {
   models?: string[];
   /** Placeholder for Epic 6 TEE attestation integration. */
   attestation?: Record<string, unknown>;
+  /** Composite reputation score with individual signal values (Story 6.4). */
+  reputation?: ReputationScore;
 }
 
 /** Content payload for a kind:10035 Service Discovery event. */
@@ -307,6 +310,49 @@ export function parseServiceDiscovery(
       )
         return null;
       skillResult.attestation = attestation as Record<string, unknown>;
+    }
+
+    // Validate optional reputation field (Story 6.4: Reputation scoring)
+    const reputation = skillRecord['reputation'];
+    if (reputation !== undefined) {
+      if (
+        typeof reputation !== 'object' ||
+        reputation === null ||
+        Array.isArray(reputation)
+      )
+        return null;
+      const repRecord = reputation as Record<string, unknown>;
+
+      const repScore = repRecord['score'];
+      if (typeof repScore !== 'number' || !isFinite(repScore)) return null;
+
+      const signals = repRecord['signals'];
+      if (
+        typeof signals !== 'object' ||
+        signals === null ||
+        Array.isArray(signals)
+      )
+        return null;
+      const sigRecord = signals as Record<string, unknown>;
+
+      const trustedBy = sigRecord['trustedBy'];
+      if (typeof trustedBy !== 'number' || !isFinite(trustedBy)) return null;
+
+      const channelVolumeUsdc = sigRecord['channelVolumeUsdc'];
+      if (typeof channelVolumeUsdc !== 'number' || !isFinite(channelVolumeUsdc))
+        return null;
+
+      const jobsCompleted = sigRecord['jobsCompleted'];
+      if (typeof jobsCompleted !== 'number' || !isFinite(jobsCompleted))
+        return null;
+
+      const avgRating = sigRecord['avgRating'];
+      if (typeof avgRating !== 'number' || !isFinite(avgRating)) return null;
+
+      skillResult.reputation = {
+        score: repScore,
+        signals: { trustedBy, channelVolumeUsdc, jobsCompleted, avgRating },
+      };
     }
 
     result.skill = skillResult;

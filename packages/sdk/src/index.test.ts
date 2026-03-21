@@ -112,6 +112,10 @@ describe('@toon-protocol/sdk public API exports', () => {
       'createNode',
       // Skill descriptor builder (Story 5.4)
       'buildSkillDescriptor',
+      // Workflow orchestrator (Story 6.1)
+      'WorkflowOrchestrator',
+      // Swarm coordinator (Story 6.2)
+      'SwarmCoordinator',
     ]);
 
     // Act

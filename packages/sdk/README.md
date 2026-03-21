@@ -1,6 +1,6 @@
 # @toon-protocol/sdk
 
-The building blocks for creating services that participate in the TOON network.
+The building blocks for creating services that participate in the TOON Protocol network. Events are encoded in [TOON format](https://github.com/toon-format/toon) and discovered via [Nostr](https://github.com/nostr-protocol/nips).
 
 ## What It Does
 
@@ -95,11 +95,13 @@ The SDK is the framework layer. You bring handlers; it handles the protocol.
 
 | Concept | Description |
 |---------|-------------|
-| **Unified identity** | One secp256k1 key produces both a Nostr pubkey and an EVM address |
+| **Unified identity** | One secp256k1 key produces both a [Nostr](https://github.com/nostr-protocol/nips) pubkey and an EVM address |
 | **Handler pattern** | `ctx.accept()` / `ctx.reject()` — handlers respond, not return |
 | **Self-write bypass** | Events from your own pubkey skip pricing |
 | **Dev mode** | Skip verification and pricing for testing |
-| **TOON encoding** | Events encoded in compact text format, not JSON |
+| **[TOON](https://github.com/toon-format/toon) encoding** | Events encoded in compact text format, not JSON |
+| **Address assignment** | ILP addresses are derived from peering topology — your upstream peer assigns your address automatically based on your pubkey. A node with multiple upstream peers has multiple addresses. See [Protocol — ILP Address Hierarchy](../../docs/protocol.md#ilp-address-hierarchy) |
+| **Invisible fee calculation** | The SDK computes multi-hop fees internally. Each intermediary advertises a fee-per-byte; the SDK sums them along the route so `publishEvent()` callers pay one total amount |
 
 ## Full Documentation
 
