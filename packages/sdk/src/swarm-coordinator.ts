@@ -50,6 +50,22 @@ export interface SwarmCoordinatorOptions {
   secretKey?: Uint8Array;
   /** Swarm collection timeout in milliseconds (default: 600000 = 10 minutes). */
   timeoutMs?: number;
+  /** Injectable time source for deterministic testing. */
+  now?: () => number;
+  /**
+   * Injectable timer factory for deterministic testing.
+   * Defaults to global setTimeout. Inject a custom implementation
+   * to control timer advancement in tests without vi.useFakeTimers().
+   */
+  setTimer?: (
+    callback: () => void,
+    ms: number
+  ) => ReturnType<typeof setTimeout>;
+  /**
+   * Injectable timer cancellation for deterministic testing.
+   * Defaults to global clearTimeout. Must pair with setTimer.
+   */
+  clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
   /** Optional event store for swarm state persistence. */
   eventStore?: WorkflowEventStore;
   /** Default destination ILP address for publishing events. */
@@ -291,8 +307,9 @@ export class SwarmCoordinator {
     this.clearTimeout();
 
     const timeoutMs = this.options.timeoutMs;
+    const timerFn = this.options.setTimer ?? setTimeout;
 
-    this.timeoutHandle = setTimeout(() => {
+    this.timeoutHandle = timerFn(() => {
       if (this.state !== 'collecting') return;
 
       if (this.submissions.length === 0) {
@@ -331,7 +348,8 @@ export class SwarmCoordinator {
    */
   private clearTimeout(): void {
     if (this.timeoutHandle !== null) {
-      clearTimeout(this.timeoutHandle);
+      const cancelFn = this.options.clearTimer ?? clearTimeout;
+      cancelFn(this.timeoutHandle);
       this.timeoutHandle = null;
     }
   }
