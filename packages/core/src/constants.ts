@@ -102,3 +102,19 @@ export const TRANSLATION_KIND = 5302;
  * In the TOON-specific replaceable range (10032-10099).
  */
 export const WORKFLOW_CHAIN_KIND = 10040;
+
+/**
+ * Job Review (kind 31117)
+ * NIP-33 parameterized replaceable event for post-job reviews.
+ * `d` tag = job request event ID enforces one review per job per reviewer.
+ * Rating tag contains integer 1-5. Role tag indicates 'customer' or 'provider'.
+ */
+export const JOB_REVIEW_KIND = 31117;
+
+/**
+ * Web of Trust declaration (kind 30382)
+ * NIP-33 parameterized replaceable event endorsing a provider pubkey.
+ * `d` tag = target provider pubkey enforces one WoT declaration per
+ * declarer per target. Used for reputation scoring sybil defense.
+ */
+export const WEB_OF_TRUST_KIND = 30382;

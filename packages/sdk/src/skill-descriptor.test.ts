@@ -32,6 +32,7 @@ import type {
   SendPacketParams,
   SendPacketResult,
   RegisterPeerParams,
+  ReputationScore,
 } from '@toon-protocol/core';
 import { HandlerRegistry } from './handler-registry.js';
 import { buildSkillDescriptor } from './skill-descriptor.js';
@@ -1248,5 +1249,140 @@ describe('Skill descriptor attestation field (Story 6.3 Task 4)', () => {
         },
       })
     ).toThrow(ToonError);
+  });
+});
+
+// ============================================================================
+// Story 6.4 Task 4: Skill descriptor reputation field
+// ============================================================================
+
+describe('Skill descriptor reputation field (Story 6.4 Task 4)', () => {
+  const REPUTATION_SCORE: ReputationScore = {
+    score: 520,
+    signals: {
+      trustedBy: 3,
+      channelVolumeUsdc: 1000,
+      jobsCompleted: 20,
+      avgRating: 4.5,
+    },
+  };
+
+  // --------------------------------------------------------------------------
+  // T-6.4-12: Reputation in kind:10035 via buildSkillDescriptor
+  // --------------------------------------------------------------------------
+  it('[P1] skill descriptor includes reputation field when provided (T-6.4-12)', () => {
+    // Arrange
+    const registry = new HandlerRegistry();
+    const handler = vi.fn().mockResolvedValue({ accept: true });
+    registry.on(5100, handler);
+
+    // Act
+    const result = buildSkillDescriptor(registry, {
+      reputation: REPUTATION_SCORE,
+    });
+
+    // Assert
+    expect(result).toBeDefined();
+    expect(result!.reputation).toBeDefined();
+    expect(result!.reputation!.score).toBe(520);
+    expect(result!.reputation!.signals.trustedBy).toBe(3);
+    expect(result!.reputation!.signals.channelVolumeUsdc).toBe(1000);
+    expect(result!.reputation!.signals.jobsCompleted).toBe(20);
+    expect(result!.reputation!.signals.avgRating).toBe(4.5);
+  });
+
+  it('[P1] reputation field roundtrips through kind:10035 build/parse', () => {
+    // Arrange
+    const registry = new HandlerRegistry();
+    const handler = vi.fn().mockResolvedValue({ accept: true });
+    registry.on(5100, handler);
+
+    const skill = buildSkillDescriptor(registry, {
+      reputation: REPUTATION_SCORE,
+    });
+    expect(skill).toBeDefined();
+
+    const secretKey = generateSecretKey();
+    const content = createServiceDiscoveryContentWithSkill(skill!);
+    const event = buildServiceDiscoveryEvent(content, secretKey);
+
+    // Act
+    const parsed = parseServiceDiscovery(event);
+
+    // Assert
+    expect(parsed).not.toBeNull();
+    expect(parsed!.skill).toBeDefined();
+    expect(parsed!.skill!.reputation).toBeDefined();
+    expect(parsed!.skill!.reputation!.score).toBe(520);
+    expect(parsed!.skill!.reputation!.signals).toEqual(
+      REPUTATION_SCORE.signals
+    );
+  });
+
+  it('[P1] skill descriptor without reputation field has no reputation (backward compat)', () => {
+    // Arrange
+    const registry = new HandlerRegistry();
+    const handler = vi.fn().mockResolvedValue({ accept: true });
+    registry.on(5100, handler);
+
+    // Act: no reputation config
+    const result = buildSkillDescriptor(registry);
+
+    // Assert
+    expect(result).toBeDefined();
+    expect(result!.reputation).toBeUndefined();
+  });
+
+  // --------------------------------------------------------------------------
+  // T-6.4-18: TEE attestation alongside reputation (via buildSkillDescriptor)
+  // --------------------------------------------------------------------------
+  it('[P1] attestation and reputation are independent fields (T-6.4-18)', () => {
+    // Arrange
+    const registry = new HandlerRegistry();
+    const handler = vi.fn().mockResolvedValue({ accept: true });
+    registry.on(5100, handler);
+
+    // Act: both attestation and reputation
+    const result = buildSkillDescriptor(registry, {
+      attestation: {
+        eventId: 'e'.repeat(64),
+        enclaveImageHash: 'abc123',
+      },
+      reputation: REPUTATION_SCORE,
+    });
+
+    // Assert: both fields present, independent
+    expect(result).toBeDefined();
+    expect(result!.attestation).toBeDefined();
+    expect(result!.attestation!['eventId']).toBe('e'.repeat(64));
+    expect(result!.reputation).toBeDefined();
+    expect(result!.reputation!.score).toBe(520);
+  });
+
+  it('[P1] createNode with skillConfig.reputation -> getSkillDescriptor includes reputation', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const handler = vi.fn().mockResolvedValue({ accept: true });
+
+    const node = createNode({
+      secretKey,
+      connector,
+      skillConfig: {
+        name: 'reputable-provider',
+        reputation: REPUTATION_SCORE,
+      },
+    });
+    node.on(5100, handler);
+
+    // Act
+    const skill = node.getSkillDescriptor();
+
+    // Assert
+    expect(skill).toBeDefined();
+    expect(skill!.name).toBe('reputable-provider');
+    expect(skill!.reputation).toBeDefined();
+    expect(skill!.reputation!.score).toBe(520);
+    expect(skill!.reputation!.signals.trustedBy).toBe(3);
   });
 });

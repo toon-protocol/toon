@@ -9,7 +9,7 @@
  */
 
 import { ToonError } from '@toon-protocol/core';
-import type { SkillDescriptor } from '@toon-protocol/core';
+import type { SkillDescriptor, ReputationScore } from '@toon-protocol/core';
 import type { HandlerRegistry } from './handler-registry.js';
 
 /** Regex for 64-char lowercase hex string. */
@@ -31,6 +31,8 @@ export interface BuildSkillDescriptorConfig {
   inputSchema?: Record<string, unknown>;
   /** Available AI models. */
   models?: string[];
+  /** Pre-computed reputation score for the skill descriptor. */
+  reputation?: ReputationScore;
   /** TEE attestation metadata for the skill descriptor. */
   attestation?: {
     /** 64-char hex event ID of the provider's latest kind:10033 attestation event. */
@@ -96,6 +98,10 @@ export function buildSkillDescriptor(
 
   if (config.models !== undefined) {
     descriptor.models = config.models;
+  }
+
+  if (config.reputation !== undefined) {
+    descriptor.reputation = config.reputation;
   }
 
   if (config.attestation !== undefined) {

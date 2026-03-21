@@ -70,3 +70,19 @@ export {
   type AttestedResultVerificationOptions,
   type AttestedResultVerificationResult,
 } from './attested-result-verifier.js';
+export {
+  buildJobReviewEvent,
+  parseJobReview,
+  buildWotDeclarationEvent,
+  parseWotDeclaration,
+  ReputationScoreCalculator,
+  hasMinReputation,
+  JOB_REVIEW_KIND,
+  WEB_OF_TRUST_KIND,
+  type JobReviewParams,
+  type ParsedJobReview,
+  type WotDeclarationParams,
+  type ParsedWotDeclaration,
+  type ReputationSignals,
+  type ReputationScore,
+} from './reputation.js';

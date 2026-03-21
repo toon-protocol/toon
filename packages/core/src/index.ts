@@ -82,6 +82,20 @@ export {
   hasRequireAttestation,
   type AttestedResultVerificationOptions,
   type AttestedResultVerificationResult,
+  buildJobReviewEvent,
+  parseJobReview,
+  buildWotDeclarationEvent,
+  parseWotDeclaration,
+  ReputationScoreCalculator,
+  hasMinReputation,
+  JOB_REVIEW_KIND,
+  WEB_OF_TRUST_KIND,
+  type JobReviewParams,
+  type ParsedJobReview,
+  type WotDeclarationParams,
+  type ParsedWotDeclaration,
+  type ReputationSignals,
+  type ReputationScore,
 } from './events/index.js';
 
 // Peer discovery
