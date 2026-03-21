@@ -8,12 +8,7 @@
  */
 
 import { ToonError } from '../errors.js';
-
-/**
- * Valid ILP address segment pattern: lowercase alphanumeric + hyphen.
- * Each dot-separated segment must match this pattern and be non-empty.
- */
-const ILP_SEGMENT_PATTERN = /^[a-z0-9-]+$/;
+import { validateIlpAddress } from './ilp-address-validation.js';
 
 /**
  * Hex-only pattern (case-insensitive for input validation).
@@ -37,28 +32,6 @@ const MAX_PUBKEY_LENGTH = 128;
  * Maximum ILP address length (practical limit).
  */
 const MAX_ILP_ADDRESS_LENGTH = 1023;
-
-/**
- * Validates that a string is a valid ILP address (dot-separated, non-empty
- * segments, valid characters only).
- */
-function validateIlpAddress(address: string): void {
-  const segments = address.split('.');
-  for (const segment of segments) {
-    if (segment.length === 0) {
-      throw new ToonError(
-        `Invalid ILP address: empty segment in "${address}"`,
-        'ADDRESS_INVALID_PREFIX'
-      );
-    }
-    if (!ILP_SEGMENT_PATTERN.test(segment)) {
-      throw new ToonError(
-        `Invalid ILP address: segment "${segment}" contains invalid characters`,
-        'ADDRESS_INVALID_PREFIX'
-      );
-    }
-  }
-}
 
 /**
  * Derives a child ILP address by appending the first 8 hex characters of a

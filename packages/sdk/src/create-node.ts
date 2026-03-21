@@ -42,6 +42,8 @@ import {
   buildJobFeedbackEvent,
   buildJobResultEvent,
   parseJobResult,
+  deriveChildAddress,
+  ILP_ROOT_PREFIX,
 } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
@@ -128,7 +130,13 @@ export interface NodeConfig {
 
   // --- Network ---
 
-  /** ILP address (default: 'g.toon.local') */
+  /**
+   * Upstream peer's ILP address prefix for address derivation.
+   * When set, the node derives its ILP address as
+   * `deriveChildAddress(upstreamPrefix, pubkey)` and ignores `ilpAddress`.
+   */
+  upstreamPrefix?: string;
+  /** ILP address (default: derived from pubkey under ILP_ROOT_PREFIX) */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
   btpEndpoint?: string;
@@ -550,8 +558,21 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // ILP info shared between both modes
+  // Address resolution priority:
+  // 1. upstreamPrefix set -> derive from upstream prefix + pubkey (ignore ilpAddress)
+  // 2. ilpAddress set -> use directly (includes genesis node with 'g.toon')
+  // 3. neither set -> derive from ILP_ROOT_PREFIX + pubkey (default)
+  let resolvedIlpAddress: string;
+  if (config.upstreamPrefix !== undefined) {
+    resolvedIlpAddress = deriveChildAddress(config.upstreamPrefix, pubkey);
+  } else if (config.ilpAddress !== undefined) {
+    resolvedIlpAddress = config.ilpAddress;
+  } else {
+    resolvedIlpAddress = deriveChildAddress(ILP_ROOT_PREFIX, pubkey);
+  }
+
   const ilpInfo = {
-    ilpAddress: config.ilpAddress ?? 'g.toon.local',
+    ilpAddress: resolvedIlpAddress,
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,

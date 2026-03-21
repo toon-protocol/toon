@@ -22,8 +22,19 @@ export {
   ILP_ROOT_PREFIX,
 } from './constants.js';
 
-// ILP address derivation
+// ILP address derivation and BTP prefix exchange
 export { deriveChildAddress } from './address/index.js';
+export {
+  isValidIlpAddressStructure,
+  validateIlpAddress,
+  extractPrefixFromHandshake,
+  buildPrefixHandshakeData,
+  validatePrefixConsistency,
+  checkAddressCollision,
+  assignAddressFromHandshake,
+  isGenesisNode,
+} from './address/index.js';
+export type { BtpHandshakeExtension } from './address/index.js';
 
 // TypeScript interfaces
 export type {
