@@ -118,3 +118,16 @@ export const JOB_REVIEW_KIND = 31117;
  * declarer per target. Used for reputation scoring sybil defense.
  */
 export const WEB_OF_TRUST_KIND = 30382;
+
+// ---------------------------------------------------------------------------
+// ILP Address Hierarchy Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * ILP root prefix for the TOON network.
+ * `g.` is the ILP global allocation prefix (standard ILP convention).
+ * `toon` is the TOON network identifier.
+ * The genesis node uses this directly -- it does not derive its address from a pubkey.
+ * All other nodes derive addresses as children of their upstream peer's prefix.
+ */
+export const ILP_ROOT_PREFIX = 'g.toon';

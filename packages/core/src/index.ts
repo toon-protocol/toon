@@ -19,7 +19,11 @@ export {
   IMAGE_GENERATION_KIND,
   TEXT_TO_SPEECH_KIND,
   TRANSLATION_KIND,
+  ILP_ROOT_PREFIX,
 } from './constants.js';
+
+// ILP address derivation
+export { deriveChildAddress } from './address/index.js';
 
 // TypeScript interfaces
 export type {
