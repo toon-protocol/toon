@@ -778,7 +778,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.stop();
   });
 
-
   // -------------------------------------------------------------------------
   // AC#1: TOON-encoded data matches the encoder output after roundtrip
   // -------------------------------------------------------------------------

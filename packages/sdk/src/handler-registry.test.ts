@@ -42,9 +42,7 @@ describe('HandlerRegistry', () => {
 
   it('[P0] .on(kind, handler) dispatches to the correct handler for that kind', async () => {
     // Arrange
-    const handler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const handler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(30617, handler);
     const ctx = createMockContext({ kind: 30617 });
 
@@ -59,12 +57,8 @@ describe('HandlerRegistry', () => {
 
   it('[P0] multiple kind registrations each dispatch to their own handler', async () => {
     // Arrange
-    const handler1 = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
-    const handler2 = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const handler1 = vi.fn().mockResolvedValue({ accept: true });
+    const handler2 = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, handler1);
     registry.on(30617, handler2);
     const ctx1 = createMockContext({ kind: 1 });
@@ -83,9 +77,7 @@ describe('HandlerRegistry', () => {
 
   it('[P0] .onDefault() fallback is invoked for an unknown kind', async () => {
     // Arrange
-    const defaultHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const defaultHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.onDefault(defaultHandler);
     const ctx = createMockContext({ kind: 99999 });
 
@@ -116,12 +108,8 @@ describe('HandlerRegistry', () => {
 
   it('[P1] duplicate .on() for the same kind replaces the previous handler', async () => {
     // Arrange
-    const originalHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
-    const replacementHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const originalHandler = vi.fn().mockResolvedValue({ accept: true });
+    const replacementHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, originalHandler);
     registry.on(1, replacementHandler);
     const ctx = createMockContext({ kind: 1 });
@@ -137,12 +125,8 @@ describe('HandlerRegistry', () => {
 
   it('[P0] multiple kind registrations route to correct handler only (no cross-dispatch)', async () => {
     // Arrange -- register two kind handlers
-    const handler1 = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
-    const handler2 = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const handler1 = vi.fn().mockResolvedValue({ accept: true });
+    const handler2 = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, handler1);
     registry.on(30617, handler2);
 
@@ -157,12 +141,8 @@ describe('HandlerRegistry', () => {
 
   it('[P0] .onDefault() is NOT invoked when a specific kind handler matches', async () => {
     // Arrange -- register both a kind handler and a default handler
-    const kindHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
-    const defaultHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true });
+    const kindHandler = vi.fn().mockResolvedValue({ accept: true });
+    const defaultHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, kindHandler);
     registry.onDefault(defaultHandler);
 

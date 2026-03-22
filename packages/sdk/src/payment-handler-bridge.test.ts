@@ -9,9 +9,7 @@ import type { HandlerRegistry } from './handler-registry.js';
  */
 function createMockRegistry() {
   return {
-    dispatch: vi
-      .fn()
-      .mockResolvedValue({ accept: true }),
+    dispatch: vi.fn().mockResolvedValue({ accept: true }),
     on: vi.fn(),
     onDefault: vi.fn(),
   } as unknown as HandlerRegistry;
