@@ -20,6 +20,7 @@ import type { IlpPeerInfo } from '../types.js';
  * @param secretKey - The secret key to sign the event with
  * @returns A signed Nostr event
  *
+ * @throws {ToonError} With code `INVALID_FEE` if `feePerByte` is not a non-negative integer string
  * @throws {ToonError} With code `ADDRESS_EMPTY_ADDRESSES` if `ilpAddresses` is an empty array
  * @throws {ToonError} With code `ADDRESS_INVALID_PREFIX` if any element of `ilpAddresses` is invalid
  */
@@ -27,6 +28,16 @@ export function buildIlpPeerInfoEvent(
   info: IlpPeerInfo,
   secretKey: Uint8Array
 ): NostrEvent {
+  // Validate feePerByte if provided
+  if (info.feePerByte !== undefined) {
+    if (typeof info.feePerByte !== 'string' || !/^\d+$/.test(info.feePerByte)) {
+      throw new ToonError(
+        `Invalid feePerByte: "${String(info.feePerByte)}" must be a non-negative integer string`,
+        'INVALID_FEE'
+      );
+    }
+  }
+
   let effectiveInfo = info;
 
   if (info.ilpAddresses !== undefined) {

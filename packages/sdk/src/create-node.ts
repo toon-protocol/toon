@@ -160,6 +160,11 @@ export interface NodeConfig {
    * A 1KB event costs 10,240 micro-USDC = ~$0.01.
    */
   basePricePerByte?: bigint;
+  /**
+   * Routing fee per byte charged by this node as an intermediary (default: 0n = free routing).
+   * Advertised in kind:10032 peer info events as a non-negative integer string.
+   */
+  feePerByte?: bigint;
   /** Dev mode skips signature verification (default: false) */
   devMode?: boolean;
   /** TOON encoder function */
@@ -650,6 +655,7 @@ export function createNode(config: NodeConfig): ServiceNode {
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
+    feePerByte: String(config.feePerByte ?? 0n),
   };
 
   // 9. Branch: embedded mode vs standalone mode

@@ -746,6 +746,7 @@ describe('NostrPeerDiscovery', () => {
           assetScale: 9,
           supportedChains: [],
           settlementAddresses: {},
+          feePerByte: '0',
         });
       });
 

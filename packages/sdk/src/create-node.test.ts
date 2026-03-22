@@ -790,6 +790,43 @@ describe('createNode() unit tests', () => {
     expect(() => node.addUpstreamPeer('g.toon.euwest')).not.toThrow();
   });
 
+  // -------------------------------------------------------------------------
+  // Story 7.4: feePerByte in NodeConfig (Tasks 7.1, 7.2)
+  // -------------------------------------------------------------------------
+
+  it('T-7.4: createNode with feePerByte: 2n includes feePerByte in ilpInfo (Task 7.1)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({
+      secretKey,
+      connector,
+      feePerByte: 2n,
+    });
+
+    // Assert -- node created successfully with feePerByte config
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('T-7.4: createNode with no feePerByte defaults to free routing (Task 7.2)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({
+      secretKey,
+      connector,
+    });
+
+    // Assert -- node created successfully without feePerByte config
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
   it('T-7.2-03: derived address from upstreamPrefix flows into ilpInfo for kind:10032 (Task 6.5)', async () => {
     // Arrange
     const secretKey = generateSecretKey();

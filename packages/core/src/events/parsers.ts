@@ -167,6 +167,22 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     }
   }
 
+  // feePerByte validation (Story 7.4)
+  const { feePerByte: rawFeePerByte } = parsed;
+  let feePerByte: string;
+  if (rawFeePerByte === undefined) {
+    feePerByte = '0';
+  } else if (
+    typeof rawFeePerByte !== 'string' ||
+    !/^\d+$/.test(rawFeePerByte)
+  ) {
+    throw new InvalidEventError(
+      `Invalid feePerByte: "${String(rawFeePerByte)}" must be a non-negative integer string`
+    );
+  } else {
+    feePerByte = rawFeePerByte;
+  }
+
   // ilpAddresses validation (Story 7.3)
   let ilpAddresses: string[];
   if (rawIlpAddresses !== undefined) {
@@ -212,5 +228,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
       tokenNetworks: tokenNetworks as Record<string, string>,
     }),
     ilpAddresses,
+    feePerByte,
   };
 }

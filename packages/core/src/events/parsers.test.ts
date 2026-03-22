@@ -608,3 +608,167 @@ describe('validateChainId', () => {
     expect(validateChainId('evm:base:8453:extra')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 7.4: Fee-per-byte kind:10032 parser tests (Tasks 6.1-6.5)
+// ---------------------------------------------------------------------------
+
+describe('parseIlpPeerInfo - feePerByte (Story 7.4)', () => {
+  it('T-7.4-01 parser: extracts feePerByte from event content (Task 6.1)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      feePerByte: '2',
+    };
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+
+    // Act
+    const result = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(result.feePerByte).toBe('2');
+  });
+
+  it("T-7.4-07: pre-Epic-7 event (no feePerByte field) defaults to '0' (Task 6.2)", () => {
+    // Arrange -- event without feePerByte field
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act
+    const result = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(result.feePerByte).toBe('0');
+  });
+
+  it('T-7.4-05: feePerByte with non-numeric string throws InvalidEventError (Task 6.3)', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: 'abc',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it('feePerByte with number type (not string) throws InvalidEventError (Task 6.4)', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: -1,
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it("T-7.4-03: default feePerByte is '0' (free routing) (Task 6.5)", () => {
+    // Arrange -- build event without feePerByte
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = createTestIlpPeerInfo();
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+
+    // Act
+    const result = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(result.feePerByte).toBe('0');
+  });
+
+  it('AC4: negative fee string throws InvalidEventError at parser level', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: '-1',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it('AC4: decimal fee string throws InvalidEventError at parser level', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: '1.5',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it('AC4: scientific notation fee string throws InvalidEventError at parser level', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: '1e5',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it('AC4: empty string feePerByte throws InvalidEventError at parser level', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: '',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+
+  it('AC4: positive integer number type throws InvalidEventError (must be string)', () => {
+    // Arrange -- feePerByte is a positive number, not a string
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      btpEndpoint: 'wss://btp.example.com',
+      assetCode: 'USD',
+      assetScale: 6,
+      feePerByte: 5,
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
+  });
+});
