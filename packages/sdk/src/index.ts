@@ -88,6 +88,24 @@ export type {
 export { createPrefixClaimHandler } from './prefix-claim-handler.js';
 export type { PrefixClaimHandlerOptions } from './prefix-claim-handler.js';
 
+// Arweave DVM (Story 8.0)
+export {
+  createArweaveDvmHandler,
+  TurboUploadAdapter,
+  ChunkManager,
+  uploadBlob,
+  uploadBlobChunked,
+} from './arweave/index.js';
+export type {
+  ArweaveDvmConfig,
+  ArweaveUploadAdapter,
+  ChunkManagerConfig,
+  AddChunkResult,
+  PublishableNode,
+  UploadBlobOptions,
+  UploadBlobChunkedOptions,
+} from './arweave/index.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 

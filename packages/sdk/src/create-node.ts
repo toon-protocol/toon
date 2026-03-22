@@ -218,6 +218,8 @@ export interface StartResult {
 export interface PublishEventResult {
   success: boolean;
   eventId: string;
+  /** Response data from the ILP FULFILL packet (e.g., Arweave tx ID for kind:5094). */
+  data?: string;
   code?: string;
   message?: string;
 }
@@ -1222,6 +1224,7 @@ export function createNode(config: NodeConfig): ServiceNode {
           return {
             success: true,
             eventId: event.id,
+            ...(result.data !== undefined ? { data: result.data } : {}),
           };
         }
 

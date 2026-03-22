@@ -20,6 +20,7 @@ export default defineConfig({
       //   connector-api.test.ts           -> Story 1.8 (done)
       //   dev-mode.test.ts                -> Story 1.10 (done)
       //   publish-event.test.ts          -> Story 2.6 (done)
+      // Story 8.0: Arweave Storage DVM — activated
     ],
   },
 });
