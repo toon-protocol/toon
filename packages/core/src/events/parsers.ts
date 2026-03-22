@@ -183,6 +183,22 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     feePerByte = rawFeePerByte;
   }
 
+  // prefixPricing validation (Story 7.6)
+  const { prefixPricing: rawPrefixPricing } = parsed;
+  let prefixPricing: { basePrice: string } | undefined;
+  if (rawPrefixPricing !== undefined) {
+    if (!isObject(rawPrefixPricing)) {
+      throw new InvalidEventError('prefixPricing must be an object');
+    }
+    const { basePrice } = rawPrefixPricing;
+    if (typeof basePrice !== 'string' || !/^\d+$/.test(basePrice)) {
+      throw new InvalidEventError(
+        `Invalid prefixPricing.basePrice: "${String(basePrice)}" must be a non-negative integer string`
+      );
+    }
+    prefixPricing = { basePrice };
+  }
+
   // ilpAddresses validation (Story 7.3)
   let ilpAddresses: string[];
   if (rawIlpAddresses !== undefined) {
@@ -229,5 +245,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     }),
     ilpAddresses,
     feePerByte,
+    ...(prefixPricing !== undefined && { prefixPricing }),
   };
 }

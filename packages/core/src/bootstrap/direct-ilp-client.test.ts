@@ -2,7 +2,6 @@
  * Tests for createDirectIlpClient (direct / in-process ILP client).
  */
 
-import { createHash } from 'node:crypto';
 import { describe, it, expect, vi } from 'vitest';
 import { createDirectIlpClient } from './direct-ilp-client.js';
 import type {
@@ -27,7 +26,6 @@ describe('createDirectIlpClient', () => {
   it('should create a client with sendIlpPacket function', () => {
     const connector = mockConnector({
       type: 'fulfill',
-      fulfillment: new Uint8Array(32),
     });
     const client = createDirectIlpClient(connector);
     expect(client).toBeDefined();
@@ -38,7 +36,6 @@ describe('createDirectIlpClient', () => {
     it('should convert string amount to BigInt correctly', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
       });
 
       const client = createDirectIlpClient(connector);
@@ -56,7 +53,6 @@ describe('createDirectIlpClient', () => {
     it('should convert base64 data to Uint8Array correctly', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
       });
 
       const testData = Buffer.from('hello world');
@@ -77,7 +73,6 @@ describe('createDirectIlpClient', () => {
     it('should pass destination through unchanged', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
       });
 
       const client = createDirectIlpClient(connector);
@@ -92,11 +87,9 @@ describe('createDirectIlpClient', () => {
       );
     });
 
-    it('should map fulfill response to { accepted: true, fulfillment }', async () => {
-      const fulfillmentBytes = createHash('sha256').update('test-id').digest();
+    it('should map fulfill response to { accepted: true }', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: fulfillmentBytes,
       });
 
       const client = createDirectIlpClient(connector);
@@ -107,9 +100,6 @@ describe('createDirectIlpClient', () => {
       });
 
       expect(result.accepted).toBe(true);
-      expect(result.fulfillment).toBe(
-        Buffer.from(fulfillmentBytes).toString('base64')
-      );
     });
 
     it('should map reject response to { accepted: false, code, message }', async () => {
@@ -135,7 +125,7 @@ describe('createDirectIlpClient', () => {
       const responseData = Buffer.from('response-payload');
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
+
         data: responseData,
       });
 
@@ -173,7 +163,6 @@ describe('createDirectIlpClient', () => {
     it('should omit response data field when not present in fulfill result', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
       });
 
       const client = createDirectIlpClient(connector);
@@ -231,7 +220,6 @@ describe('createDirectIlpClient', () => {
     it('should wrap invalid amount string BigInt parse error in BootstrapError', async () => {
       const connector = mockConnector({
         type: 'fulfill',
-        fulfillment: new Uint8Array(32),
       });
 
       const client = createDirectIlpClient(connector);
@@ -245,85 +233,23 @@ describe('createDirectIlpClient', () => {
       ).rejects.toThrow(BootstrapError);
     });
 
-    describe('executionCondition from raw data bytes', () => {
-      it('should compute executionCondition = SHA256(SHA256(data)) from raw data bytes', async () => {
-        const toonData = Buffer.from('test-toon-data');
+    it('should not pass executionCondition to connector', async () => {
+      const toonData = Buffer.from('test-toon-data');
 
-        const connector = mockConnector({
-          type: 'fulfill',
-          fulfillment: new Uint8Array(32),
-        });
-
-        const client = createDirectIlpClient(connector);
-        await client.sendIlpPacket({
-          destination: 'g.peer1',
-          amount: '100',
-          data: toonData.toString('base64'),
-        });
-
-        // Compute expected condition: SHA256(SHA256(raw_data_bytes))
-        // Matches connector's PaymentHandlerAdapter.computeFulfillmentFromData()
-        const fulfillment = createHash('sha256').update(toonData).digest();
-        const expectedCondition = createHash('sha256')
-          .update(fulfillment)
-          .digest();
-
-        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
-          .calls[0]![0] as SendPacketParams;
-        expect(Buffer.from(callArgs.executionCondition!)).toEqual(
-          Buffer.from(expectedCondition)
-        );
+      const connector = mockConnector({
+        type: 'fulfill',
       });
 
-      it('should not set executionCondition when data is empty', async () => {
-        const connector = mockConnector({
-          type: 'fulfill',
-          fulfillment: new Uint8Array(32),
-        });
-
-        const client = createDirectIlpClient(connector);
-        await client.sendIlpPacket({
-          destination: 'g.peer1',
-          amount: '100',
-          data: '',
-        });
-
-        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
-          .calls[0]![0] as SendPacketParams;
-        expect(callArgs.executionCondition).toBeUndefined();
+      const client = createDirectIlpClient(connector);
+      await client.sendIlpPacket({
+        destination: 'g.peer1',
+        amount: '100',
+        data: toonData.toString('base64'),
       });
 
-      it('should compute executionCondition regardless of toonDecoder presence', async () => {
-        const toonData = Buffer.from('some-data');
-        const toonDecoder = vi.fn().mockReturnValue({ id: 'fake-id' });
-
-        const connector = mockConnector({
-          type: 'fulfill',
-          fulfillment: new Uint8Array(32),
-        });
-
-        const client = createDirectIlpClient(connector, { toonDecoder });
-        await client.sendIlpPacket({
-          destination: 'g.peer1',
-          amount: '100',
-          data: toonData.toString('base64'),
-        });
-
-        // Condition should be from raw data, not decoded event ID
-        const fulfillment = createHash('sha256').update(toonData).digest();
-        const expectedCondition = createHash('sha256')
-          .update(fulfillment)
-          .digest();
-
-        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
-          .calls[0]![0] as SendPacketParams;
-        expect(Buffer.from(callArgs.executionCondition!)).toEqual(
-          Buffer.from(expectedCondition)
-        );
-
-        // toonDecoder should NOT have been called for condition computation
-        expect(toonDecoder).not.toHaveBeenCalled();
-      });
+      const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+        .calls[0]![0] as SendPacketParams;
+      expect(callArgs).not.toHaveProperty('executionCondition');
     });
   });
 });

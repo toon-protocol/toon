@@ -11,7 +11,7 @@ function createMockRegistry() {
   return {
     dispatch: vi
       .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'mock-fulfillment' }),
+      .mockResolvedValue({ accept: true }),
     on: vi.fn(),
     onDefault: vi.fn(),
   } as unknown as HandlerRegistry;
@@ -72,7 +72,7 @@ describe('PaymentHandler Bridge', () => {
 
   it('[P0] isTransit=false awaits handler response', async () => {
     // Arrange
-    const expectedResponse = { accept: true, fulfillment: 'real-fulfillment' };
+    const expectedResponse = { accept: true };
     (mockRegistry.dispatch as ReturnType<typeof vi.fn>).mockResolvedValue(
       expectedResponse
     );

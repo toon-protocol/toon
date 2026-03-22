@@ -609,3 +609,72 @@ describe('buildIlpPeerInfoEvent - feePerByte (Story 7.4)', () => {
     expect((thrownError as ToonError).code).toBe('INVALID_FEE');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 7.6: prefixPricing in kind:10032 (Task 6, AC #11)
+// ---------------------------------------------------------------------------
+
+describe('buildIlpPeerInfoEvent - prefixPricing (Story 7.6)', () => {
+  it('T-7.7-09: prefixPricing serialized in event content', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      prefixPricing: { basePrice: '1000000' },
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const content = JSON.parse(event.content);
+
+    // Assert
+    expect(content.prefixPricing).toEqual({ basePrice: '1000000' });
+  });
+
+  it('T-7.7-09 roundtrip: build -> parse preserves prefixPricing (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      prefixPricing: { basePrice: '1000000' },
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(parsed.prefixPricing).toEqual({ basePrice: '1000000' });
+  });
+
+  it('prefixPricing absent: parser returns undefined for prefixPricing', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = createTestIlpPeerInfo();
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(parsed.prefixPricing).toBeUndefined();
+  });
+
+  it('prefixPricing coexists with feePerByte without interference', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      feePerByte: '5',
+      prefixPricing: { basePrice: '500000' },
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(parsed.feePerByte).toBe('5');
+    expect(parsed.prefixPricing).toEqual({ basePrice: '500000' });
+  });
+});

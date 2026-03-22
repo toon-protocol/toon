@@ -772,3 +772,95 @@ describe('parseIlpPeerInfo - feePerByte (Story 7.4)', () => {
     expect(() => parseIlpPeerInfo(event)).toThrow('Invalid feePerByte');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 7.6: prefixPricing field in kind:10032
+// ---------------------------------------------------------------------------
+
+describe('parseIlpPeerInfo() prefixPricing (Story 7.6, T-7.7-09)', () => {
+  function createMockEvent(kind: number, content: string): NostrEvent {
+    return {
+      id: 'a'.repeat(64),
+      pubkey: 'b'.repeat(64),
+      created_at: 1700000000,
+      kind,
+      tags: [],
+      content,
+      sig: 'c'.repeat(128),
+    };
+  }
+
+  it('T-7.7-09 [P1]: kind:10032 with prefixPricing roundtrips through build -> parse', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ilpAddress: 'g.toon.genesis',
+      btpEndpoint: 'wss://btp.toon.dev',
+      assetCode: 'USD',
+      assetScale: 6,
+      prefixPricing: { basePrice: '1000000' },
+    };
+
+    // Act -- build then parse
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert -- prefixPricing is preserved
+    expect(parsed.prefixPricing).toBeDefined();
+    expect(parsed.prefixPricing?.basePrice).toBe('1000000');
+  });
+
+  it('kind:10032 without prefixPricing -> parsed result has no prefixPricing', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ilpAddress: 'g.toon.genesis',
+      btpEndpoint: 'wss://btp.toon.dev',
+      assetCode: 'USD',
+      assetScale: 6,
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(parsed.prefixPricing).toBeUndefined();
+  });
+
+  it('kind:10032 with invalid prefixPricing.basePrice (negative) -> throws InvalidEventError', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.toon.genesis',
+      btpEndpoint: 'wss://btp.toon.dev',
+      assetCode: 'USD',
+      assetScale: 6,
+      prefixPricing: { basePrice: '-100' },
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'Invalid prefixPricing.basePrice'
+    );
+  });
+
+  it('kind:10032 with non-object prefixPricing -> throws InvalidEventError', () => {
+    // Arrange
+    const content = JSON.stringify({
+      ilpAddress: 'g.toon.genesis',
+      btpEndpoint: 'wss://btp.toon.dev',
+      assetCode: 'USD',
+      assetScale: 6,
+      prefixPricing: 'not-an-object',
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      'prefixPricing must be an object'
+    );
+  });
+});

@@ -164,10 +164,6 @@ describe('HandlerContext', () => {
 
     // Assert
     expect(response.accept).toBe(true);
-    expect(response).toHaveProperty('fulfillment');
-    expect(typeof (response as { fulfillment: string }).fulfillment).toBe(
-      'string'
-    );
   });
 
   it('[P0] ctx.accept() without data does not include metadata property (AC #8)', () => {

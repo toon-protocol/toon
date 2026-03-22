@@ -583,6 +583,12 @@ export function parseJobRequest(event: NostrEvent): ParsedJobRequest | null {
  * NIP-90 tags: `e` (request event ID), `p` (customer pubkey), and `amount`
  * (compute cost + currency).
  *
+ * The `amount` tag is **informational** (a receipt of the agreed price).
+ * In the prepaid protocol model, payment is sent with the job request
+ * (via `publishEvent()` with the `amount` option), NOT triggered by
+ * parsing the result event's amount tag. The amount tag serves as a
+ * record of what was agreed upon, not as a payment trigger.
+ *
  * Returns `null` for malformed events. Follows the lenient parse pattern.
  *
  * @param event - The Nostr event to parse.

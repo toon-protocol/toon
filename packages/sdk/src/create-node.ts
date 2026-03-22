@@ -48,6 +48,8 @@ import {
   ILP_ROOT_PREFIX,
   calculateRouteAmount,
   resolveRouteFees,
+  buildPrefixClaimEvent,
+  validatePrefix,
 } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
@@ -216,7 +218,6 @@ export interface StartResult {
 export interface PublishEventResult {
   success: boolean;
   eventId: string;
-  fulfillment?: string;
   code?: string;
   message?: string;
 }
@@ -252,12 +253,16 @@ export interface ServiceNode {
    * ILP PREPARE packet via the runtime client.
    *
    * @param event - The Nostr event to publish
-   * @param options - Must include destination ILP address
+   * @param options - Must include destination ILP address. Optional `amount`
+   *   overrides the default basePricePerByte * toonData.length calculation
+   *   (prepaid model: send exact destination amount). Optional `bid` is a
+   *   client-side safety cap: if the destination amount exceeds `bid`, the
+   *   SDK throws before sending any ILP packet.
    * @returns Result with success/failure info and event ID
    */
   publishEvent(
     event: NostrEvent,
-    options?: { destination: string }
+    options?: { destination: string; amount?: bigint; bid?: bigint }
   ): Promise<PublishEventResult>;
 
   /**
@@ -323,6 +328,10 @@ export interface ServiceNode {
    * The payment routes through the ILP mesh using the same infrastructure
    * as relay write fees.
    *
+   * @deprecated Use publishEvent() with amount option instead. Prepaid model:
+   * send job request + payment in one packet via
+   * `publishEvent(event, { destination, amount: computePrice })`.
+   *
    * @param resultEvent - Kind 6xxx result event with amount tag
    * @param providerIlpAddress - Provider's ILP address from kind:10035
    * @param options - Optional originalBid for bid validation (E5-R005)
@@ -353,6 +362,25 @@ export interface ServiceNode {
    * @param upstreamPrefix - The upstream prefix to remove
    */
   removeUpstreamPeer(upstreamPrefix: string): void;
+
+  /**
+   * Claim a prefix from an upstream peer by sending a prefix claim event
+   * with payment via ILP.
+   *
+   * Builds a Kind 10034 prefix claim event, reads the upstream's prefix
+   * pricing from its kind:10032 advertisement, and calls publishEvent()
+   * with the appropriate amount.
+   *
+   * @param prefix - The prefix string to claim (e.g., 'useast')
+   * @param upstreamDestination - ILP address of the upstream node
+   * @param options - Optional prefixPrice override (defaults to upstream's prefixPricing.basePrice from discovery)
+   * @returns Result with success/failure info and event ID
+   */
+  claimPrefix(
+    prefix: string,
+    upstreamDestination: string,
+    options?: { prefixPrice?: bigint }
+  ): Promise<PublishEventResult>;
 }
 
 /**
@@ -1112,7 +1140,7 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     async publishEvent(
       event: NostrEvent,
-      options?: { destination: string }
+      options?: { destination: string; amount?: bigint; bid?: bigint }
     ): Promise<PublishEventResult> {
       // Guard: node must be started
       if (!started) {
@@ -1144,12 +1172,36 @@ export function createNode(config: NodeConfig): ServiceNode {
           console.warn(`[publishEvent] ${warning}`);
         }
 
-        // Compute amount: basePricePerByte * toonData.length + intermediary fees
-        const amount = calculateRouteAmount({
-          basePricePerByte: config.basePricePerByte ?? 10n,
-          packetByteLength: toonData.length,
-          hopFees,
-        });
+        // Compute destination amount: use override or default basePricePerByte * bytes
+        const destinationAmount =
+          options.amount ??
+          (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
+
+        // Bid safety cap: if bid is provided, reject if destination amount exceeds bid
+        if (options.bid !== undefined && destinationAmount > options.bid) {
+          throw new NodeError(
+            `Cannot publish: destination amount ${destinationAmount} exceeds bid safety cap ${options.bid}`
+          );
+        }
+
+        // Compute total amount: destination amount + intermediary route fees
+        let amount: bigint;
+        if (options.amount !== undefined) {
+          // When amount override is provided, add only hop fees (no basePricePerByte)
+          const hopFeesTotal = calculateRouteAmount({
+            basePricePerByte: 0n,
+            packetByteLength: toonData.length,
+            hopFees,
+          });
+          amount = options.amount + hopFeesTotal;
+        } else {
+          // Default: basePricePerByte * bytes + hop fees
+          amount = calculateRouteAmount({
+            basePricePerByte: config.basePricePerByte ?? 10n,
+            packetByteLength: toonData.length,
+            hopFees,
+          });
+        }
 
         // Build ILP PREPARE packet using shared construction (packet equivalence
         // with x402 rail -- the destination relay cannot distinguish between
@@ -1168,7 +1220,6 @@ export function createNode(config: NodeConfig): ServiceNode {
           return {
             success: true,
             eventId: event.id,
-            fulfillment: result.fulfillment ?? '',
           };
         }
 
@@ -1232,6 +1283,11 @@ export function createNode(config: NodeConfig): ServiceNode {
       providerIlpAddress: string,
       options?: { originalBid?: string }
     ): Promise<IlpSendResult> {
+      // Deprecation warning
+      console.warn(
+        '[settleCompute] DEPRECATED: Use publishEvent() with { amount } option instead. The prepaid model sends job request + payment in one packet.'
+      );
+
       // Guard: node must be started
       if (!started) {
         throw new NodeError(
@@ -1364,6 +1420,59 @@ export function createNode(config: NodeConfig): ServiceNode {
 
       // Note: kind:10032 republication will be triggered when BootstrapService
       // gains a republish() method (deferred to address lifecycle E2E integration).
+    },
+
+    async claimPrefix(
+      prefix: string,
+      upstreamDestination: string,
+      options?: { prefixPrice?: bigint }
+    ): Promise<PublishEventResult> {
+      // Guard: node must be started
+      if (!started) {
+        throw new NodeError(
+          'Cannot claim prefix: node not started. Call start() first.'
+        );
+      }
+
+      // Validate prefix format before sending payment (fail-fast, like bid safety cap)
+      const prefixValidation = validatePrefix(prefix);
+      if (!prefixValidation.valid) {
+        throw new NodeError(
+          `Cannot claim prefix: ${prefixValidation.reason ?? 'invalid prefix'}`
+        );
+      }
+
+      // Determine the amount: explicit override, or look up upstream's prefixPricing
+      let claimAmount = options?.prefixPrice;
+      if (claimAmount === undefined) {
+        // Look up from discovered peers
+        const peers = discoveryTrackerInstance.getAllDiscoveredPeers();
+        const upstreamPeer = peers.find(
+          (p) =>
+            p.peerInfo.ilpAddress === upstreamDestination ||
+            (p.peerInfo.ilpAddresses &&
+              p.peerInfo.ilpAddresses.includes(upstreamDestination))
+        );
+        if (upstreamPeer?.peerInfo.prefixPricing?.basePrice) {
+          claimAmount = BigInt(upstreamPeer.peerInfo.prefixPricing.basePrice);
+        } else {
+          throw new NodeError(
+            'Cannot claim prefix: no amount provided and upstream peer prefix pricing not found in discovery'
+          );
+        }
+      }
+
+      // Build the prefix claim event
+      const claimEvent = buildPrefixClaimEvent(
+        { requestedPrefix: prefix },
+        config.secretKey
+      );
+
+      // Delegate to publishEvent with the amount override
+      return node.publishEvent(claimEvent, {
+        destination: upstreamDestination,
+        amount: claimAmount,
+      });
     },
   };
 

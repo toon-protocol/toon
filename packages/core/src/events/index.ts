@@ -65,6 +65,16 @@ export {
   type ParsedSwarmSelection,
 } from './swarm.js';
 export {
+  buildPrefixClaimEvent,
+  parsePrefixClaimEvent,
+  buildPrefixGrantEvent,
+  parsePrefixGrantEvent,
+  PREFIX_CLAIM_KIND,
+  PREFIX_GRANT_KIND,
+  type PrefixClaimContent,
+  type PrefixGrantContent,
+} from './prefix-claim.js';
+export {
   AttestedResultVerifier,
   hasRequireAttestation,
   type AttestedResultVerificationOptions,

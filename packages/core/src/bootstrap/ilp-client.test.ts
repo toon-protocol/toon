@@ -61,9 +61,7 @@ describe('createHttpIlpClient', () => {
     it('should POST to /admin/ilp/send with correct body', async () => {
       const mockFetch = vi
         .fn()
-        .mockResolvedValue(
-          createFetchResponse({ accepted: true, fulfillment: 'abc123' })
-        );
+        .mockResolvedValue(createFetchResponse({ accepted: true }));
       vi.stubGlobal('fetch', mockFetch);
 
       const client = createHttpIlpClient('http://localhost:3000');
@@ -93,7 +91,6 @@ describe('createHttpIlpClient', () => {
         vi.fn().mockResolvedValue(
           createFetchResponse({
             accepted: true,
-            fulfillment: 'abc123',
             data: 'AQID',
           })
         )
@@ -107,7 +104,6 @@ describe('createHttpIlpClient', () => {
       });
 
       expect(result.accepted).toBe(true);
-      expect(result.fulfillment).toBe('abc123');
       expect(result.data).toBe('AQID');
     });
 
@@ -164,11 +160,7 @@ describe('createHttpIlpClient', () => {
       it('should normalize { fulfilled: true } to accepted === true', async () => {
         vi.stubGlobal(
           'fetch',
-          vi
-            .fn()
-            .mockResolvedValue(
-              createFetchResponse({ fulfilled: true, fulfillment: 'abc' })
-            )
+          vi.fn().mockResolvedValue(createFetchResponse({ fulfilled: true }))
         );
 
         const client = createHttpIlpClient('http://localhost:3000');

@@ -33,6 +33,8 @@ export interface IlpPeerInfo {
   tokenNetworks?: Record<string, string>;
   /** Routing fee per byte charged by this node as an intermediary, serialized as a non-negative integer string (e.g., '2'). Defaults to '0' (free routing) when absent. */
   feePerByte?: string;
+  /** Prefix pricing for prefix claim marketplace. basePrice is in USDC micro-units as a non-negative integer string. */
+  prefixPricing?: { basePrice: string };
 }
 
 /**

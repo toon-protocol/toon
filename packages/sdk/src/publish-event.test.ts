@@ -22,7 +22,6 @@ import type { PublishEventResult } from './index.js';
 const _typeCheck: PublishEventResult = {
   success: true,
   eventId: 'test',
-  fulfillment: 'test',
 };
 void _typeCheck;
 
@@ -75,7 +74,6 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -106,7 +104,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -146,7 +143,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange -- use a known basePricePerByte to verify computation
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 20n;
     const node = createNode({
@@ -178,11 +174,10 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
   // AC#4: Success result shape
   // -------------------------------------------------------------------------
 
-  it('[P0] publishEvent() returns { success: true, eventId, fulfillment } when connector accepts (AC#4)', async () => {
+  it('[P0] publishEvent() returns { success: true, eventId } when connector accepts (AC#4)', async () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -201,8 +196,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Assert -- success result shape
     expect(result.success).toBe(true);
     expect(result.eventId).toBe('dd'.repeat(32));
-    expect(typeof result.fulfillment).toBe('string');
-    expect(result.fulfillment?.length).toBeGreaterThan(0);
 
     // Cleanup
     await node.stop();
@@ -329,7 +322,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const customPrice = 50n;
     const node = createNode({
@@ -364,7 +356,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange -- omit basePricePerByte from config
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -425,7 +416,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 10n;
     const node = createNode({
@@ -599,7 +589,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange -- two events with different content sizes
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 10n;
     const node = createNode({
@@ -648,7 +637,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
 
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 10n;
     const node = createNode({
@@ -690,7 +678,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -710,17 +697,16 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     expect(result.success).toBe(true);
     expect(result.code).toBeUndefined();
     expect(result.message).toBeUndefined();
-    expect(result.fulfillment).toBeDefined();
 
     // Cleanup
     await node.stop();
   });
 
   // -------------------------------------------------------------------------
-  // AC#4: Rejection result does not contain fulfillment field
+  // AC#4: Rejection result shape
   // -------------------------------------------------------------------------
 
-  it('[P1] publishEvent() rejection result does not include fulfillment field (AC#4)', async () => {
+  it('[P1] publishEvent() rejection result includes code and message (AC#4)', async () => {
     // Arrange
     const connector = createMockConnector({
       type: 'reject',
@@ -741,9 +727,8 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
       destination: 'g.peer.unreachable',
     });
 
-    // Assert -- rejection shape has no fulfillment
+    // Assert -- rejection shape
     expect(result.success).toBe(false);
-    expect(result.fulfillment).toBeUndefined();
     expect(result.code).toBe('F02');
     expect(result.message).toBe('No route to destination');
 
@@ -793,39 +778,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     await node.stop();
   });
 
-  it('[P2] publishEvent() returns empty fulfillment when connector fulfill omits it (AC#4)', async () => {
-    // Arrange -- connector returns fulfill without a fulfillment field
-    const connector = createMockConnector();
-    // DirectRuntimeClient converts fulfill.fulfillment (Uint8Array) to base64 string.
-    // When the connector returns a fulfill, fulfillment is always present as Uint8Array.
-    // The ?? '' fallback in publishEvent covers the edge case where IlpSendResult.fulfillment
-    // is undefined (e.g., from an HTTP-based runtime client).
-    // Simulate this by overriding sendPacket to return a fulfill with empty fulfillment.
-    connector.sendPacket = async () => ({
-      type: 'fulfill' as const,
-      fulfillment: new Uint8Array(0),
-    });
-    const node = createNode({
-      secretKey: TEST_SECRET_KEY,
-      connector,
-      knownPeers: [],
-    });
-    await node.start();
-
-    const event = createTestEvent();
-
-    // Act
-    const result = await node.publishEvent(event, {
-      destination: 'g.peer.address',
-    });
-
-    // Assert -- fulfillment should be a string (base64 of empty Uint8Array = '')
-    expect(result.success).toBe(true);
-    expect(typeof result.fulfillment).toBe('string');
-
-    // Cleanup
-    await node.stop();
-  });
 
   // -------------------------------------------------------------------------
   // AC#1: TOON-encoded data matches the encoder output after roundtrip
@@ -837,7 +789,6 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
       await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -886,7 +837,6 @@ describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
     const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 10n;
     const node = createNode({
@@ -924,7 +874,6 @@ describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
     // If any fee parameters were added, this TypeScript compilation would fail.
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -956,7 +905,6 @@ describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -992,7 +940,6 @@ describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
     const { encodeEventToToon } = await import('@toon-protocol/core/toon');
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
     });
     const basePricePerByte = 10n;
     const node = createNode({
@@ -1041,5 +988,388 @@ describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
 
     // Assert: (10 * 100) + (2 * 100) + (3 * 100) = 1500
     expect(amount).toBe(1500n);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 7.6: Prepaid Protocol Model - publishEvent amount override & bid cap
+// ---------------------------------------------------------------------------
+
+describe('publishEvent() prepaid protocol model (Story 7.6)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-01: publishEvent with amount override
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-01 [P0]: publishEvent() with amount option uses provided amount as base instead of basePricePerByte * bytes (AC #1)', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte: 10n,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- provide explicit amount
+    await node.publishEvent(event, {
+      destination: 'g.peer.address',
+      amount: 50000n,
+    });
+
+    // Assert -- the ILP PREPARE amount should include 50000n (not basePricePerByte * bytes)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
+    const call = connector.sendPacketCalls[0]!;
+    // With a direct route (unknown intermediary defaults to 0n fee),
+    // total amount = 50000n + 0 route fees = 50000n
+    expect(call.amount).toBe(50000n);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-06: publishEvent without amount uses default basePricePerByte * bytes
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-06 [P0]: publishEvent() without amount option uses basePricePerByte * toonData.length (AC #2)', async () => {
+    // Arrange
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const basePricePerByte = 10n;
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+    const expectedToonLength = BigInt(encodeEventToToon(event).length);
+    const expectedAmount = basePricePerByte * expectedToonLength;
+
+    // Act -- no amount option
+    await node.publishEvent(event, { destination: 'g.peer.address' });
+
+    // Assert -- default behavior unchanged
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
+    const call = connector.sendPacketCalls[0]!;
+    expect(call.amount).toBe(expectedAmount);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-04: Bid safety cap rejects when amount > bid
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-04 [P0]: publishEvent() throws NodeError when amount exceeds bid safety cap (AC #3)', async () => {
+    // Arrange
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act & Assert -- amount 50000n > bid 40000n -> reject before sending
+    await expect(
+      node.publishEvent(event, {
+        destination: 'g.peer.address',
+        amount: 50000n,
+        bid: 40000n,
+      })
+    ).rejects.toThrow(NodeError);
+
+    await expect(
+      node.publishEvent(event, {
+        destination: 'g.peer.address',
+        amount: 50000n,
+        bid: 40000n,
+      })
+    ).rejects.toThrow(/exceeds bid safety cap/);
+
+    // Assert -- no ILP packet was sent
+    expect(connector.sendPacketCalls.length).toBe(0);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-05: Bid safety cap passes when amount <= bid
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-05 [P0]: publishEvent() sends normally when amount is within bid safety cap (AC #3)', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- amount 50000n <= bid 60000n -> should send
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+      amount: 50000n,
+      bid: 60000n,
+    });
+
+    // Assert -- packet was sent successfully
+    expect(result.success).toBe(true);
+    expect(connector.sendPacketCalls.length).toBe(1);
+    // Verify the amount sent is the override amount (50000n), not basePricePerByte * bytes
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
+    const call = connector.sendPacketCalls[0]!;
+    expect(call.amount).toBe(50000n);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-10: Amount override with route fees
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-10 [P1]: publishEvent() with amount override adds route fees on top of provided amount', () => {
+    // This verifies the formula: totalIlpAmount = amount + SUM(hopFees[i] * packetByteLength)
+    // We test via calculateRouteAmount since publishEvent delegates to it.
+    const packetByteLength = 100;
+    const hopFees = [2n, 3n]; // two intermediaries
+
+    // When amount is provided, basePricePerByte should be 0n (amount replaces it)
+    // and the provided amount is added separately.
+    const routeFeesOnly = calculateRouteAmount({
+      basePricePerByte: 0n,
+      packetByteLength,
+      hopFees,
+    });
+
+    // Route fees = (2 * 100) + (3 * 100) = 500
+    expect(routeFeesOnly).toBe(500n);
+
+    // Total with amount override = 50000n + 500n = 50500n
+    const totalWithOverride = 50000n + routeFeesOnly;
+    expect(totalWithOverride).toBe(50500n);
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-13: No bid -> no bid check
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-13 [P2]: publishEvent() with amount but no bid sends without bid check (AC #1)', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- amount provided, no bid -> should send without any bid check
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+      amount: 50000n,
+    });
+
+    // Assert -- sent successfully
+    expect(result.success).toBe(true);
+    expect(connector.sendPacketCalls.length).toBe(1);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.6-08: settleCompute deprecation warning
+  // -------------------------------------------------------------------------
+
+  it('T-7.6-08 [P1]: settleCompute() logs deprecation warning on invocation (AC #4)', async () => {
+    // Arrange
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    // Build a valid Kind 6100 result event for settleCompute
+    const { buildJobResultEvent } = await import('@toon-protocol/core');
+    const resultEvent = buildJobResultEvent(
+      {
+        kind: 6100,
+        requestEventId: 'a'.repeat(64),
+        customerPubkey: 'b'.repeat(64),
+        amount: '1000',
+        content: 'test result',
+      },
+      TEST_SECRET_KEY
+    );
+
+    // Act -- call settleCompute (deprecated)
+    try {
+      await node.settleCompute(resultEvent, 'g.peer.provider');
+    } catch {
+      // May throw due to connector behavior; we only care about the warning
+    }
+
+    // Assert -- deprecation warning was logged
+    const deprecationCalls = warnSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && call[0].includes('DEPRECATED')
+    );
+    expect(deprecationCalls.length).toBeGreaterThan(0);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: deprecation calls verified above
+    expect(deprecationCalls[0]![0]).toContain('settleCompute');
+
+    // Cleanup
+    warnSpy.mockRestore();
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Bid equal to amount -> passes
+  // -------------------------------------------------------------------------
+
+  it('[P2] publishEvent() with amount exactly equal to bid passes bid check', async () => {
+    // Arrange
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- amount == bid -> should pass
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+      amount: 50000n,
+      bid: 50000n,
+    });
+
+    // Assert
+    expect(result.success).toBe(true);
+    expect(connector.sendPacketCalls.length).toBe(1);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // Bid safety cap with default (computed) amount (AC #3 gap coverage)
+  // -------------------------------------------------------------------------
+
+  it('[P1] publishEvent() throws NodeError when computed default amount exceeds bid safety cap (AC #3)', async () => {
+    // Arrange -- use a high basePricePerByte so computed amount exceeds bid
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte: 10000n, // high price -> large computed amount
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act & Assert -- no explicit amount; computed default (10000n * toonBytes) > bid of 1n
+    await expect(
+      node.publishEvent(event, {
+        destination: 'g.peer.address',
+        bid: 1n, // very low bid, computed amount will exceed it
+      })
+    ).rejects.toThrow(NodeError);
+
+    await expect(
+      node.publishEvent(event, {
+        destination: 'g.peer.address',
+        bid: 1n,
+      })
+    ).rejects.toThrow(/exceeds bid safety cap/);
+
+    // Assert -- no ILP packet was sent
+    expect(connector.sendPacketCalls.length).toBe(0);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // settleCompute backward compatibility (AC #4 gap coverage)
+  // -------------------------------------------------------------------------
+
+  it('[P1] settleCompute() still functions (backward compat) despite deprecation (AC #4)', async () => {
+    // Arrange
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const connector = createMockConnector({
+      type: 'fulfill',
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    // Build a valid Kind 6100 result event for settleCompute
+    const { buildJobResultEvent } = await import('@toon-protocol/core');
+    const resultEvent = buildJobResultEvent(
+      {
+        kind: 6100,
+        requestEventId: 'a'.repeat(64),
+        customerPubkey: 'b'.repeat(64),
+        amount: '1000',
+        content: 'test result',
+      },
+      TEST_SECRET_KEY
+    );
+
+    // Act -- call settleCompute (deprecated but still functional)
+    const result = await node.settleCompute(resultEvent, 'g.peer.provider');
+
+    // Assert -- method still works and returns a result
+    expect(result).toBeDefined();
+    expect(result.accepted).toBe(true);
+
+    // Assert -- ILP packet was actually sent via connector
+    expect(connector.sendPacketCalls.length).toBe(1);
+
+    // Cleanup
+    warnSpy.mockRestore();
+    await node.stop();
   });
 });

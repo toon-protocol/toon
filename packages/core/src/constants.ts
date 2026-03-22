@@ -119,6 +119,22 @@ export const JOB_REVIEW_KIND = 31117;
  */
 export const WEB_OF_TRUST_KIND = 30382;
 
+/**
+ * Prefix Claim (kind 10034)
+ * Replaceable event requesting a prefix claim from an upstream node.
+ * The content field contains a PrefixClaimContent JSON payload with the
+ * requested prefix string. Payment is carried in the ILP PREPARE packet.
+ */
+export const PREFIX_CLAIM_KIND = 10034;
+
+/**
+ * Prefix Grant (kind 10037)
+ * Replaceable event confirming a prefix claim was accepted by the upstream node.
+ * Published by the upstream node after validating payment and prefix availability.
+ * Contains the granted prefix, claimer's pubkey, and derived ILP address.
+ */
+export const PREFIX_GRANT_KIND = 10037;
+
 // ---------------------------------------------------------------------------
 // ILP Address Hierarchy Constants
 // ---------------------------------------------------------------------------

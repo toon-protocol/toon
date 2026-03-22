@@ -24,3 +24,8 @@ export {
 } from './address-assignment.js';
 
 export { AddressRegistry } from './address-registry.js';
+
+export {
+  validatePrefix,
+  type PrefixValidationResult,
+} from './prefix-validation.js';

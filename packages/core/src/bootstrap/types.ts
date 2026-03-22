@@ -150,7 +150,6 @@ export type BootstrapEventListener = (event: BootstrapEvent) => void;
  */
 export interface IlpSendResult {
   accepted: boolean;
-  fulfillment?: string;
   data?: string; // base64-encoded response TOON
   code?: string;
   message?: string;

@@ -79,10 +79,9 @@ export function createDirectBlsClient(
 
         const result = (await response.json()) as Record<string, unknown>;
 
-        // BLS returns {accept, fulfillment, data, code, message}
+        // BLS returns {accept, data, code, message}
         return {
           accepted: (result['accept'] as boolean) ?? false,
-          fulfillment: result['fulfillment'] as string | undefined,
           data: result['data'] as string | undefined,
           code: result['code'] as string | undefined,
           message: result['message'] as string | undefined,

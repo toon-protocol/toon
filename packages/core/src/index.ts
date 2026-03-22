@@ -20,6 +20,8 @@ export {
   TEXT_TO_SPEECH_KIND,
   TRANSLATION_KIND,
   ILP_ROOT_PREFIX,
+  PREFIX_CLAIM_KIND,
+  PREFIX_GRANT_KIND,
 } from './constants.js';
 
 // ILP address derivation and BTP prefix exchange
@@ -34,8 +36,12 @@ export {
   assignAddressFromHandshake,
   isGenesisNode,
   AddressRegistry,
+  validatePrefix,
 } from './address/index.js';
-export type { BtpHandshakeExtension } from './address/index.js';
+export type {
+  BtpHandshakeExtension,
+  PrefixValidationResult,
+} from './address/index.js';
 
 // TypeScript interfaces
 export type {
@@ -94,6 +100,12 @@ export {
   type SwarmSelectionParams,
   type ParsedSwarmRequest,
   type ParsedSwarmSelection,
+  buildPrefixClaimEvent,
+  parsePrefixClaimEvent,
+  buildPrefixGrantEvent,
+  parsePrefixGrantEvent,
+  type PrefixClaimContent,
+  type PrefixGrantContent,
   AttestedResultVerifier,
   hasRequireAttestation,
   type AttestedResultVerificationOptions,

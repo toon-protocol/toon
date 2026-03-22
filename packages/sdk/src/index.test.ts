@@ -116,6 +116,8 @@ describe('@toon-protocol/sdk public API exports', () => {
       'WorkflowOrchestrator',
       // Swarm coordinator (Story 6.2)
       'SwarmCoordinator',
+      // Prefix claim handler (Story 7.6)
+      'createPrefixClaimHandler',
     ]);
 
     // Act
