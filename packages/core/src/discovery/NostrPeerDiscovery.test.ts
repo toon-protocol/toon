@@ -740,11 +740,13 @@ describe('NostrPeerDiscovery', () => {
 
         expect(callback).toHaveBeenCalledWith(peerPubkey, {
           ilpAddress: 'g.test.peer',
+          ilpAddresses: ['g.test.peer'],
           btpEndpoint: 'wss://btp.example',
           assetCode: 'XRP',
           assetScale: 9,
           supportedChains: [],
           settlementAddresses: {},
+          feePerByte: '0',
         });
       });
 

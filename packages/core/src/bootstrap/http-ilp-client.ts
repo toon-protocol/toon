@@ -63,7 +63,6 @@ export function createHttpIlpClient(connectorUrl: string): IlpClient {
         if (result['accept'] || result['accepted']) {
           return {
             accepted: true,
-            fulfillment: result['fulfillment'] as string | undefined,
             data: result['data'] as string | undefined,
           };
         } else {

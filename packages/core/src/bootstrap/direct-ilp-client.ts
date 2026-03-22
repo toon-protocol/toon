@@ -6,7 +6,6 @@
  * zero-latency embedded mode without network overhead.
  */
 
-import { createHash } from 'node:crypto';
 import { BootstrapError } from './BootstrapService.js';
 import type { IlpClient, IlpSendResult } from './types.js';
 
@@ -19,9 +18,7 @@ export interface SendPacketParams {
   /** Amount as BigInt (not string) */
   amount: bigint;
   /** Binary data (not base64 string) */
-  data: Uint8Array;
-  /** 32-byte SHA-256 execution condition */
-  executionCondition?: Uint8Array;
+  data?: Uint8Array;
   /**
    * Packet expiration. Included for structural compatibility with ConnectorNode
    * but is not set by the direct client — callers or the connector provide it
@@ -35,15 +32,14 @@ export interface SendPacketParams {
  *
  * Accepts both string discriminants ('fulfill'/'reject') for backward
  * compatibility with test mocks, and numeric PacketType enum values
- * (13 = FULFILL, 14 = REJECT) used by @toon-protocol/connector@1.6.0+.
+ * (13 = FULFILL, 14 = REJECT) used by @toon-protocol/connector@2.0.0+.
  */
 export type SendPacketResult =
   | {
       type: 'fulfill';
-      fulfillment: Uint8Array | Buffer;
       data?: Uint8Array | Buffer;
     }
-  | { type: 13; fulfillment: Uint8Array | Buffer; data?: Uint8Array | Buffer }
+  | { type: 13; data?: Uint8Array | Buffer }
   | {
       type: 'reject';
       code: string;
@@ -64,17 +60,10 @@ export interface ConnectorNodeLike {
 }
 
 /**
- * Configuration options for the direct runtime client.
- *
- * @deprecated toonDecoder is no longer used for condition computation.
- * Execution condition is computed directly from raw data bytes:
- *   condition = SHA-256(SHA-256(raw_data_bytes))
+ * @deprecated No longer used. Kept for backward compatibility.
  */
 export interface DirectRuntimeClientConfig {
-  /**
-   * @deprecated No longer used. Execution condition is computed from raw data
-   * bytes to match the connector's PaymentHandlerAdapter.
-   */
+  /** @deprecated No longer used. */
   toonDecoder?: (bytes: Uint8Array) => { id: string };
 }
 
@@ -104,20 +93,6 @@ export function createDirectIlpClient(
         // Convert base64 data to Uint8Array
         const data = Uint8Array.from(Buffer.from(params.data, 'base64'));
 
-        // Compute execution condition from raw TOON data bytes.
-        // The receiving connector's PaymentHandlerAdapter computes:
-        //   fulfillment = SHA-256(raw_data_bytes)
-        // So condition = SHA-256(fulfillment) = SHA-256(SHA-256(raw_data_bytes)).
-        // Empty data signals a pure ILP value transfer (e.g., DVM compute settlement)
-        // where no TOON event payload exists -- skip condition computation.
-        let executionCondition: Uint8Array | undefined;
-        if (data.length > 0) {
-          const fulfillment = createHash('sha256').update(data).digest();
-          executionCondition = createHash('sha256')
-            .update(fulfillment)
-            .digest();
-        }
-
         // Call connector.sendPacket()
         // expiresAt is required by ConnectorNode.sendPacket() even though the
         // interface marks it optional. Default to 30 seconds from now.
@@ -125,7 +100,6 @@ export function createDirectIlpClient(
           destination: params.destination,
           amount,
           data,
-          executionCondition,
           expiresAt: new Date(Date.now() + 30000),
         });
 
@@ -134,7 +108,6 @@ export function createDirectIlpClient(
         if (result.type === 'fulfill' || result.type === 13) {
           return {
             accepted: true,
-            fulfillment: Buffer.from(result.fulfillment).toString('base64'),
             data: result.data
               ? Buffer.from(result.data).toString('base64')
               : undefined,

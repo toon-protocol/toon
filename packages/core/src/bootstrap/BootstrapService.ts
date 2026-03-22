@@ -524,7 +524,7 @@ export class BootstrapService {
 
     if (ilpResult.accepted) {
       console.log(
-        `[Bootstrap] Announced to ${result.registeredPeerId} via ILP (fulfillment: ${ilpResult.fulfillment}, eventId: ${ilpInfoEvent.id})`
+        `[Bootstrap] Announced to ${result.registeredPeerId} via ILP (eventId: ${ilpInfoEvent.id})`
       );
       this.emit({
         type: 'bootstrap:announced',

@@ -19,7 +19,29 @@ export {
   IMAGE_GENERATION_KIND,
   TEXT_TO_SPEECH_KIND,
   TRANSLATION_KIND,
+  ILP_ROOT_PREFIX,
+  PREFIX_CLAIM_KIND,
+  PREFIX_GRANT_KIND,
 } from './constants.js';
+
+// ILP address derivation and BTP prefix exchange
+export { deriveChildAddress } from './address/index.js';
+export {
+  isValidIlpAddressStructure,
+  validateIlpAddress,
+  extractPrefixFromHandshake,
+  buildPrefixHandshakeData,
+  validatePrefixConsistency,
+  checkAddressCollision,
+  assignAddressFromHandshake,
+  isGenesisNode,
+  AddressRegistry,
+  validatePrefix,
+} from './address/index.js';
+export type {
+  BtpHandshakeExtension,
+  PrefixValidationResult,
+} from './address/index.js';
 
 // TypeScript interfaces
 export type {
@@ -78,6 +100,12 @@ export {
   type SwarmSelectionParams,
   type ParsedSwarmRequest,
   type ParsedSwarmSelection,
+  buildPrefixClaimEvent,
+  parsePrefixClaimEvent,
+  buildPrefixGrantEvent,
+  parsePrefixGrantEvent,
+  type PrefixClaimContent,
+  type PrefixGrantContent,
   AttestedResultVerifier,
   hasRequireAttestation,
   type AttestedResultVerificationOptions,
@@ -114,6 +142,15 @@ export {
   type SeedRelayDiscoveryResult,
   type PublishSeedRelayConfig,
 } from './discovery/index.js';
+
+// Fee calculation utilities
+export {
+  calculateRouteAmount,
+  type CalculateRouteAmountParams,
+  resolveRouteFees,
+  type ResolveRouteFeesParams,
+  type ResolveRouteFeesResult,
+} from './fee/index.js';
 
 // Settlement utilities
 export {

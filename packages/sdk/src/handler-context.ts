@@ -5,7 +5,6 @@
  * for accessing TOON data, shallow-parsed metadata, and accept/reject actions.
  */
 
-import { createHash } from 'crypto';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import type {
@@ -77,18 +76,8 @@ export function createHandlerContext(
       return cachedEvent;
     },
     accept(metadata?: Record<string, unknown>): HandlePacketAcceptResponse {
-      // Compute fulfillment = SHA-256(raw_toon_bytes).
-      // Matches the connector's PaymentHandlerAdapter.computeFulfillmentFromData().
-      // The sender uses condition = SHA-256(SHA-256(raw_toon_bytes)) and the
-      // connector validates SHA-256(fulfillment) == condition.
-      const toonBytes = Buffer.from(options.toon, 'base64');
-      const fulfillment = createHash('sha256')
-        .update(toonBytes)
-        .digest()
-        .toString('base64');
       return {
         accept: true,
-        fulfillment,
         ...(metadata ? { metadata } : {}),
       };
     },

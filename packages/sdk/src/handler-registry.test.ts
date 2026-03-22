@@ -25,7 +25,7 @@ function createMockContext(
       created_at: 1234567890,
       sig: 'c'.repeat(128),
     }),
-    accept: vi.fn().mockReturnValue({ accept: true, fulfillment: 'mock' }),
+    accept: vi.fn().mockReturnValue({ accept: true }),
     reject: vi
       .fn()
       .mockReturnValue({ accept: false, code: 'F00', message: 'rejected' }),
@@ -42,9 +42,7 @@ describe('HandlerRegistry', () => {
 
   it('[P0] .on(kind, handler) dispatches to the correct handler for that kind', async () => {
     // Arrange
-    const handler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'f' });
+    const handler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(30617, handler);
     const ctx = createMockContext({ kind: 30617 });
 
@@ -54,17 +52,13 @@ describe('HandlerRegistry', () => {
     // Assert
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(ctx);
-    expect(result).toEqual({ accept: true, fulfillment: 'f' });
+    expect(result).toEqual({ accept: true });
   });
 
   it('[P0] multiple kind registrations each dispatch to their own handler', async () => {
     // Arrange
-    const handler1 = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'f1' });
-    const handler2 = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'f2' });
+    const handler1 = vi.fn().mockResolvedValue({ accept: true });
+    const handler2 = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, handler1);
     registry.on(30617, handler2);
     const ctx1 = createMockContext({ kind: 1 });
@@ -83,9 +77,7 @@ describe('HandlerRegistry', () => {
 
   it('[P0] .onDefault() fallback is invoked for an unknown kind', async () => {
     // Arrange
-    const defaultHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'df' });
+    const defaultHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.onDefault(defaultHandler);
     const ctx = createMockContext({ kind: 99999 });
 
@@ -95,7 +87,7 @@ describe('HandlerRegistry', () => {
     // Assert
     expect(defaultHandler).toHaveBeenCalledTimes(1);
     expect(defaultHandler).toHaveBeenCalledWith(ctx);
-    expect(result).toEqual({ accept: true, fulfillment: 'df' });
+    expect(result).toEqual({ accept: true });
   });
 
   it('[P0] no handler and no default produces F00 rejection', async () => {
@@ -116,12 +108,8 @@ describe('HandlerRegistry', () => {
 
   it('[P1] duplicate .on() for the same kind replaces the previous handler', async () => {
     // Arrange
-    const originalHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'old' });
-    const replacementHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'new' });
+    const originalHandler = vi.fn().mockResolvedValue({ accept: true });
+    const replacementHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, originalHandler);
     registry.on(1, replacementHandler);
     const ctx = createMockContext({ kind: 1 });
@@ -132,17 +120,13 @@ describe('HandlerRegistry', () => {
     // Assert
     expect(originalHandler).not.toHaveBeenCalled();
     expect(replacementHandler).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ accept: true, fulfillment: 'new' });
+    expect(result).toEqual({ accept: true });
   });
 
   it('[P0] multiple kind registrations route to correct handler only (no cross-dispatch)', async () => {
     // Arrange -- register two kind handlers
-    const handler1 = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'f1' });
-    const handler2 = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'f2' });
+    const handler1 = vi.fn().mockResolvedValue({ accept: true });
+    const handler2 = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, handler1);
     registry.on(30617, handler2);
 
@@ -152,17 +136,13 @@ describe('HandlerRegistry', () => {
     // Assert -- handler2 invoked, handler1 NOT invoked, return value from handler2
     expect(handler2).toHaveBeenCalledTimes(1);
     expect(handler1).not.toHaveBeenCalled();
-    expect(result).toEqual({ accept: true, fulfillment: 'f2' });
+    expect(result).toEqual({ accept: true });
   });
 
   it('[P0] .onDefault() is NOT invoked when a specific kind handler matches', async () => {
     // Arrange -- register both a kind handler and a default handler
-    const kindHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'kind' });
-    const defaultHandler = vi
-      .fn()
-      .mockResolvedValue({ accept: true, fulfillment: 'default' });
+    const kindHandler = vi.fn().mockResolvedValue({ accept: true });
+    const defaultHandler = vi.fn().mockResolvedValue({ accept: true });
     registry.on(1, kindHandler);
     registry.onDefault(defaultHandler);
 
@@ -172,7 +152,7 @@ describe('HandlerRegistry', () => {
     // Assert -- kind handler invoked, default handler NOT invoked, return from kind handler
     expect(kindHandler).toHaveBeenCalledTimes(1);
     expect(defaultHandler).not.toHaveBeenCalled();
-    expect(result).toEqual({ accept: true, fulfillment: 'kind' });
+    expect(result).toEqual({ accept: true });
   });
 
   it('[P0] F00 rejection includes a descriptive message', async () => {

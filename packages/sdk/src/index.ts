@@ -84,6 +84,10 @@ export type {
   SwarmCoordinatorOptions,
 } from './swarm-coordinator.js';
 
+// Prefix claim handler (Story 7.6)
+export { createPrefixClaimHandler } from './prefix-claim-handler.js';
+export type { PrefixClaimHandlerOptions } from './prefix-claim-handler.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 

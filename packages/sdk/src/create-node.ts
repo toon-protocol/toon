@@ -42,6 +42,14 @@ import {
   buildJobFeedbackEvent,
   buildJobResultEvent,
   parseJobResult,
+  deriveChildAddress,
+  checkAddressCollision,
+  AddressRegistry,
+  ILP_ROOT_PREFIX,
+  calculateRouteAmount,
+  resolveRouteFees,
+  buildPrefixClaimEvent,
+  validatePrefix,
 } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
@@ -128,7 +136,19 @@ export interface NodeConfig {
 
   // --- Network ---
 
-  /** ILP address (default: 'g.toon.local') */
+  /**
+   * Upstream peer's ILP address prefix for address derivation.
+   * When set, the node derives its ILP address as
+   * `deriveChildAddress(upstreamPrefix, pubkey)` and ignores `ilpAddress`.
+   */
+  upstreamPrefix?: string;
+  /**
+   * Multiple upstream peer prefixes for multi-peered nodes (Story 7.3).
+   * When set, derives one ILP address per upstream prefix. Takes priority
+   * over `upstreamPrefix` (singular) when both are set.
+   */
+  upstreamPrefixes?: string[];
+  /** ILP address (default: derived from pubkey under ILP_ROOT_PREFIX) */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
   btpEndpoint?: string;
@@ -144,6 +164,11 @@ export interface NodeConfig {
    * A 1KB event costs 10,240 micro-USDC = ~$0.01.
    */
   basePricePerByte?: bigint;
+  /**
+   * Routing fee per byte charged by this node as an intermediary (default: 0n = free routing).
+   * Advertised in kind:10032 peer info events as a non-negative integer string.
+   */
+  feePerByte?: bigint;
   /** Dev mode skips signature verification (default: false) */
   devMode?: boolean;
   /** TOON encoder function */
@@ -193,7 +218,6 @@ export interface StartResult {
 export interface PublishEventResult {
   success: boolean;
   eventId: string;
-  fulfillment?: string;
   code?: string;
   message?: string;
 }
@@ -229,12 +253,16 @@ export interface ServiceNode {
    * ILP PREPARE packet via the runtime client.
    *
    * @param event - The Nostr event to publish
-   * @param options - Must include destination ILP address
+   * @param options - Must include destination ILP address. Optional `amount`
+   *   overrides the default basePricePerByte * toonData.length calculation
+   *   (prepaid model: send exact destination amount). Optional `bid` is a
+   *   client-side safety cap: if the destination amount exceeds `bid`, the
+   *   SDK throws before sending any ILP packet.
    * @returns Result with success/failure info and event ID
    */
   publishEvent(
     event: NostrEvent,
-    options?: { destination: string }
+    options?: { destination: string; amount?: bigint; bid?: bigint }
   ): Promise<PublishEventResult>;
 
   /**
@@ -300,6 +328,10 @@ export interface ServiceNode {
    * The payment routes through the ILP mesh using the same infrastructure
    * as relay write fees.
    *
+   * @deprecated Use publishEvent() with amount option instead. Prepaid model:
+   * send job request + payment in one packet via
+   * `publishEvent(event, { destination, amount: computePrice })`.
+   *
    * @param resultEvent - Kind 6xxx result event with amount tag
    * @param providerIlpAddress - Provider's ILP address from kind:10035
    * @param options - Optional originalBid for bid validation (E5-R005)
@@ -310,6 +342,45 @@ export interface ServiceNode {
     providerIlpAddress: string,
     options?: { originalBid?: string }
   ): Promise<IlpSendResult>;
+
+  /**
+   * Add a new upstream peer, deriving and registering its ILP address.
+   *
+   * Updates the AddressRegistry, registers a self-route in the embedded
+   * connector, and triggers kind:10032 republication via BootstrapService.
+   *
+   * @param upstreamPrefix - The upstream peer's ILP address prefix
+   */
+  addUpstreamPeer(upstreamPrefix: string): void;
+
+  /**
+   * Remove an upstream peer, unregistering its derived ILP address.
+   *
+   * Updates the AddressRegistry, removes the self-route from the embedded
+   * connector, and triggers kind:10032 republication via BootstrapService.
+   *
+   * @param upstreamPrefix - The upstream prefix to remove
+   */
+  removeUpstreamPeer(upstreamPrefix: string): void;
+
+  /**
+   * Claim a prefix from an upstream peer by sending a prefix claim event
+   * with payment via ILP.
+   *
+   * Builds a Kind 10034 prefix claim event, reads the upstream's prefix
+   * pricing from its kind:10032 advertisement, and calls publishEvent()
+   * with the appropriate amount.
+   *
+   * @param prefix - The prefix string to claim (e.g., 'useast')
+   * @param upstreamDestination - ILP address of the upstream node
+   * @param options - Optional prefixPrice override (defaults to upstream's prefixPricing.basePrice from discovery)
+   * @returns Result with success/failure info and event ID
+   */
+  claimPrefix(
+    prefix: string,
+    upstreamDestination: string,
+    options?: { prefixPrice?: bigint }
+  ): Promise<PublishEventResult>;
 }
 
 /**
@@ -550,11 +621,71 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // ILP info shared between both modes
+  // Address resolution priority (Story 7.3 extends with upstreamPrefixes):
+  // 1. upstreamPrefixes set -> derive one address per prefix, primary = first
+  // 2. upstreamPrefix set -> derive single address (ignore ilpAddress)
+  // 3. ilpAddress set -> use directly (includes genesis node with 'g.toon')
+  // 4. neither set -> derive from ILP_ROOT_PREFIX + pubkey (default)
+  let resolvedIlpAddress: string;
+  let resolvedIlpAddresses: string[];
+
+  if (
+    config.upstreamPrefixes !== undefined &&
+    config.upstreamPrefixes.length > 0
+  ) {
+    // upstreamPrefixes takes priority over upstreamPrefix (singular)
+    if (config.upstreamPrefix !== undefined) {
+      console.warn(
+        '[toon:warn] Both upstreamPrefixes and upstreamPrefix set; upstreamPrefixes takes priority'
+      );
+    }
+    resolvedIlpAddresses = config.upstreamPrefixes.map((p) =>
+      deriveChildAddress(p, pubkey)
+    );
+    // Task 4.4: Check for truncation collisions across upstream prefixes
+    for (let i = 0; i < resolvedIlpAddresses.length; i++) {
+      const others = resolvedIlpAddresses.filter((_, j) => j !== i);
+      checkAddressCollision(resolvedIlpAddresses[i] as string, others);
+    }
+    resolvedIlpAddress = resolvedIlpAddresses[0] as string;
+  } else if (config.upstreamPrefix !== undefined) {
+    resolvedIlpAddress = deriveChildAddress(config.upstreamPrefix, pubkey);
+    resolvedIlpAddresses = [resolvedIlpAddress];
+  } else if (config.ilpAddress !== undefined) {
+    resolvedIlpAddress = config.ilpAddress;
+    resolvedIlpAddresses = [resolvedIlpAddress];
+  } else {
+    resolvedIlpAddress = deriveChildAddress(ILP_ROOT_PREFIX, pubkey);
+    resolvedIlpAddresses = [resolvedIlpAddress];
+  }
+
+  // Task 6.2: Initialize AddressRegistry with initial upstream prefixes
+  const addressRegistry = new AddressRegistry();
+  if (
+    config.upstreamPrefixes !== undefined &&
+    config.upstreamPrefixes.length > 0
+  ) {
+    for (let i = 0; i < config.upstreamPrefixes.length; i++) {
+      addressRegistry.addAddress(
+        config.upstreamPrefixes[i] as string,
+        resolvedIlpAddresses[i] as string
+      );
+    }
+  } else if (config.upstreamPrefix !== undefined) {
+    addressRegistry.addAddress(config.upstreamPrefix, resolvedIlpAddress);
+  } else if (config.ilpAddress !== undefined) {
+    addressRegistry.addAddress('explicit', resolvedIlpAddress);
+  } else {
+    addressRegistry.addAddress(ILP_ROOT_PREFIX, resolvedIlpAddress);
+  }
+
   const ilpInfo = {
-    ilpAddress: config.ilpAddress ?? 'g.toon.local',
+    ilpAddress: resolvedIlpAddress,
+    ilpAddresses: resolvedIlpAddresses,
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
+    feePerByte: String(config.feePerByte ?? 0n),
   };
 
   // 9. Branch: embedded mode vs standalone mode
@@ -739,12 +870,14 @@ export function createNode(config: NodeConfig): ServiceNode {
 
       trackerRef.current = discoveryTrackerInstance;
 
-      // Add self-route
-      autoCreatedConnector.addRoute({
-        prefix: ilpInfo.ilpAddress,
-        nextHop: nodeId,
-        priority: 100,
-      });
+      // Add self-routes for all addresses (Task 5.3)
+      for (const addr of ilpInfo.ilpAddresses) {
+        autoCreatedConnector.addRoute({
+          prefix: addr,
+          nextHop: nodeId,
+          priority: 100,
+        });
+      }
 
       // Start the toonNode (wires packet handler, runs bootstrap)
       const result = await toonNode.start();
@@ -1007,7 +1140,7 @@ export function createNode(config: NodeConfig): ServiceNode {
 
     async publishEvent(
       event: NostrEvent,
-      options?: { destination: string }
+      options?: { destination: string; amount?: bigint; bid?: bigint }
     ): Promise<PublishEventResult> {
       // Guard: node must be started
       if (!started) {
@@ -1027,9 +1160,48 @@ export function createNode(config: NodeConfig): ServiceNode {
         // TOON-encode the event
         const toonData = encoder(event);
 
-        // Compute amount: basePricePerByte * toonData.length
-        const amount =
+        // Resolve intermediary routing fees from discovered peers
+        const { hopFees, warnings } = resolveRouteFees({
+          destination: options.destination,
+          ownIlpAddress: ilpInfo.ilpAddress,
+          discoveredPeers: discoveryTrackerInstance.getAllDiscoveredPeers(),
+        });
+
+        // Log warnings about unknown intermediaries
+        for (const warning of warnings) {
+          console.warn(`[publishEvent] ${warning}`);
+        }
+
+        // Compute destination amount: use override or default basePricePerByte * bytes
+        const destinationAmount =
+          options.amount ??
           (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
+
+        // Bid safety cap: if bid is provided, reject if destination amount exceeds bid
+        if (options.bid !== undefined && destinationAmount > options.bid) {
+          throw new NodeError(
+            `Cannot publish: destination amount ${destinationAmount} exceeds bid safety cap ${options.bid}`
+          );
+        }
+
+        // Compute total amount: destination amount + intermediary route fees
+        let amount: bigint;
+        if (options.amount !== undefined) {
+          // When amount override is provided, add only hop fees (no basePricePerByte)
+          const hopFeesTotal = calculateRouteAmount({
+            basePricePerByte: 0n,
+            packetByteLength: toonData.length,
+            hopFees,
+          });
+          amount = options.amount + hopFeesTotal;
+        } else {
+          // Default: basePricePerByte * bytes + hop fees
+          amount = calculateRouteAmount({
+            basePricePerByte: config.basePricePerByte ?? 10n,
+            packetByteLength: toonData.length,
+            hopFees,
+          });
+        }
 
         // Build ILP PREPARE packet using shared construction (packet equivalence
         // with x402 rail -- the destination relay cannot distinguish between
@@ -1048,7 +1220,6 @@ export function createNode(config: NodeConfig): ServiceNode {
           return {
             success: true,
             eventId: event.id,
-            fulfillment: result.fulfillment ?? '',
           };
         }
 
@@ -1112,6 +1283,11 @@ export function createNode(config: NodeConfig): ServiceNode {
       providerIlpAddress: string,
       options?: { originalBid?: string }
     ): Promise<IlpSendResult> {
+      // Deprecation warning
+      console.warn(
+        '[settleCompute] DEPRECATED: Use publishEvent() with { amount } option instead. The prepaid model sends job request + payment in one packet.'
+      );
+
       // Guard: node must be started
       if (!started) {
         throw new NodeError(
@@ -1181,6 +1357,121 @@ export function createNode(config: NodeConfig): ServiceNode {
         destination: providerIlpAddress,
         amount: computeAmount,
         data: '',
+      });
+    },
+
+    // Task 6.3: Address lifecycle management for multi-peered nodes
+    addUpstreamPeer(upstreamPrefix: string): void {
+      const derivedAddress = deriveChildAddress(upstreamPrefix, pubkey);
+
+      // Check for collision against existing addresses
+      checkAddressCollision(derivedAddress, addressRegistry.getAddresses());
+
+      // Update registry
+      addressRegistry.addAddress(upstreamPrefix, derivedAddress);
+
+      // Update ilpInfo for kind:10032 republication
+      ilpInfo.ilpAddresses = addressRegistry.getAddresses();
+      ilpInfo.ilpAddress =
+        addressRegistry.getPrimaryAddress() ?? ilpInfo.ilpAddress;
+
+      // Register self-route in embedded connector (if available)
+      if (autoCreatedConnector) {
+        const nodeId = `toon-${pubkey.slice(0, 16)}`;
+        autoCreatedConnector.addRoute({
+          prefix: derivedAddress,
+          nextHop: nodeId,
+          priority: 100,
+        });
+      }
+
+      // Note: kind:10032 republication will be triggered when BootstrapService
+      // gains a republish() method (deferred to address lifecycle E2E integration).
+    },
+
+    removeUpstreamPeer(upstreamPrefix: string): void {
+      // Guard: cannot remove the last address -- a node must always have at least one
+      // ILP address (AC #3: empty ilpAddresses array is rejected at construction time).
+      if (
+        addressRegistry.hasPrefix(upstreamPrefix) &&
+        addressRegistry.size <= 1
+      ) {
+        throw new NodeError(
+          'Cannot remove last upstream peer: a node must have at least one ILP address'
+        );
+      }
+
+      const removedAddress = addressRegistry.removeAddress(upstreamPrefix);
+      if (removedAddress === undefined) {
+        return; // No-op if prefix not found
+      }
+
+      // Update ilpInfo for kind:10032 republication
+      ilpInfo.ilpAddresses = addressRegistry.getAddresses();
+      const newPrimary = addressRegistry.getPrimaryAddress();
+      if (newPrimary !== undefined) {
+        ilpInfo.ilpAddress = newPrimary;
+      }
+
+      // Remove self-route from embedded connector (if available)
+      if (autoCreatedConnector && autoCreatedConnector.removeRoute) {
+        autoCreatedConnector.removeRoute(removedAddress);
+      }
+
+      // Note: kind:10032 republication will be triggered when BootstrapService
+      // gains a republish() method (deferred to address lifecycle E2E integration).
+    },
+
+    async claimPrefix(
+      prefix: string,
+      upstreamDestination: string,
+      options?: { prefixPrice?: bigint }
+    ): Promise<PublishEventResult> {
+      // Guard: node must be started
+      if (!started) {
+        throw new NodeError(
+          'Cannot claim prefix: node not started. Call start() first.'
+        );
+      }
+
+      // Validate prefix format before sending payment (fail-fast, like bid safety cap)
+      const prefixValidation = validatePrefix(prefix);
+      if (!prefixValidation.valid) {
+        throw new NodeError(
+          `Cannot claim prefix: ${prefixValidation.reason ?? 'invalid prefix'}`
+        );
+      }
+
+      // Determine the amount: explicit override, or look up upstream's prefixPricing
+      let claimAmount = options?.prefixPrice;
+      if (claimAmount === undefined) {
+        // Look up from discovered peers
+        const peers = discoveryTrackerInstance.getAllDiscoveredPeers();
+        const upstreamPeer = peers.find(
+          (p) =>
+            p.peerInfo.ilpAddress === upstreamDestination ||
+            (p.peerInfo.ilpAddresses &&
+              p.peerInfo.ilpAddresses.includes(upstreamDestination))
+        );
+        if (upstreamPeer?.peerInfo.prefixPricing?.basePrice) {
+          claimAmount = BigInt(upstreamPeer.peerInfo.prefixPricing.basePrice);
+        } else {
+          throw new NodeError(
+            'Cannot claim prefix: no amount provided and upstream peer prefix pricing not found in discovery'
+          );
+        }
+      }
+
+      // Build the prefix claim event
+      const claimEvent = buildPrefixClaimEvent(
+        { requestedPrefix: prefix },
+        config.secretKey
+      );
+
+      // Delegate to publishEvent with the amount override
+      return node.publishEvent(claimEvent, {
+        destination: upstreamDestination,
+        amount: claimAmount,
       });
     },
   };

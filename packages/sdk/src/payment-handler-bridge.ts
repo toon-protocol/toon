@@ -26,7 +26,6 @@ export interface PaymentRequest {
 
 export interface PaymentResponse {
   accept: boolean;
-  fulfillment?: string;
   code?: string;
   message?: string;
   data?: string;

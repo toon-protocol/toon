@@ -118,3 +118,32 @@ export const JOB_REVIEW_KIND = 31117;
  * declarer per target. Used for reputation scoring sybil defense.
  */
 export const WEB_OF_TRUST_KIND = 30382;
+
+/**
+ * Prefix Claim (kind 10034)
+ * Replaceable event requesting a prefix claim from an upstream node.
+ * The content field contains a PrefixClaimContent JSON payload with the
+ * requested prefix string. Payment is carried in the ILP PREPARE packet.
+ */
+export const PREFIX_CLAIM_KIND = 10034;
+
+/**
+ * Prefix Grant (kind 10037)
+ * Replaceable event confirming a prefix claim was accepted by the upstream node.
+ * Published by the upstream node after validating payment and prefix availability.
+ * Contains the granted prefix, claimer's pubkey, and derived ILP address.
+ */
+export const PREFIX_GRANT_KIND = 10037;
+
+// ---------------------------------------------------------------------------
+// ILP Address Hierarchy Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * ILP root prefix for the TOON network.
+ * `g.` is the ILP global allocation prefix (standard ILP convention).
+ * `toon` is the TOON network identifier.
+ * The genesis node uses this directly -- it does not derive its address from a pubkey.
+ * All other nodes derive addresses as children of their upstream peer's prefix.
+ */
+export const ILP_ROOT_PREFIX = 'g.toon';

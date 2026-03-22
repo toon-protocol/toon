@@ -57,7 +57,7 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@toon-protocol/connector": ">=1.7.0"
+    "@toon-protocol/connector": ">=2.0.0"
   },
   "peerDependenciesMeta": {
     "@toon-protocol/connector": {

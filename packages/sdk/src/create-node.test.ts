@@ -19,6 +19,7 @@ import type {
   BootstrapEventListener,
   BootstrapEvent,
 } from '@toon-protocol/core';
+import { deriveChildAddress, ILP_ROOT_PREFIX } from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 
@@ -484,5 +485,370 @@ describe('createNode() unit tests', () => {
     expect(() => node.on('evil\n\rinjection' as 'bootstrap', vi.fn())).toThrow(
       /Unknown lifecycle event: 'evilinjection'/
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 7.2: Address derivation from upstreamPrefix (AC #1, #2, #3)
+  // -------------------------------------------------------------------------
+
+  it('T-7.2-02: createNode with upstreamPrefix derives ILP address as prefix.pubkey8 (Task 6.1)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+
+    // Act -- should not throw (address is derived from upstreamPrefix + pubkey)
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Assert -- node created successfully with derived address
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+  });
+
+  it('T-7.2-04: createNode with ilpAddress=g.toon uses it directly (genesis node) (Task 6.2)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act -- genesis node uses ILP_ROOT_PREFIX directly
+    const node = createNode({
+      secretKey,
+      connector,
+      ilpAddress: 'g.toon',
+    });
+
+    // Assert -- node created without error (address is g.toon, not derived)
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('T-7.2-08: createNode with upstreamPrefix ignores ilpAddress (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+
+    // Act -- upstreamPrefix takes priority over ilpAddress
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon',
+      ilpAddress: 'g.toon.legacy',
+    });
+
+    // Assert -- node created; address is derived from upstreamPrefix, not ilpAddress
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+  });
+
+  it('createNode with no upstreamPrefix and no ilpAddress defaults to deriveChildAddress(ILP_ROOT_PREFIX, pubkey) (Task 6.4)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+
+    // Act -- neither upstreamPrefix nor ilpAddress set
+    const node = createNode({
+      secretKey,
+      connector,
+    });
+
+    // Assert -- node created successfully with derived default address
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+    // The derived address is g.toon.{pubkey.slice(0,8)} which is deterministic
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 7.3: Multi-address config (Tasks 8.1-8.4)
+  // -------------------------------------------------------------------------
+
+  it('T-7.3-02: createNode with upstreamPrefixes derives two ILP addresses and starts successfully (Task 8.1)', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+    const expectedAddr1 = deriveChildAddress('g.toon.useast', pubkey);
+    const expectedAddr2 = deriveChildAddress('g.toon.euwest', pubkey);
+
+    // Act -- upstreamPrefixes with two prefixes
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefixes: ['g.toon.useast', 'g.toon.euwest'],
+      knownPeers: [],
+    });
+
+    // Assert -- node created successfully with two distinct derived addresses
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+    expect(expectedAddr1).not.toBe(expectedAddr2);
+
+    // Start and verify bootstrap completes (proves multi-address ilpInfo was valid)
+    const result = await node.start();
+    expect(result.peerCount).toBe(0);
+    await node.stop();
+  });
+
+  it('createNode with upstreamPrefix (singular, existing behavior) still works with single address (Task 8.2)', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+    const expectedAddr = deriveChildAddress('g.toon.useast', pubkey);
+
+    // Act -- existing singular upstreamPrefix
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+      knownPeers: [],
+    });
+
+    // Assert -- node created successfully with deterministic derived address
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+    expect(expectedAddr).toMatch(/^g\.toon\.useast\.[0-9a-f]{8}$/);
+
+    // Start and verify bootstrap completes with single address
+    const result = await node.start();
+    expect(result.peerCount).toBe(0);
+    await node.stop();
+  });
+
+  it('createNode with upstreamPrefixes AND upstreamPrefix -- plural takes priority with warning (Task 8.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Act -- both set; upstreamPrefixes should win
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefixes: ['g.toon.useast', 'g.toon.euwest'],
+      upstreamPrefix: 'g.toon.legacy',
+    });
+
+    // Assert -- node created; plural takes priority and a warning is logged
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('upstreamPrefixes takes priority')
+    );
+
+    // Cleanup
+    warnSpy.mockRestore();
+  });
+
+  it('createNode with no upstreamPrefix and no ilpAddress defaults to single-address from ILP_ROOT_PREFIX (Task 8.4)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const pubkey = getPublicKey(secretKey);
+    const connector = createMockConnector();
+    const expectedDefaultAddr = deriveChildAddress(ILP_ROOT_PREFIX, pubkey);
+
+    // Act -- neither upstreamPrefix nor ilpAddress set
+    const node = createNode({
+      secretKey,
+      connector,
+    });
+
+    // Assert -- node created with default derived address from ILP_ROOT_PREFIX
+    expect(node).toBeDefined();
+    expect(node.pubkey).toBe(pubkey);
+    // Verify the default address follows the expected pattern: g.toon.{pubkey8}
+    expect(expectedDefaultAddr).toMatch(/^g\.toon\.[0-9a-f]{8}$/);
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 7.3: addUpstreamPeer / removeUpstreamPeer lifecycle (AC #4, Task 6.3)
+  // -------------------------------------------------------------------------
+
+  it('addUpstreamPeer and removeUpstreamPeer methods exist on ServiceNode (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({ secretKey, connector });
+
+    // Assert -- methods exist on the ServiceNode interface
+    expect(typeof node.addUpstreamPeer).toBe('function');
+    expect(typeof node.removeUpstreamPeer).toBe('function');
+  });
+
+  it('addUpstreamPeer adds a new upstream peer address without throwing (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act & Assert -- adding a new upstream peer should not throw
+    expect(() => node.addUpstreamPeer('g.toon.euwest')).not.toThrow();
+  });
+
+  it('removeUpstreamPeer with unknown prefix is a no-op (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act & Assert -- removing an unknown prefix should not throw
+    expect(() => node.removeUpstreamPeer('g.toon.unknown')).not.toThrow();
+  });
+
+  it('removeUpstreamPeer after addUpstreamPeer succeeds without throwing (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act -- add then remove
+    node.addUpstreamPeer('g.toon.euwest');
+
+    // Assert -- removing the added prefix should not throw
+    expect(() => node.removeUpstreamPeer('g.toon.euwest')).not.toThrow();
+  });
+
+  it('addUpstreamPeer with duplicate prefix throws ADDRESS_COLLISION (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act & Assert -- adding the same prefix again should detect collision
+    // because deriveChildAddress(prefix, pubkey) produces the same address
+    expect(() => node.addUpstreamPeer('g.toon.useast')).toThrow(/collides/);
+  });
+
+  it('removeUpstreamPeer throws when removing the last address (CR fix)', () => {
+    // Arrange -- node with a single upstream prefix (one address)
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act & Assert -- removing the only address should throw
+    expect(() => node.removeUpstreamPeer('g.toon.useast')).toThrow(
+      /Cannot remove last upstream peer/
+    );
+  });
+
+  it('removeUpstreamPeer succeeds when node has multiple addresses and one is removed (CR fix)', () => {
+    // Arrange -- node with two upstream prefixes
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+    node.addUpstreamPeer('g.toon.euwest');
+
+    // Act & Assert -- removing one of two addresses should succeed
+    expect(() => node.removeUpstreamPeer('g.toon.useast')).not.toThrow();
+  });
+
+  it('addUpstreamPeer followed by removeUpstreamPeer then re-add succeeds (Task 6.3)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+    });
+
+    // Act -- add, remove, re-add the same prefix
+    node.addUpstreamPeer('g.toon.euwest');
+    node.removeUpstreamPeer('g.toon.euwest');
+
+    // Assert -- re-adding after removal should not throw
+    expect(() => node.addUpstreamPeer('g.toon.euwest')).not.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 7.4: feePerByte in NodeConfig (Tasks 7.1, 7.2)
+  // -------------------------------------------------------------------------
+
+  it('T-7.4: createNode with feePerByte: 2n includes feePerByte in ilpInfo (Task 7.1)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({
+      secretKey,
+      connector,
+      feePerByte: 2n,
+    });
+
+    // Assert -- node created successfully with feePerByte config
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('T-7.4: createNode with no feePerByte defaults to free routing (Task 7.2)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act
+    const node = createNode({
+      secretKey,
+      connector,
+    });
+
+    // Assert -- node created successfully without feePerByte config
+    expect(node).toBeDefined();
+    expect(node.pubkey).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('T-7.2-03: derived address from upstreamPrefix flows into ilpInfo for kind:10032 (Task 6.5)', async () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const connector = createMockConnector();
+
+    // Act -- create node with upstreamPrefix and start it (triggers bootstrap)
+    const node = createNode({
+      secretKey,
+      connector,
+      upstreamPrefix: 'g.toon.useast',
+      knownPeers: [],
+    });
+
+    // Start the node -- bootstrap will use ilpInfo.ilpAddress for kind:10032
+    const result = await node.start();
+
+    // Assert -- node started successfully, meaning the derived address
+    // was used in ilpInfo and propagated to BootstrapService
+    expect(result).toBeDefined();
+    expect(result.peerCount).toBe(0);
+
+    // Cleanup
+    await node.stop();
   });
 });

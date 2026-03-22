@@ -11,6 +11,8 @@ export interface IlpPeerInfo {
   pubkey?: string;
   /** ILP address of the peer's connector (e.g., "g.example.connector") */
   ilpAddress: string;
+  /** All ILP addresses of this peer (one per upstream peering). When absent (pre-Epic-7 events), consumers should default to [ilpAddress]. */
+  ilpAddresses?: string[];
   /** BTP WebSocket endpoint URL for packet exchange */
   btpEndpoint: string;
   /** Optional BLS HTTP endpoint for direct packet delivery (bootstrap only) */
@@ -29,6 +31,10 @@ export interface IlpPeerInfo {
   preferredTokens?: Record<string, string>;
   /** Maps chain identifier to TokenNetwork contract address (EVM-specific) */
   tokenNetworks?: Record<string, string>;
+  /** Routing fee per byte charged by this node as an intermediary, serialized as a non-negative integer string (e.g., '2'). Defaults to '0' (free routing) when absent. */
+  feePerByte?: string;
+  /** Prefix pricing for prefix claim marketplace. basePrice is in USDC micro-units as a non-negative integer string. */
+  prefixPricing?: { basePrice: string };
 }
 
 /**

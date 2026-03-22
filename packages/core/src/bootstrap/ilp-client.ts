@@ -59,7 +59,6 @@ export function createHttpIlpClient(baseUrl: string): IlpClient {
       const data = (await response.json()) as Record<string, unknown>;
       return {
         accepted: (data['accepted'] ?? data['fulfilled'] ?? false) as boolean,
-        fulfillment: data['fulfillment'] as string | undefined,
         data: data['data'] as string | undefined,
         code: data['code'] as string | undefined,
         message: data['message'] as string | undefined,

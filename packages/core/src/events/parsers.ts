@@ -5,6 +5,7 @@
 import type { NostrEvent } from 'nostr-tools/pure';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
+import { isValidIlpAddressStructure } from '../address/ilp-address-validation.js';
 import type { IlpPeerInfo } from '../types.js';
 
 /**
@@ -64,6 +65,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     settlementEngine,
     assetCode,
     assetScale,
+    ilpAddresses: rawIlpAddresses,
   } = parsed;
 
   if (typeof ilpAddress !== 'string' || ilpAddress.length === 0) {
@@ -165,6 +167,62 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     }
   }
 
+  // feePerByte validation (Story 7.4)
+  const { feePerByte: rawFeePerByte } = parsed;
+  let feePerByte: string;
+  if (rawFeePerByte === undefined) {
+    feePerByte = '0';
+  } else if (
+    typeof rawFeePerByte !== 'string' ||
+    !/^\d+$/.test(rawFeePerByte)
+  ) {
+    throw new InvalidEventError(
+      `Invalid feePerByte: "${String(rawFeePerByte)}" must be a non-negative integer string`
+    );
+  } else {
+    feePerByte = rawFeePerByte;
+  }
+
+  // prefixPricing validation (Story 7.6)
+  const { prefixPricing: rawPrefixPricing } = parsed;
+  let prefixPricing: { basePrice: string } | undefined;
+  if (rawPrefixPricing !== undefined) {
+    if (!isObject(rawPrefixPricing)) {
+      throw new InvalidEventError('prefixPricing must be an object');
+    }
+    const { basePrice } = rawPrefixPricing;
+    if (typeof basePrice !== 'string' || !/^\d+$/.test(basePrice)) {
+      throw new InvalidEventError(
+        `Invalid prefixPricing.basePrice: "${String(basePrice)}" must be a non-negative integer string`
+      );
+    }
+    prefixPricing = { basePrice };
+  }
+
+  // ilpAddresses validation (Story 7.3)
+  let ilpAddresses: string[];
+  if (rawIlpAddresses !== undefined) {
+    if (!Array.isArray(rawIlpAddresses)) {
+      throw new InvalidEventError('ilpAddresses must be an array');
+    }
+    for (const addr of rawIlpAddresses) {
+      if (typeof addr !== 'string' || addr.length === 0) {
+        throw new InvalidEventError(
+          'ilpAddresses elements must be non-empty strings'
+        );
+      }
+      if (!isValidIlpAddressStructure(addr)) {
+        throw new InvalidEventError(
+          `Invalid ILP address in ilpAddresses: "${addr}"`
+        );
+      }
+    }
+    ilpAddresses = rawIlpAddresses as string[];
+  } else {
+    // Backward-compatible default: wrap the singular ilpAddress in an array
+    ilpAddresses = [ilpAddress as string];
+  }
+
   return {
     ilpAddress,
     btpEndpoint,
@@ -185,5 +243,8 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     ...(tokenNetworks !== undefined && {
       tokenNetworks: tokenNetworks as Record<string, string>,
     }),
+    ilpAddresses,
+    feePerByte,
+    ...(prefixPricing !== undefined && { prefixPricing }),
   };
 }
