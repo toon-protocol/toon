@@ -727,6 +727,118 @@ describe('BootstrapService', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // republish() — re-advertise kind:10032 after topology changes
+  // ---------------------------------------------------------------------------
+
+  it('should re-announce to all peers via ILP when republish() is called', async () => {
+    const admin = createMockConnectorAdmin();
+    const runtime = createMockIlpClient();
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const service = new BootstrapService(
+      {
+        knownPeers: [createKnownPeer()],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        basePricePerByte: 10n,
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setConnectorAdmin(admin);
+    service.setIlpClient(runtime);
+
+    // First bootstrap to get results
+    const bootstrapPromise = service.bootstrap();
+    await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+    simulateRelayResponse(VALID_PEER_INFO);
+    const results = await bootstrapPromise;
+
+    // Clear mock call counts from initial bootstrap
+    runtime.sendIlpPacket.mockClear();
+
+    // Now republish
+    const successCount = await service.republish(results);
+
+    expect(successCount).toBe(1);
+    expect(runtime.sendIlpPacket).toHaveBeenCalledTimes(1);
+
+    // Verify the ILP call targets the peer
+    const ilpCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as
+      | { destination: string }
+      | undefined;
+    expect(ilpCall?.destination).toBe('g.test.peer');
+  });
+
+  it('should return 0 when republish() is called with empty results', async () => {
+    const service = new BootstrapService(
+      { knownPeers: [], ardriveEnabled: false },
+      secretKey,
+      ownIlpInfo
+    );
+
+    const successCount = await service.republish([]);
+    expect(successCount).toBe(0);
+  });
+
+  it('should continue on individual peer failure during republish()', async () => {
+    const runtime = createMockIlpClient();
+    // First call fails, second succeeds
+    runtime.sendIlpPacket
+      .mockRejectedValueOnce(new Error('network error'))
+      .mockResolvedValueOnce({ accepted: true });
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const events: BootstrapEvent[] = [];
+    const service = new BootstrapService(
+      {
+        knownPeers: [],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        basePricePerByte: 10n,
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setIlpClient(runtime);
+    service.on((event) => events.push(event));
+
+    // Fabricate two results
+    const fakeResults = [
+      {
+        knownPeer: createKnownPeer({ pubkey: 'aa'.repeat(32) }),
+        peerInfo: VALID_PEER_INFO,
+        registeredPeerId: 'nostr-peer1',
+      },
+      {
+        knownPeer: createKnownPeer({ pubkey: 'bb'.repeat(32) }),
+        peerInfo: { ...VALID_PEER_INFO, ilpAddress: 'g.test.peer2' },
+        registeredPeerId: 'nostr-peer2',
+      },
+    ];
+
+    const successCount = await service.republish(fakeResults);
+
+    // First failed, second succeeded
+    expect(successCount).toBe(1);
+    // Should have emitted announce-failed for the first peer
+    const failEvents = events.filter(
+      (e) => e.type === 'bootstrap:announce-failed'
+    );
+    expect(failEvents).toHaveLength(1);
+  });
+
+  // ---------------------------------------------------------------------------
   // BootstrapError
   // ---------------------------------------------------------------------------
 

@@ -834,6 +834,65 @@ export class BootstrapService {
   }
 
   /**
+   * Re-advertise own kind:10032 to all previously bootstrapped peers.
+   *
+   * Called after topology changes (addUpstreamPeer/removeUpstreamPeer) to
+   * propagate updated ILP address lists to the network. Uses the same
+   * ILP-first announcement path as the initial Phase 2 bootstrap.
+   *
+   * For non-ILP mode, publishes directly to each peer's relay URL.
+   *
+   * @param results - The bootstrap results from the initial bootstrap() call
+   * @returns Number of peers successfully re-announced to
+   */
+  async republish(results: BootstrapResult[]): Promise<number> {
+    if (results.length === 0) {
+      return 0;
+    }
+
+    let successCount = 0;
+
+    if (this.ilpClient && this.toonEncoder) {
+      // ILP-first flow: re-announce via ILP PREPARE
+      for (const result of results) {
+        try {
+          await this.announceViaIlp(result);
+          successCount++;
+        } catch (error) {
+          const reason =
+            error instanceof Error ? error.message : 'Unknown error';
+          this.emit({
+            type: 'bootstrap:announce-failed',
+            peerId: result.registeredPeerId,
+            reason: `republish: ${reason}`,
+          });
+          console.warn(
+            `[Bootstrap] Republish failed for ${result.registeredPeerId}:`,
+            reason
+          );
+          // Non-fatal: continue to next peer
+        }
+      }
+    } else {
+      // Direct publish to relay URLs
+      for (const result of results) {
+        try {
+          await this.publishOurInfo(result.knownPeer.relayUrl);
+          successCount++;
+        } catch (error) {
+          console.warn(
+            `[Bootstrap] Republish to ${result.knownPeer.relayUrl} failed:`,
+            error instanceof Error ? error.message : 'Unknown error'
+          );
+          // Non-fatal: continue to next peer
+        }
+      }
+    }
+
+    return successCount;
+  }
+
+  /**
    * Get our pubkey.
    */
   getPubkey(): string {
