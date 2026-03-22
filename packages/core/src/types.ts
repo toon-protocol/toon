@@ -11,6 +11,8 @@ export interface IlpPeerInfo {
   pubkey?: string;
   /** ILP address of the peer's connector (e.g., "g.example.connector") */
   ilpAddress: string;
+  /** All ILP addresses of this peer (one per upstream peering). When absent (pre-Epic-7 events), consumers should default to [ilpAddress]. */
+  ilpAddresses?: string[];
   /** BTP WebSocket endpoint URL for packet exchange */
   btpEndpoint: string;
   /** Optional BLS HTTP endpoint for direct packet delivery (bootstrap only) */

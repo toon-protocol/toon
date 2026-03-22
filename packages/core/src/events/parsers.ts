@@ -5,6 +5,7 @@
 import type { NostrEvent } from 'nostr-tools/pure';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
+import { isValidIlpAddressStructure } from '../address/ilp-address-validation.js';
 import type { IlpPeerInfo } from '../types.js';
 
 /**
@@ -64,6 +65,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     settlementEngine,
     assetCode,
     assetScale,
+    ilpAddresses: rawIlpAddresses,
   } = parsed;
 
   if (typeof ilpAddress !== 'string' || ilpAddress.length === 0) {
@@ -165,6 +167,30 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     }
   }
 
+  // ilpAddresses validation (Story 7.3)
+  let ilpAddresses: string[];
+  if (rawIlpAddresses !== undefined) {
+    if (!Array.isArray(rawIlpAddresses)) {
+      throw new InvalidEventError('ilpAddresses must be an array');
+    }
+    for (const addr of rawIlpAddresses) {
+      if (typeof addr !== 'string' || addr.length === 0) {
+        throw new InvalidEventError(
+          'ilpAddresses elements must be non-empty strings'
+        );
+      }
+      if (!isValidIlpAddressStructure(addr)) {
+        throw new InvalidEventError(
+          `Invalid ILP address in ilpAddresses: "${addr}"`
+        );
+      }
+    }
+    ilpAddresses = rawIlpAddresses as string[];
+  } else {
+    // Backward-compatible default: wrap the singular ilpAddress in an array
+    ilpAddresses = [ilpAddress as string];
+  }
+
   return {
     ilpAddress,
     btpEndpoint,
@@ -185,5 +211,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     ...(tokenNetworks !== undefined && {
       tokenNetworks: tokenNetworks as Record<string, string>,
     }),
+    ilpAddresses,
   };
 }

@@ -33,6 +33,7 @@ export {
   checkAddressCollision,
   assignAddressFromHandshake,
   isGenesisNode,
+  AddressRegistry,
 } from './address/index.js';
 export type { BtpHandshakeExtension } from './address/index.js';
 

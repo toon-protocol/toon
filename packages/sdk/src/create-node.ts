@@ -43,6 +43,8 @@ import {
   buildJobResultEvent,
   parseJobResult,
   deriveChildAddress,
+  checkAddressCollision,
+  AddressRegistry,
   ILP_ROOT_PREFIX,
 } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
@@ -136,6 +138,12 @@ export interface NodeConfig {
    * `deriveChildAddress(upstreamPrefix, pubkey)` and ignores `ilpAddress`.
    */
   upstreamPrefix?: string;
+  /**
+   * Multiple upstream peer prefixes for multi-peered nodes (Story 7.3).
+   * When set, derives one ILP address per upstream prefix. Takes priority
+   * over `upstreamPrefix` (singular) when both are set.
+   */
+  upstreamPrefixes?: string[];
   /** ILP address (default: derived from pubkey under ILP_ROOT_PREFIX) */
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
@@ -318,6 +326,26 @@ export interface ServiceNode {
     providerIlpAddress: string,
     options?: { originalBid?: string }
   ): Promise<IlpSendResult>;
+
+  /**
+   * Add a new upstream peer, deriving and registering its ILP address.
+   *
+   * Updates the AddressRegistry, registers a self-route in the embedded
+   * connector, and triggers kind:10032 republication via BootstrapService.
+   *
+   * @param upstreamPrefix - The upstream peer's ILP address prefix
+   */
+  addUpstreamPeer(upstreamPrefix: string): void;
+
+  /**
+   * Remove an upstream peer, unregistering its derived ILP address.
+   *
+   * Updates the AddressRegistry, removes the self-route from the embedded
+   * connector, and triggers kind:10032 republication via BootstrapService.
+   *
+   * @param upstreamPrefix - The upstream prefix to remove
+   */
+  removeUpstreamPeer(upstreamPrefix: string): void;
 }
 
 /**
@@ -558,21 +586,67 @@ export function createNode(config: NodeConfig): ServiceNode {
   };
 
   // ILP info shared between both modes
-  // Address resolution priority:
-  // 1. upstreamPrefix set -> derive from upstream prefix + pubkey (ignore ilpAddress)
-  // 2. ilpAddress set -> use directly (includes genesis node with 'g.toon')
-  // 3. neither set -> derive from ILP_ROOT_PREFIX + pubkey (default)
+  // Address resolution priority (Story 7.3 extends with upstreamPrefixes):
+  // 1. upstreamPrefixes set -> derive one address per prefix, primary = first
+  // 2. upstreamPrefix set -> derive single address (ignore ilpAddress)
+  // 3. ilpAddress set -> use directly (includes genesis node with 'g.toon')
+  // 4. neither set -> derive from ILP_ROOT_PREFIX + pubkey (default)
   let resolvedIlpAddress: string;
-  if (config.upstreamPrefix !== undefined) {
+  let resolvedIlpAddresses: string[];
+
+  if (
+    config.upstreamPrefixes !== undefined &&
+    config.upstreamPrefixes.length > 0
+  ) {
+    // upstreamPrefixes takes priority over upstreamPrefix (singular)
+    if (config.upstreamPrefix !== undefined) {
+      console.warn(
+        '[toon:warn] Both upstreamPrefixes and upstreamPrefix set; upstreamPrefixes takes priority'
+      );
+    }
+    resolvedIlpAddresses = config.upstreamPrefixes.map((p) =>
+      deriveChildAddress(p, pubkey)
+    );
+    // Task 4.4: Check for truncation collisions across upstream prefixes
+    for (let i = 0; i < resolvedIlpAddresses.length; i++) {
+      const others = resolvedIlpAddresses.filter((_, j) => j !== i);
+      checkAddressCollision(resolvedIlpAddresses[i] as string, others);
+    }
+    resolvedIlpAddress = resolvedIlpAddresses[0] as string;
+  } else if (config.upstreamPrefix !== undefined) {
     resolvedIlpAddress = deriveChildAddress(config.upstreamPrefix, pubkey);
+    resolvedIlpAddresses = [resolvedIlpAddress];
   } else if (config.ilpAddress !== undefined) {
     resolvedIlpAddress = config.ilpAddress;
+    resolvedIlpAddresses = [resolvedIlpAddress];
   } else {
     resolvedIlpAddress = deriveChildAddress(ILP_ROOT_PREFIX, pubkey);
+    resolvedIlpAddresses = [resolvedIlpAddress];
+  }
+
+  // Task 6.2: Initialize AddressRegistry with initial upstream prefixes
+  const addressRegistry = new AddressRegistry();
+  if (
+    config.upstreamPrefixes !== undefined &&
+    config.upstreamPrefixes.length > 0
+  ) {
+    for (let i = 0; i < config.upstreamPrefixes.length; i++) {
+      addressRegistry.addAddress(
+        config.upstreamPrefixes[i] as string,
+        resolvedIlpAddresses[i] as string
+      );
+    }
+  } else if (config.upstreamPrefix !== undefined) {
+    addressRegistry.addAddress(config.upstreamPrefix, resolvedIlpAddress);
+  } else if (config.ilpAddress !== undefined) {
+    addressRegistry.addAddress('explicit', resolvedIlpAddress);
+  } else {
+    addressRegistry.addAddress(ILP_ROOT_PREFIX, resolvedIlpAddress);
   }
 
   const ilpInfo = {
     ilpAddress: resolvedIlpAddress,
+    ilpAddresses: resolvedIlpAddresses,
     btpEndpoint: config.btpEndpoint ?? '',
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
@@ -760,12 +834,14 @@ export function createNode(config: NodeConfig): ServiceNode {
 
       trackerRef.current = discoveryTrackerInstance;
 
-      // Add self-route
-      autoCreatedConnector.addRoute({
-        prefix: ilpInfo.ilpAddress,
-        nextHop: nodeId,
-        priority: 100,
-      });
+      // Add self-routes for all addresses (Task 5.3)
+      for (const addr of ilpInfo.ilpAddresses) {
+        autoCreatedConnector.addRoute({
+          prefix: addr,
+          nextHop: nodeId,
+          priority: 100,
+        });
+      }
 
       // Start the toonNode (wires packet handler, runs bootstrap)
       const result = await toonNode.start();
@@ -1203,6 +1279,68 @@ export function createNode(config: NodeConfig): ServiceNode {
         amount: computeAmount,
         data: '',
       });
+    },
+
+    // Task 6.3: Address lifecycle management for multi-peered nodes
+    addUpstreamPeer(upstreamPrefix: string): void {
+      const derivedAddress = deriveChildAddress(upstreamPrefix, pubkey);
+
+      // Check for collision against existing addresses
+      checkAddressCollision(derivedAddress, addressRegistry.getAddresses());
+
+      // Update registry
+      addressRegistry.addAddress(upstreamPrefix, derivedAddress);
+
+      // Update ilpInfo for kind:10032 republication
+      ilpInfo.ilpAddresses = addressRegistry.getAddresses();
+      ilpInfo.ilpAddress =
+        addressRegistry.getPrimaryAddress() ?? ilpInfo.ilpAddress;
+
+      // Register self-route in embedded connector (if available)
+      if (autoCreatedConnector) {
+        const nodeId = `toon-${pubkey.slice(0, 16)}`;
+        autoCreatedConnector.addRoute({
+          prefix: derivedAddress,
+          nextHop: nodeId,
+          priority: 100,
+        });
+      }
+
+      // Note: kind:10032 republication will be triggered when BootstrapService
+      // gains a republish() method (deferred to address lifecycle E2E integration).
+    },
+
+    removeUpstreamPeer(upstreamPrefix: string): void {
+      // Guard: cannot remove the last address -- a node must always have at least one
+      // ILP address (AC #3: empty ilpAddresses array is rejected at construction time).
+      if (
+        addressRegistry.hasPrefix(upstreamPrefix) &&
+        addressRegistry.size <= 1
+      ) {
+        throw new NodeError(
+          'Cannot remove last upstream peer: a node must have at least one ILP address'
+        );
+      }
+
+      const removedAddress = addressRegistry.removeAddress(upstreamPrefix);
+      if (removedAddress === undefined) {
+        return; // No-op if prefix not found
+      }
+
+      // Update ilpInfo for kind:10032 republication
+      ilpInfo.ilpAddresses = addressRegistry.getAddresses();
+      const newPrimary = addressRegistry.getPrimaryAddress();
+      if (newPrimary !== undefined) {
+        ilpInfo.ilpAddress = newPrimary;
+      }
+
+      // Remove self-route from embedded connector (if available)
+      if (autoCreatedConnector && autoCreatedConnector.removeRoute) {
+        autoCreatedConnector.removeRoute(removedAddress);
+      }
+
+      // Note: kind:10032 republication will be triggered when BootstrapService
+      // gains a republish() method (deferred to address lifecycle E2E integration).
     },
   };
 

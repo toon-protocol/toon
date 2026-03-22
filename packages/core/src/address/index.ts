@@ -22,3 +22,5 @@ export {
   assignAddressFromHandshake,
   isGenesisNode,
 } from './address-assignment.js';
+
+export { AddressRegistry } from './address-registry.js';
