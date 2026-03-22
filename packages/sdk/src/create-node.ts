@@ -46,6 +46,8 @@ import {
   checkAddressCollision,
   AddressRegistry,
   ILP_ROOT_PREFIX,
+  calculateRouteAmount,
+  resolveRouteFees,
 } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
@@ -1130,9 +1132,24 @@ export function createNode(config: NodeConfig): ServiceNode {
         // TOON-encode the event
         const toonData = encoder(event);
 
-        // Compute amount: basePricePerByte * toonData.length
-        const amount =
-          (config.basePricePerByte ?? 10n) * BigInt(toonData.length);
+        // Resolve intermediary routing fees from discovered peers
+        const { hopFees, warnings } = resolveRouteFees({
+          destination: options.destination,
+          ownIlpAddress: ilpInfo.ilpAddress,
+          discoveredPeers: discoveryTrackerInstance.getAllDiscoveredPeers(),
+        });
+
+        // Log warnings about unknown intermediaries
+        for (const warning of warnings) {
+          console.warn(`[publishEvent] ${warning}`);
+        }
+
+        // Compute amount: basePricePerByte * toonData.length + intermediary fees
+        const amount = calculateRouteAmount({
+          basePricePerByte: config.basePricePerByte ?? 10n,
+          packetByteLength: toonData.length,
+          hopFees,
+        });
 
         // Build ILP PREPARE packet using shared construction (packet equivalence
         // with x402 rail -- the destination relay cannot distinguish between

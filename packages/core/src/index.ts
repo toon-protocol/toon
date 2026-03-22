@@ -131,6 +131,15 @@ export {
   type PublishSeedRelayConfig,
 } from './discovery/index.js';
 
+// Fee calculation utilities
+export {
+  calculateRouteAmount,
+  type CalculateRouteAmountParams,
+  resolveRouteFees,
+  type ResolveRouteFeesParams,
+  type ResolveRouteFeesResult,
+} from './fee/index.js';
+
 // Settlement utilities
 export {
   negotiateSettlementChain,

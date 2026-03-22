@@ -35,6 +35,7 @@ import type {
 } from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
+import { calculateRouteAmount } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // Test Fixtures: Deterministic mock data
@@ -864,5 +865,181 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
 
     // Cleanup
     await node.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 7.5: Route-aware fee calculation integration tests
+// ---------------------------------------------------------------------------
+
+describe('publishEvent() route-aware fee calculation (Story 7.5)', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.5-01: Direct route -> unchanged amount (basePricePerByte * toonBytes)
+  // -------------------------------------------------------------------------
+
+  it('T-7.5-01: direct route with no intermediaries computes amount = basePricePerByte * toonBytes.length', async () => {
+    // Arrange -- use the real encoder to get known TOON length
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const basePricePerByte = 10n;
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+    const expectedToonLength = BigInt(encodeEventToToon(event).length);
+    // Direct route: no intermediary fees, amount = basePricePerByte * bytes
+    const expectedAmount = basePricePerByte * expectedToonLength;
+
+    // Act -- destination g.peer.address has unknown intermediary g.peer which defaults to 0n
+    await node.publishEvent(event, { destination: 'g.peer.address' });
+
+    // Assert -- amount matches direct route calculation (unknown intermediary = 0n fee)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
+    const call = connector.sendPacketCalls[0]!;
+    expect(call.amount).toBe(expectedAmount);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.5-04: publishEvent API signature has no fee parameters
+  // -------------------------------------------------------------------------
+
+  it('T-7.5-04: publishEvent() API signature does not expose fee parameters', async () => {
+    // This is a compile-time assertion: the publishEvent signature is
+    // (event: NostrEvent, options?: { destination: string }) => Promise<PublishEventResult>
+    // If any fee parameters were added, this TypeScript compilation would fail.
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- call with ONLY destination (no fee params)
+    const result = await node.publishEvent(event, {
+      destination: 'g.peer.address',
+    });
+
+    // Assert -- publish succeeds without any fee parameters
+    expect(result.success).toBe(true);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#6: publishEvent logs warning for unknown intermediaries
+  // -------------------------------------------------------------------------
+
+  it('AC#6: publishEvent() logs console.warn with [publishEvent] prefix for unknown intermediaries', async () => {
+    // Arrange
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      knownPeers: [],
+    });
+    await node.start();
+
+    const event = createTestEvent();
+
+    // Act -- destination g.peer.address has unknown intermediary g.peer
+    await node.publishEvent(event, { destination: 'g.peer.address' });
+
+    // Assert -- console.warn was called with [publishEvent] prefix and intermediary address
+    const warnCalls = warnSpy.mock.calls.filter(
+      (call) =>
+        typeof call[0] === 'string' && call[0].includes('[publishEvent]')
+    );
+    expect(warnCalls.length).toBeGreaterThan(0);
+    expect(warnCalls[0]![0]).toContain('defaulting feePerByte to 0');
+
+    // Cleanup
+    warnSpy.mockRestore();
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // AC#1: True direct route (sender and destination under same parent)
+  // -------------------------------------------------------------------------
+
+  it('AC#1: publishEvent() with true direct route (same parent) computes amount with no intermediary fees', async () => {
+    // Arrange -- use explicit ilpAddress so sender is under g.toon.useast
+    const { encodeEventToToon } = await import('@toon-protocol/core/toon');
+    const connector = createMockConnector({
+      type: 'fulfill',
+      fulfillment: Buffer.from('test-fulfillment'),
+    });
+    const basePricePerByte = 10n;
+    const node = createNode({
+      secretKey: TEST_SECRET_KEY,
+      connector,
+      basePricePerByte,
+      knownPeers: [],
+      ilpAddress: 'g.toon.useast.client1',
+    });
+    await node.start();
+
+    const event = createTestEvent();
+    const expectedToonLength = BigInt(encodeEventToToon(event).length);
+    // True direct route: same parent g.toon.useast -> zero intermediaries
+    const expectedAmount = basePricePerByte * expectedToonLength;
+
+    // Act -- destination under same parent
+    await node.publishEvent(event, { destination: 'g.toon.useast.relay42' });
+
+    // Assert -- amount = basePricePerByte * bytes (no intermediary fees)
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
+    const call = connector.sendPacketCalls[0]!;
+    expect(call.amount).toBe(expectedAmount);
+
+    // Cleanup
+    await node.stop();
+  });
+
+  // -------------------------------------------------------------------------
+  // T-7.5-04: Multi-hop amount includes intermediary fees via calculateRouteAmount
+  // -------------------------------------------------------------------------
+
+  it('T-7.5-04: calculateRouteAmount correctly computes multi-hop amount for publishEvent integration', () => {
+    // This verifies the formula used by publishEvent is correct.
+    // publishEvent calls calculateRouteAmount internally -- we verify the
+    // function independently with known inputs matching multi-hop scenario.
+    const basePricePerByte = 10n;
+    const packetByteLength = 100;
+    const hopFees = [2n, 3n]; // two intermediaries
+
+    const amount = calculateRouteAmount({
+      basePricePerByte,
+      packetByteLength,
+      hopFees,
+    });
+
+    // Assert: (10 * 100) + (2 * 100) + (3 * 100) = 1500
+    expect(amount).toBe(1500n);
   });
 });

@@ -45,6 +45,8 @@ export interface DiscoveryTracker {
   peerWith(pubkey: string): Promise<void>;
   /** Get discovered peers not yet peered with. */
   getDiscoveredPeers(): DiscoveredPeer[];
+  /** Get all discovered peers regardless of peering status (for fee calculation). */
+  getAllDiscoveredPeers(): DiscoveredPeer[];
   /** Check if a pubkey has been actively peered with. */
   isPeered(pubkey: string): boolean;
   /** Count of registered (peered) peers. */
@@ -116,7 +118,8 @@ export function createDiscoveryTracker(
           })
           .catch((error) => {
             console.warn(
-              `[DiscoveryTracker] Failed to deregister ${peerId}:`,
+              '[DiscoveryTracker] Failed to deregister %s: %s',
+              peerId,
               error instanceof Error ? error.message : 'Unknown error'
             );
           });
@@ -229,7 +232,8 @@ export function createDiscoveryTracker(
         peeredPubkeys.delete(targetPubkey);
         const reason = error instanceof Error ? error.message : 'Unknown error';
         console.warn(
-          `[DiscoveryTracker] Failed to register ${peerId}:`,
+          '[DiscoveryTracker] Failed to register %s: %s',
+          peerId,
           reason
         );
         emit({
@@ -306,7 +310,8 @@ export function createDiscoveryTracker(
           const reason =
             error instanceof Error ? error.message : 'Unknown error';
           console.warn(
-            `[DiscoveryTracker] Settlement failed for ${peerId}:`,
+            '[DiscoveryTracker] Settlement failed for %s: %s',
+            peerId,
             reason
           );
           emit({
@@ -323,6 +328,10 @@ export function createDiscoveryTracker(
       return [...discoveredPeers.values()].filter(
         (p) => !peeredPubkeys.has(p.pubkey)
       );
+    },
+
+    getAllDiscoveredPeers(): DiscoveredPeer[] {
+      return [...discoveredPeers.values()];
     },
 
     isPeered(targetPubkey: string): boolean {
