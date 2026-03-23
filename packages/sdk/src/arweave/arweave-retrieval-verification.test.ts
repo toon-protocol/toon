@@ -45,9 +45,7 @@ function createMockChunkManager() {
   };
 }
 
-function createMockHandlerContext(
-  blobData: Buffer
-): HandlerContext {
+function createMockHandlerContext(blobData: Buffer): HandlerContext {
   return {
     toon: 'mock-toon-string',
     kind: 5094,
