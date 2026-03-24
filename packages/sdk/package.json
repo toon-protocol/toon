@@ -49,6 +49,7 @@
     "@noble/hashes": "^2.0.0",
     "@scure/bip32": "^2.0.0",
     "@scure/bip39": "^2.0.0",
+    "@ardrive/turbo-sdk": "^1.19.0",
     "@toon-protocol/core": "workspace:*",
     "nostr-tools": "^2.20.0"
   },

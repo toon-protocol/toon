@@ -81,6 +81,14 @@ export {
   type AttestedResultVerificationResult,
 } from './attested-result-verifier.js';
 export {
+  buildBlobStorageRequest,
+  parseBlobStorageRequest,
+  BLOB_STORAGE_REQUEST_KIND,
+  BLOB_STORAGE_RESULT_KIND,
+  type BlobStorageRequestParams,
+  type ParsedBlobStorageRequest,
+} from './arweave-storage.js';
+export {
   buildJobReviewEvent,
   parseJobReview,
   buildWotDeclarationEvent,

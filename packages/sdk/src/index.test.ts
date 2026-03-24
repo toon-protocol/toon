@@ -118,6 +118,12 @@ describe('@toon-protocol/sdk public API exports', () => {
       'SwarmCoordinator',
       // Prefix claim handler (Story 7.6)
       'createPrefixClaimHandler',
+      // Arweave DVM (Story 8.0)
+      'createArweaveDvmHandler',
+      'TurboUploadAdapter',
+      'ChunkManager',
+      'uploadBlob',
+      'uploadBlobChunked',
     ]);
 
     // Act
@@ -195,6 +201,7 @@ describe('@toon-protocol/sdk package.json structure (AC1)', () => {
     // Arrange
     const deps = pkg['dependencies'] as Record<string, string> | undefined;
     const allowedDeps = new Set([
+      '@ardrive/turbo-sdk',
       '@toon-protocol/core',
       'nostr-tools',
       '@scure/bip39',

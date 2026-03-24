@@ -218,6 +218,8 @@ export interface StartResult {
 export interface PublishEventResult {
   success: boolean;
   eventId: string;
+  /** Response data from the ILP FULFILL packet (e.g., Arweave tx ID for kind:5094). */
+  data?: string;
   code?: string;
   message?: string;
 }
@@ -1025,6 +1027,7 @@ export function createNode(config: NodeConfig): ServiceNode {
 
   // 10. Track SDK-level lifecycle state
   let started = false;
+  let lastBootstrapResults: BootstrapResult[] = [];
 
   // 11. Build and return ServiceNode
   const node: ServiceNode = {
@@ -1094,6 +1097,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       try {
         const result = await doStart();
         started = true;
+        lastBootstrapResults = result.bootstrapResults;
         return {
           peerCount: result.peerCount,
           channelCount: result.channelCount,
@@ -1220,6 +1224,7 @@ export function createNode(config: NodeConfig): ServiceNode {
           return {
             success: true,
             eventId: event.id,
+            ...(result.data !== undefined ? { data: result.data } : {}),
           };
         }
 
@@ -1385,8 +1390,10 @@ export function createNode(config: NodeConfig): ServiceNode {
         });
       }
 
-      // Note: kind:10032 republication will be triggered when BootstrapService
-      // gains a republish() method (deferred to address lifecycle E2E integration).
+      // Trigger kind:10032 republication to propagate updated address list
+      if (started && lastBootstrapResults.length > 0) {
+        void bootstrapServiceInstance.republish(lastBootstrapResults);
+      }
     },
 
     removeUpstreamPeer(upstreamPrefix: string): void {
@@ -1418,8 +1425,10 @@ export function createNode(config: NodeConfig): ServiceNode {
         autoCreatedConnector.removeRoute(removedAddress);
       }
 
-      // Note: kind:10032 republication will be triggered when BootstrapService
-      // gains a republish() method (deferred to address lifecycle E2E integration).
+      // Trigger kind:10032 republication to propagate updated address list
+      if (started && lastBootstrapResults.length > 0) {
+        void bootstrapServiceInstance.republish(lastBootstrapResults);
+      }
     },
 
     async claimPrefix(
