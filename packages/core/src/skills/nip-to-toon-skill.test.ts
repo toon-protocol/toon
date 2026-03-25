@@ -28,12 +28,7 @@ import { execSync } from 'child_process';
 
 // Resolve project root (vitest runs from repo root)
 const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..', '..');
-const SKILL_DIR = join(
-  PROJECT_ROOT,
-  '.claude',
-  'skills',
-  'nip-to-toon-skill'
-);
+const SKILL_DIR = join(PROJECT_ROOT, '.claude', 'skills', 'nip-to-toon-skill');
 const REFS_DIR = join(SKILL_DIR, 'references');
 const EVALS_DIR = join(SKILL_DIR, 'evals');
 const SCRIPTS_DIR = join(SKILL_DIR, 'scripts');
@@ -1020,10 +1015,9 @@ describe('[9.2-QUALITY] Quality Validation', () => {
     // When checking each file
     // Then all must exist
     for (const ref of EXPECTED_REFS) {
-      expect(
-        existsSync(join(REFS_DIR, ref)),
-        `Missing reference: ${ref}`
-      ).toBe(true);
+      expect(existsSync(join(REFS_DIR, ref)), `Missing reference: ${ref}`).toBe(
+        true
+      );
     }
   });
 
@@ -1052,7 +1046,9 @@ describe('[9.2-QUALITY] Quality Validation', () => {
       const content = readFileSync(join(REFS_DIR, ref), 'utf-8');
       const lower = content.toLowerCase();
       expect(
-        lower.match(/why|because|reason|purpose|rationale|this ensures|this prevents/),
+        lower.match(
+          /why|because|reason|purpose|rationale|this ensures|this prevents/
+        ),
         `Reference ${ref} lacks WHY reasoning (D9-008 compliance)`
       ).toBeTruthy();
     }
