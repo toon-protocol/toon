@@ -1241,7 +1241,7 @@ license: MIT
 
 # Broken Skill
 
-Send events with bare \["EVENT", payload\] patterns.
+Send events with bare ["EVENT", payload] patterns.
 `;
       execSync(`mkdir -p "${tmpDir}"`, { encoding: 'utf-8' });
       execSync(
@@ -1294,7 +1294,9 @@ This is a test skill body.
 
 This is the social context for the JSON test skill pipeline.
 `;
-      execSync(`mkdir -p "${tmpDir}/references" "${tmpDir}/evals"`, { encoding: 'utf-8' });
+      execSync(`mkdir -p "${tmpDir}/references" "${tmpDir}/evals"`, {
+        encoding: 'utf-8',
+      });
       execSync(
         `cat > "${tmpDir}/SKILL.md" << 'HEREDOC'
 ${skillMd}
@@ -1373,7 +1375,10 @@ describe('[9.2-QUALITY] Additional Quality Checks', () => {
     // Task 6.3: Verify all reference files exist and are non-empty
     for (const ref of EXPECTED_REFS) {
       const content = readFileSync(join(REFS_DIR, ref), 'utf-8');
-      expect(content.trim().length, `Reference ${ref} is empty`).toBeGreaterThan(0);
+      expect(
+        content.trim().length,
+        `Reference ${ref} is empty`
+      ).toBeGreaterThan(0);
     }
   });
 
@@ -1391,7 +1396,9 @@ describe('[9.2-QUALITY] Additional Quality Checks', () => {
     const ids = evals.output_evals.map((e: { id: string }) => e.id);
     // Must cover write-capable (NIP-25), read-only (NIP-50), both (NIP-23)
     expect(ids.some((id: string) => id.includes('write'))).toBe(true);
-    expect(ids.some((id: string) => id.includes('readonly') || id.includes('read'))).toBe(true);
+    expect(
+      ids.some((id: string) => id.includes('readonly') || id.includes('read'))
+    ).toBe(true);
     expect(ids.some((id: string) => id.includes('both'))).toBe(true);
   });
 
@@ -1401,9 +1408,10 @@ describe('[9.2-QUALITY] Additional Quality Checks', () => {
     const skillContent = readFileSync(SKILL_MD, 'utf-8');
     const socialIdx = skillContent.indexOf('## Social Context');
     const nextSectionIdx = skillContent.indexOf('\n## ', socialIdx + 1);
-    const socialSection = nextSectionIdx > 0
-      ? skillContent.slice(socialIdx, nextSectionIdx)
-      : skillContent.slice(socialIdx);
+    const socialSection =
+      nextSectionIdx > 0
+        ? skillContent.slice(socialIdx, nextSectionIdx)
+        : skillContent.slice(socialIdx);
     // Must mention pipeline-specific concerns
     expect(socialSection.toLowerCase()).toMatch(/pipeline|downstream|propagat/);
   });
