@@ -108,7 +108,7 @@ export function createArweaveDvmHandler(
 
         return {
           accept: true,
-          data: txId,
+          data: Buffer.from(txId, 'utf-8').toString('base64'),
         };
       } catch (error) {
         // Log full error internally but return generic message to client (CWE-209)
@@ -135,7 +135,7 @@ export function createArweaveDvmHandler(
       const { txId } = await turboAdapter.upload(parsed.blobData, uploadTags);
       return {
         accept: true,
-        data: txId,
+        data: Buffer.from(txId, 'utf-8').toString('base64'),
       };
     } catch {
       // Generic message to avoid leaking Arweave SDK internals (CWE-209)
