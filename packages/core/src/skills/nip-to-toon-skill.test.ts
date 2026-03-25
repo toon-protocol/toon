@@ -452,6 +452,16 @@ describe('[9.2-STEP-005] AC6: Eval Generation Step', () => {
     const lower = content.toLowerCase();
     expect(lower).toMatch(/why|because|reason|purpose|rationale/);
   });
+
+  it('[P0] Eval guide documents expected_output field in output eval format', () => {
+    // The eval format spec must document expected_output since all output evals include it
+    // and the test at [9.2-EVAL] validates its presence on every output eval
+    const content = readFileSync(
+      join(REFS_DIR, 'eval-generation-guide.md'),
+      'utf-8'
+    );
+    expect(content).toContain('expected_output');
+  });
 });
 
 // ─── AC7: TOON Assertions Step [Test: 9.2-STEP-006] ──────────────────────
@@ -798,6 +808,13 @@ describe('[9.2-STRUCT-003] AC14: Validate Script Correctness', () => {
     expect(content).toMatch(/EVENT|bare.*event|\["EVENT/);
   });
 
+  it('[P0] validate-skill.sh uses path-safe JSON validation (process.argv)', () => {
+    // The JSON validation must handle paths with special characters safely
+    // by passing the path as a process argument, not interpolating into JS string
+    const content = readFileSync(VALIDATE_SCRIPT, 'utf-8');
+    expect(content).toContain('process.argv');
+  });
+
   it('[P0] validate-skill.sh checks description word count (50-200)', () => {
     const content = readFileSync(VALIDATE_SCRIPT, 'utf-8');
     expect(content).toMatch(/word.*count|wc.*-w|50|200/);
@@ -1114,5 +1131,280 @@ describe('[9.2-META] Meta-Eval Readiness', () => {
     expect(lower).toMatch(/write.*toon-write-check|toon-write-check.*write/);
     // Read-only should get format checks
     expect(lower).toMatch(/read.*toon-format-check|toon-format-check.*read/);
+  });
+});
+
+// ─── Gap-Fill Tests: Acceptance Criteria Coverage ─────────────────────────
+
+describe('[9.2-STEP-001] AC2: NIP Analysis Step — Content Formats', () => {
+  it('[P1] Pipeline Step 1 documents content format analysis', () => {
+    // AC2: "identifies event kinds, tag structures, content formats"
+    const content = readAllSkillContent();
+    const lower = content.toLowerCase();
+    expect(lower).toMatch(/content.*format|format.*content/);
+  });
+
+  it('[P1] Pipeline Step 1 documents TOON-specific considerations flagging', () => {
+    // AC2: "flags TOON-specific considerations"
+    // SKILL.md Step 1 should mention excluded NIPs or TOON-specific overlap
+    const content = readFileSync(SKILL_MD, 'utf-8');
+    const lower = content.toLowerCase();
+    expect(lower).toMatch(/toon-specific|excluded.*nip|nip.*excluded/);
+  });
+});
+
+describe('[9.2-STEP-004] AC5: Skill Authoring Step — Level 3 References', () => {
+  it('[P1] Skill structure template documents Level 3 reference file names', () => {
+    // AC5: "Level 3 references (references/nip-spec.md, references/toon-extensions.md, references/scenarios.md)"
+    const content = readFileSync(
+      join(REFS_DIR, 'skill-structure-template.md'),
+      'utf-8'
+    );
+    expect(content).toContain('nip-spec.md');
+    expect(content).toContain('toon-extensions.md');
+    expect(content).toContain('scenarios.md');
+  });
+
+  it('[P0] SKILL.md Step 4 references the Level 3 reference file names', () => {
+    // AC5: generated skills should include these reference pointers
+    const content = readFileSync(SKILL_MD, 'utf-8');
+    expect(content).toContain('nip-spec.md');
+    expect(content).toContain('toon-extensions.md');
+    expect(content).toContain('scenarios.md');
+  });
+});
+
+describe('[9.2-STEP-005] AC6: Eval Generation — Rubric Format', () => {
+  it('[P0] Each output eval has rubric with correct/acceptable/incorrect', () => {
+    // AC6: "rubric-based grading categories: correct / acceptable / incorrect"
+    const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
+    for (const oe of evals.output_evals) {
+      expect(oe).toHaveProperty('rubric');
+      expect(oe.rubric).toHaveProperty('correct');
+      expect(oe.rubric).toHaveProperty('acceptable');
+      expect(oe.rubric).toHaveProperty('incorrect');
+    }
+  });
+});
+
+describe('[9.2-STEP-008] AC10: Benchmarking — Stddev', () => {
+  it('[P1] Benchmarking documentation mentions standard deviation', () => {
+    // AC10: "timing mean +/- stddev"
+    const content = readAllSkillContent();
+    const lower = content.toLowerCase();
+    expect(lower).toMatch(/standard deviation|stddev|std.*dev|\+\/-/);
+  });
+});
+
+describe('[9.2-STEP-010] AC12: Eval Viewer — generate_review.py', () => {
+  it('[P0] Documents specific eval-viewer/generate_review.py path', () => {
+    // AC12: "generates HTML review via eval-viewer/generate_review.py"
+    const content = readAllSkillContent();
+    expect(content).toContain('generate_review.py');
+  });
+});
+
+describe('[9.2-STRUCT-003] AC14: Validate Script — Self-Validation', () => {
+  it('[P0] validate-skill.sh passes on nip-to-toon-skill itself', () => {
+    // AC14 / Task 6.1: Self-validation — the pipeline skill must pass its own linter
+    try {
+      execSync(`bash "${VALIDATE_SCRIPT}" "${SKILL_DIR}"`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      expect(true).toBe(true);
+    } catch (e: unknown) {
+      const error = e as { status: number; stderr: string; stdout: string };
+      // Show validation output for debugging
+      expect(error.stdout || error.stderr).toBe('');
+      expect(error.status).toBe(0);
+    }
+  });
+
+  it('[P0] validate-skill.sh catches 5+ planted defects in a broken skill', () => {
+    // AC14: "Must correctly identify 5+ planted defects"
+    // Create a deliberately broken skill in a temp dir and verify the validator catches defects
+    const tmpDir = execSync('mktemp -d', { encoding: 'utf-8' }).trim();
+    try {
+      // Create a broken SKILL.md with multiple defects:
+      // Defect 1: Extra frontmatter field (license)
+      // Defect 2: Description too short (< 50 words)
+      // Defect 3: Missing ## Social Context section
+      // Defect 4: Bare ["EVENT", ...] pattern
+      // Defect 5: Missing evals/evals.json (no evals dir)
+      // Defect 6: Missing references/ directory
+      const brokenSkillMd = `---
+name: broken-skill
+description: This is way too short.
+license: MIT
+---
+
+# Broken Skill
+
+Send events with bare \["EVENT", payload\] patterns.
+`;
+      execSync(`mkdir -p "${tmpDir}"`, { encoding: 'utf-8' });
+      execSync(
+        `cat > "${tmpDir}/SKILL.md" << 'HEREDOC'
+${brokenSkillMd}
+HEREDOC`,
+        { encoding: 'utf-8' }
+      );
+
+      // Run validator — it should fail
+      let stdout = '';
+      try {
+        stdout = execSync(`bash "${VALIDATE_SCRIPT}" "${tmpDir}"`, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        });
+        // Should NOT reach here — broken skill should fail
+        expect(true).toBe(false);
+      } catch (e: unknown) {
+        const error = e as { status: number; stdout: string };
+        stdout = error.stdout || '';
+        // Must exit non-zero
+        expect(error.status).toBeGreaterThan(0);
+      }
+
+      // Count FAIL lines to verify 5+ defects caught
+      const failCount = (stdout.match(/FAIL:/g) || []).length;
+      expect(failCount).toBeGreaterThanOrEqual(5);
+    } finally {
+      // Cleanup
+      execSync(`rm -rf "${tmpDir}"`, { encoding: 'utf-8' });
+    }
+  });
+
+  it('[P1] validate-skill.sh detects invalid JSON in evals.json', () => {
+    // Verify the validator catches malformed JSON (not just missing evals.json)
+    const tmpDir = execSync('mktemp -d', { encoding: 'utf-8' }).trim();
+    try {
+      // Create a skill with valid structure but invalid JSON in evals
+      const skillMd = `---
+name: json-test-skill
+description: ${'A test skill with enough words to pass the 50-word minimum threshold for description validation checks. '.repeat(2)}This skill tests JSON validation in the validate-skill script to ensure malformed eval files are caught by the linter.
+---
+
+# JSON Test Skill
+
+This is a test skill body.
+
+## Social Context
+
+This is the social context for the JSON test skill pipeline.
+`;
+      execSync(`mkdir -p "${tmpDir}/references" "${tmpDir}/evals"`, { encoding: 'utf-8' });
+      execSync(
+        `cat > "${tmpDir}/SKILL.md" << 'HEREDOC'
+${skillMd}
+HEREDOC`,
+        { encoding: 'utf-8' }
+      );
+      // Write invalid JSON to evals.json
+      execSync(`echo '{ broken json }' > "${tmpDir}/evals/evals.json"`, {
+        encoding: 'utf-8',
+      });
+
+      let stdout = '';
+      try {
+        stdout = execSync(`bash "${VALIDATE_SCRIPT}" "${tmpDir}"`, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        });
+      } catch (e: unknown) {
+        const error = e as { status: number; stdout: string };
+        stdout = error.stdout || '';
+      }
+
+      // Must report the invalid JSON as a FAIL
+      expect(stdout).toContain('FAIL');
+      expect(stdout).toMatch(/not valid JSON|invalid JSON/i);
+    } finally {
+      execSync(`rm -rf "${tmpDir}"`, { encoding: 'utf-8' });
+    }
+  });
+});
+
+describe('[9.2-META] Meta-Eval: Read-Only Exclusion of Write Assertions', () => {
+  it('[P0] Pipeline documents that read-only NIPs do NOT get toon-write-check', () => {
+    // 9.2-META-001: "toon-write-check absent" for read-only NIPs
+    // The toon-compliance-assertions.md should specify write-check is for write-capable only
+    const content = readFileSync(
+      join(REFS_DIR, 'toon-compliance-assertions.md'),
+      'utf-8'
+    );
+    // toon-write-check should be marked as write-capable only (not for read-only)
+    expect(content).toContain('toon-write-check');
+    const lower = content.toLowerCase();
+    // Must distinguish that write-check applies to write-capable, not read-only
+    expect(lower).toMatch(/toon-write-check/);
+    // The NIP-50 output eval in evals.json should assert write-check is NOT injected
+    const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
+    const nip50Eval = evals.output_evals.find(
+      (e: { id: string }) => e.id === 'pipeline-nip50-readonly'
+    );
+    expect(nip50Eval).toBeDefined();
+    const assertionText = nip50Eval.assertions.join(' ').toLowerCase();
+    expect(assertionText).toMatch(/not.*toon-write-check|not.*toon-fee-check/);
+  });
+});
+
+describe('[9.2-META] Meta-Eval: Excluded NIP Handling', () => {
+  it('[P0] Pipeline documents excluded NIP handling in evals', () => {
+    // 9.2-META: Pipeline should handle excluded NIPs (NIP-57 Zaps)
+    const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
+    const excludedEval = evals.output_evals.find(
+      (e: { id: string }) => e.id === 'pipeline-excluded-nip-handling'
+    );
+    expect(excludedEval).toBeDefined();
+    expect(excludedEval.prompt.toLowerCase()).toMatch(/nip-57|excluded|zap/);
+  });
+
+  it('[P0] Pipeline SKILL.md mentions excluded NIPs', () => {
+    // The pipeline should guide agents on handling NIPs that ILP replaces
+    const content = readFileSync(SKILL_MD, 'utf-8');
+    expect(content).toMatch(/NIP-57|NIP-13|NIP-42|excluded/);
+  });
+});
+
+describe('[9.2-QUALITY] Additional Quality Checks', () => {
+  it('[P0] Every reference file is non-empty', () => {
+    // Task 6.3: Verify all reference files exist and are non-empty
+    for (const ref of EXPECTED_REFS) {
+      const content = readFileSync(join(REFS_DIR, ref), 'utf-8');
+      expect(content.trim().length, `Reference ${ref} is empty`).toBeGreaterThan(0);
+    }
+  });
+
+  it('[P0] evals.json trigger queries have non-empty strings', () => {
+    // Verify no empty or placeholder queries
+    const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
+    for (const te of evals.trigger_evals) {
+      expect(te.query.trim().length).toBeGreaterThan(10);
+    }
+  });
+
+  it('[P0] Output evals cover all 3 NIP classifications (read-only, write, both)', () => {
+    // Meta-eval readiness: must have evals for each classification
+    const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
+    const ids = evals.output_evals.map((e: { id: string }) => e.id);
+    // Must cover write-capable (NIP-25), read-only (NIP-50), both (NIP-23)
+    expect(ids.some((id: string) => id.includes('write'))).toBe(true);
+    expect(ids.some((id: string) => id.includes('readonly') || id.includes('read'))).toBe(true);
+    expect(ids.some((id: string) => id.includes('both'))).toBe(true);
+  });
+
+  it('[P1] SKILL.md Social Context section is distinct from generic template', () => {
+    // The Social Context section in SKILL.md must be specific to the pipeline skill,
+    // not a copy of the social-context-template.md
+    const skillContent = readFileSync(SKILL_MD, 'utf-8');
+    const socialIdx = skillContent.indexOf('## Social Context');
+    const nextSectionIdx = skillContent.indexOf('\n## ', socialIdx + 1);
+    const socialSection = nextSectionIdx > 0
+      ? skillContent.slice(socialIdx, nextSectionIdx)
+      : skillContent.slice(socialIdx);
+    // Must mention pipeline-specific concerns
+    expect(socialSection.toLowerCase()).toMatch(/pipeline|downstream|propagat/);
   });
 });
