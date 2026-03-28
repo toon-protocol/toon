@@ -229,7 +229,9 @@ describe('[EVAL-A, EVAL-B] AC2: NIP-94 Coverage (File Metadata / kind:1063)', ()
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/content.*description|content.*caption|description.*caption/);
+    expect(lower).toMatch(
+      /content.*description|content.*caption|description.*caption/
+    );
   });
 
   it('[P0] nip-spec.md covers NIP-94 kind:1063 structure', () => {
@@ -339,14 +341,18 @@ describe('[TOON-A, TOON-B] AC3: TOON Write Model', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/imeta.*increase.*size|imeta.*byte.*size|imeta.*cost/);
+    expect(lower).toMatch(
+      /imeta.*increase.*size|imeta.*byte.*size|imeta.*cost/
+    );
   });
 
   it('[P0] SKILL.md body explains arweave:tx: in i tags adds minimal byte overhead', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/arweave.*minimal.*overhead|i.*tag.*minimal|arweave.*small/);
+    expect(lower).toMatch(
+      /arweave.*minimal.*overhead|i.*tag.*minimal|arweave.*small/
+    );
   });
 
   it('[P0] SKILL.md body references nostr-protocol-core for fee formula', () => {
@@ -396,7 +402,9 @@ describe('[TOON-A, TOON-B] AC3: TOON Write Model', () => {
   it('[P0] toon-extensions.md covers i tag external content ID byte overhead', () => {
     const content = readFileSync(join(REFS_DIR, 'toon-extensions.md'), 'utf-8');
     const lower = content.toLowerCase();
-    expect(lower).toMatch(/i.*tag.*byte|arweave.*overhead|external.*content.*id.*byte/);
+    expect(lower).toMatch(
+      /i.*tag.*byte|arweave.*overhead|external.*content.*id.*byte/
+    );
   });
 
   it('[P0] scenarios.md covers media usage scenarios with publishEvent', () => {
@@ -451,7 +459,9 @@ describe('[TOON-C] AC4: TOON Read Model', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/query.*kind:1063|subscribe.*kind:1063|filter.*kind.*1063/);
+    expect(lower).toMatch(
+      /query.*kind:1063|subscribe.*kind:1063|filter.*kind.*1063/
+    );
   });
 
   it('[P0] SKILL.md body explains how to parse imeta tags from events', () => {
@@ -465,7 +475,9 @@ describe('[TOON-C] AC4: TOON Read Model', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/i.*tag.*filter|filter.*i.*tag|external.*content.*filter/);
+    expect(lower).toMatch(
+      /i.*tag.*filter|filter.*i.*tag|external.*content.*filter/
+    );
   });
 
   it('[P0] SKILL.md body explains reading is free on TOON', () => {
@@ -506,7 +518,8 @@ describe('[STRUCT-D, TOON-D] AC5: Social Context', () => {
   it('[P0] Social Context has at least 100 words of media-specific content', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
-    const socialSection = body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
+    const socialSection =
+      body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
     const wc = wordCount(socialSection);
     expect(wc).toBeGreaterThanOrEqual(100);
   });
@@ -628,7 +641,9 @@ describe('[EVAL-A] AC6: Trigger Evals', () => {
       .filter((e: { should_trigger: boolean }) => e.should_trigger === true)
       .map((e: { query: string }) => e.query.toLowerCase());
     const joined = shouldTrigger.join(' ');
-    expect(joined).toMatch(/how do i.*attach|how do i.*media|how do i.*file|how do i.*reference/);
+    expect(joined).toMatch(
+      /how do i.*attach|how do i.*media|how do i.*file|how do i.*reference/
+    );
   });
 
   it('[P0] should-trigger queries cover arweave:tx: content IDs', () => {
@@ -648,9 +663,16 @@ describe('[EVAL-A] AC6: Trigger Evals', () => {
     const joined = shouldTrigger.join(' ');
     let found = 0;
     const terms = [
-      /nip.?92/, /nip.?94/, /nip.?73/, /imeta/,
-      /kind:1063/, /media.*attach/, /file.*metadata/,
-      /external.*content.*id/, /arweave/, /alt.*text/,
+      /nip.?92/,
+      /nip.?94/,
+      /nip.?73/,
+      /imeta/,
+      /kind:1063/,
+      /media.*attach/,
+      /file.*metadata/,
+      /external.*content.*id/,
+      /arweave/,
+      /alt.*text/,
     ];
     for (const t of terms) {
       if (joined.match(t)) found++;
@@ -806,7 +828,9 @@ describe('[EVAL-B] AC6: Output Evals', () => {
     const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
     const writeEvals = evals.output_evals.filter(
       (oe: { id: string }) =>
-        oe.id.includes('file-metadata') || oe.id.includes('media-attach') || oe.id.includes('imeta')
+        oe.id.includes('file-metadata') ||
+        oe.id.includes('media-attach') ||
+        oe.id.includes('imeta')
     );
     for (const we of writeEvals) {
       expect(we.assertions.length).toBeGreaterThanOrEqual(5);
@@ -817,7 +841,9 @@ describe('[EVAL-B] AC6: Output Evals', () => {
     const evals = JSON.parse(readFileSync(EVALS_JSON, 'utf-8'));
     const readEvals = evals.output_evals.filter(
       (oe: { id: string }) =>
-        oe.id.includes('query') || oe.id.includes('read') || oe.id.includes('discover')
+        oe.id.includes('query') ||
+        oe.id.includes('read') ||
+        oe.id.includes('discover')
     );
     for (const re of readEvals) {
       expect(re.assertions.length).toBeGreaterThanOrEqual(3);

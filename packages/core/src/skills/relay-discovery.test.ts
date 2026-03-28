@@ -562,7 +562,9 @@ describe('[EVAL-A] AC8: Trigger Evals', () => {
       .filter((e: { should_trigger: boolean }) => e.should_trigger === true)
       .map((e: { query: string }) => e.query.toLowerCase());
     const joined = shouldTrigger.join(' ');
-    expect(joined).toMatch(/how do i.*find|how do i.*check|which relay|how do i.*discover/);
+    expect(joined).toMatch(
+      /how do i.*find|how do i.*check|which relay|how do i.*discover/
+    );
   });
 
   it('[P0] should-trigger queries cover at least 5 relay-discovery-relevant terms', () => {
@@ -573,10 +575,15 @@ describe('[EVAL-A] AC8: Trigger Evals', () => {
     const joined = shouldTrigger.join(' ');
     let found = 0;
     const terms = [
-      /nip.?11/, /nip.?65/, /nip.?66/,
-      /relay.*health|health.*relay/, /relay.*discover|discover.*relay/,
-      /relay.*list|kind:10002/, /relay.*monitor|monitor.*relay/,
-      /relay.*info/, /which relay/,
+      /nip.?11/,
+      /nip.?65/,
+      /nip.?66/,
+      /relay.*health|health.*relay/,
+      /relay.*discover|discover.*relay/,
+      /relay.*list|kind:10002/,
+      /relay.*monitor|monitor.*relay/,
+      /relay.*info/,
+      /which relay/,
     ];
     for (const t of terms) {
       if (joined.match(t)) found++;
@@ -644,7 +651,9 @@ describe('[EVAL-B] AC8: Output Evals', () => {
       .flatMap((oe: { assertions: string[] }) => oe.assertions)
       .join(' ')
       .toLowerCase();
-    expect(allAssertions).toMatch(/relay.*discover|discover.*relay|nip-11|health/);
+    expect(allAssertions).toMatch(
+      /relay.*discover|discover.*relay|nip-11|health/
+    );
   });
 
   it('[P0] output evals include TOON-enriched health endpoint assertion', () => {
@@ -840,7 +849,8 @@ describe('[TOON-D] AC12: Social Context', () => {
   it('[P0] Social Context has at least 80 words of relay-specific content', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
-    const socialSection = body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
+    const socialSection =
+      body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
     const wc = wordCount(socialSection);
     expect(wc).toBeGreaterThanOrEqual(80);
   });
@@ -938,7 +948,9 @@ describe('AC13: Relay Information Structures Documentation', () => {
 describe('[TOON-A] AC14: Read-Focused Skill -- Write Model', () => {
   it('[P0] skill documents kind:10002 as the only writable event', () => {
     const allContent = readAllSkillContent().toLowerCase();
-    expect(allContent).toMatch(/kind:10002.*only.*writ|only.*writ.*kind:10002|only.*kind:10002/);
+    expect(allContent).toMatch(
+      /kind:10002.*only.*writ|only.*writ.*kind:10002|only.*kind:10002/
+    );
   });
 
   it('[P0] skill uses publishEvent for kind:10002 write operations', () => {
@@ -954,7 +966,9 @@ describe('[TOON-A] AC14: Read-Focused Skill -- Write Model', () => {
 
   it('[P0] skill documents NIP-66 as typically published by monitors, not end-user agents', () => {
     const allContent = readAllSkillContent().toLowerCase();
-    expect(allContent).toMatch(/monitor.*operator|relay.*monitor.*publish|not.*end.?user/);
+    expect(allContent).toMatch(
+      /monitor.*operator|relay.*monitor.*publish|not.*end.?user/
+    );
   });
 });
 
@@ -1009,7 +1023,8 @@ describe('[DEP-A] AC15: No Duplication', () => {
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
     // Should not contain DVM job routing specifics
-    const dvmPatterns = /kind:5[0-9]{3}.*route|dvm.*job.*route|job.*request.*relay/;
+    const dvmPatterns =
+      /kind:5[0-9]{3}.*route|dvm.*job.*route|job.*request.*relay/;
     expect(lower).not.toMatch(dvmPatterns);
   });
 

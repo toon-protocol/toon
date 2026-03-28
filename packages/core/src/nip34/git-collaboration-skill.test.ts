@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 
 // ============================================================================
@@ -38,11 +38,23 @@ const SKILL_MD = join(SKILL_DIR, 'SKILL.md');
  * All NIP-34 event kinds that must be covered.
  */
 const NIP34_KINDS = [
-  { kind: 30617, name: 'Repository Announcement', file: 'kind-30617-repository-announcement.md' },
-  { kind: 30618, name: 'Repository State', file: 'kind-30618-repository-state.md' },
+  {
+    kind: 30617,
+    name: 'Repository Announcement',
+    file: 'kind-30617-repository-announcement.md',
+  },
+  {
+    kind: 30618,
+    name: 'Repository State',
+    file: 'kind-30618-repository-state.md',
+  },
   { kind: 1617, name: 'Patch', file: 'kind-1617-patch.md' },
   { kind: 1618, name: 'Pull Request', file: 'kind-1618-pull-request.md' },
-  { kind: 1619, name: 'PR Status Update', file: 'kind-1619-pr-status-update.md' },
+  {
+    kind: 1619,
+    name: 'PR Status Update',
+    file: 'kind-1619-pr-status-update.md',
+  },
   { kind: 1621, name: 'Issue', file: 'kind-1621-issue.md' },
   { kind: 1622, name: 'Reply/Comment', file: 'kind-1622-reply.md' },
   { kind: 1630, name: 'Status Open', file: 'kind-1630-status-open.md' },
@@ -55,7 +67,15 @@ const NIP34_KINDS = [
 /**
  * Major kind categories that must each have at least one output eval.
  */
-const MAJOR_KIND_CATEGORIES = ['repo', 'patch', 'pr', 'issue', 'reply', 'status', 'blob'];
+const MAJOR_KIND_CATEGORIES = [
+  'repo',
+  'patch',
+  'pr',
+  'issue',
+  'reply',
+  'status',
+  'blob',
+];
 
 /**
  * Safely read a file, returning empty string if it does not exist.
@@ -99,7 +119,9 @@ function extractDescription(frontmatter: string): string {
   const singleLine = frontmatter.match(/^description:\s*['"]?(.*?)['"]?\s*$/m);
   if (singleLine) return singleLine[1];
 
-  const multiLine = frontmatter.match(/^description:\s*[|>]-?\s*\n([\s\S]*?)(?=^\w|\Z)/m);
+  const multiLine = frontmatter.match(
+    /^description:\s*[|>]-?\s*\n([\s\S]*?)(?=^\w|$)/m
+  );
   if (multiLine) {
     return multiLine[1]
       .split('\n')
@@ -450,7 +472,9 @@ describe('Git Collaboration Skill Structure (Story 9.26)', () => {
       // Assert -- should contain question-like social triggers
       // e.g., "how do I...", "should I...", "what is the cost of..."
       const hasSocialTriggers =
-        /how do I|should I|what.*cost|when.*should|is it worth/i.test(description);
+        /how do I|should I|what.*cost|when.*should|is it worth/i.test(
+          description
+        );
       expect(hasSocialTriggers).toBe(true);
     });
   });

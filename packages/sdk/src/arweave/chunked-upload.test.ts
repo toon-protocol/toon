@@ -25,7 +25,8 @@ function createMockServiceNode() {
     publishEvent: vi.fn().mockResolvedValue({
       success: true,
       eventId: 'a'.repeat(64),
-      data: 'mock-arweave-tx-id-from-fulfill',
+      // Data is base64-encoded (as returned by the connector's FULFILL path)
+      data: Buffer.from('mock-arweave-tx-id-from-fulfill').toString('base64'),
     }),
   };
 }
@@ -232,7 +233,7 @@ describe('Client-Side Upload Helpers (Story 8.0)', () => {
         .mockResolvedValueOnce({
           success: true,
           eventId: 'a'.repeat(64),
-          data: 'arweave-final-tx-id',
+          data: Buffer.from('arweave-final-tx-id').toString('base64'),
         });
       const blob = createTestBlob(1_200_000);
       const destination = 'g.toon.arweave-provider';

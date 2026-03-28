@@ -271,7 +271,9 @@ describe('[EVAL-A, EVAL-B] AC2: NIP-28 Coverage', () => {
   it('[P0] nip-spec.md covers kind:41 author must match kind:40 creator', () => {
     const content = readFileSync(join(REFS_DIR, 'nip-spec.md'), 'utf-8');
     const lower = content.toLowerCase();
-    expect(lower).toMatch(/author.*match|creator.*only|only.*creator|non.?creator/);
+    expect(lower).toMatch(
+      /author.*match|creator.*only|only.*creator|non.?creator/
+    );
   });
 
   it('[P0] nip-spec.md covers channel discovery filters', () => {
@@ -324,14 +326,18 @@ describe('[TOON-A, TOON-B] AC3: TOON Write Model', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/moderat.*cost|kind:43.*cost|kind:44.*cost|hide.*cost|mute.*cost/);
+    expect(lower).toMatch(
+      /moderat.*cost|kind:43.*cost|kind:44.*cost|hide.*cost|mute.*cost/
+    );
   });
 
   it('[P0] SKILL.md body explains conciseness incentive from per-byte pricing', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/conciseness.*incentive|concise.*incent|natural.*concis/);
+    expect(lower).toMatch(
+      /conciseness.*incentive|concise.*incent|natural.*concis/
+    );
   });
 
   it('[P0] SKILL.md body references nostr-protocol-core for fee formula', () => {
@@ -435,7 +441,9 @@ describe('[TOON-C] AC4: TOON Read Model', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/subscribe.*kind:40|kind:40.*discover|channel.*discover/);
+    expect(lower).toMatch(
+      /subscribe.*kind:40|kind:40.*discover|channel.*discover/
+    );
   });
 
   it('[P0] SKILL.md body explains subscribing to messages via #e tag filter', () => {
@@ -502,7 +510,8 @@ describe('[STRUCT-D, TOON-D] AC5: Social Context', () => {
   it('[P0] Social Context has at least 100 words of chat-specific content', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
-    const socialSection = body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
+    const socialSection =
+      body.split('## Social Context')[1]?.split(/\n## /)[0] || '';
     const wc = wordCount(socialSection);
     expect(wc).toBeGreaterThanOrEqual(100);
   });
@@ -530,7 +539,9 @@ describe('[STRUCT-D, TOON-D] AC5: Social Context', () => {
     const { body } = parseFrontmatter(content);
     const socialSection = body.split('## Social Context')[1] || '';
     const lower = socialSection.toLowerCase();
-    expect(lower).toMatch(/description|about.*field|channel.*purpose|stated.*purpose/);
+    expect(lower).toMatch(
+      /description|about.*field|channel.*purpose|stated.*purpose/
+    );
   });
 
   it('[P0] Social Context covers hide/mute as personal moderation tools', () => {
@@ -633,7 +644,9 @@ describe('[EVAL-A] AC6: Trigger Evals', () => {
       .filter((e: { should_trigger: boolean }) => e.should_trigger === true)
       .map((e: { query: string }) => e.query.toLowerCase());
     const joined = shouldTrigger.join(' ');
-    expect(joined).toMatch(/how do i.*create|how do i.*send|how do i.*hide|how do i.*mute/);
+    expect(joined).toMatch(
+      /how do i.*create|how do i.*send|how do i.*hide|how do i.*mute/
+    );
   });
 
   it('[P0] should-trigger queries cover at least 5 of the 9 required chat-relevant terms', () => {
@@ -644,10 +657,15 @@ describe('[EVAL-A] AC6: Trigger Evals', () => {
     const joined = shouldTrigger.join(' ');
     let found = 0;
     const terms = [
-      /nip.?28/, /public.*chat/, /channel.*creat|kind:40/,
-      /channel.*message|kind:42/, /hide.*message|kind:43/,
-      /mute.*user|kind:44/, /channel.*metadata|kind:41/,
-      /send.*message/, /chat.*channel/,
+      /nip.?28/,
+      /public.*chat/,
+      /channel.*creat|kind:40/,
+      /channel.*message|kind:42/,
+      /hide.*message|kind:43/,
+      /mute.*user|kind:44/,
+      /channel.*metadata|kind:41/,
+      /send.*message/,
+      /chat.*channel/,
     ];
     for (const t of terms) {
       if (joined.match(t)) found++;
@@ -1181,18 +1199,24 @@ describe('Channel Identity Cross-File Consistency', () => {
     const content = readFileSync(SKILL_MD, 'utf-8');
     const { body } = parseFrontmatter(content);
     const lower = body.toLowerCase();
-    expect(lower).toMatch(/kind:40.*event.*id|event.*id.*kind:40|channel.*identifier/);
+    expect(lower).toMatch(
+      /kind:40.*event.*id|event.*id.*kind:40|channel.*identifier/
+    );
   });
 
   it('[P0] channel identity documented in nip-spec.md', () => {
     const content = readFileSync(join(REFS_DIR, 'nip-spec.md'), 'utf-8');
     const lower = content.toLowerCase();
-    expect(lower).toMatch(/kind:40.*event.*id|event.*id.*kind:40|channel.*identifier/);
+    expect(lower).toMatch(
+      /kind:40.*event.*id|event.*id.*kind:40|channel.*identifier/
+    );
   });
 
   it('[P0] channel identity referenced in scenarios.md', () => {
     const content = readFileSync(join(REFS_DIR, 'scenarios.md'), 'utf-8');
     const lower = content.toLowerCase();
-    expect(lower).toMatch(/event.*id.*channel|channel.*identifier|permanent.*identifier/);
+    expect(lower).toMatch(
+      /event.*id.*channel|channel.*identifier|permanent.*identifier/
+    );
   });
 });
