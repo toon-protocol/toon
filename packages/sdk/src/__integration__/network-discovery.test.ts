@@ -9,10 +9,10 @@
  * graceful skip when services are unavailable.
  *
  * Prerequisites:
- *   - Genesis node: ./deploy-genesis-node.sh
- *   - Local relay: ws://localhost:7100
- *   - Local connector: http://localhost:8080
- *   - Local Anvil: http://localhost:8545
+ *   - SDK E2E infra: ./scripts/sdk-e2e-infra.sh up
+ *   - Peer1 relay: ws://localhost:19700
+ *   - Peer1 BLS: http://localhost:19100
+ *   - Anvil: http://localhost:18545
  *
  * Tests skip gracefully if infrastructure is not available, following the
  * existing E2E pattern from packages/client/tests/e2e/.
@@ -194,11 +194,11 @@ describe('Network Discovery and Bootstrap Integration', () => {
     infraAvailable = await checkInfrastructure();
     if (!infraAvailable.all) {
       console.warn(
-        '[Network Discovery Tests] Skipping: Genesis node not fully available.',
+        '[Network Discovery Tests] Skipping: SDK E2E infra not fully available.',
         `relay=${infraAvailable.relay} connector=${infraAvailable.connector} ` +
           `bls=${infraAvailable.bls} anvil=${infraAvailable.anvil}`
       );
-      console.warn('Run: ./deploy-genesis-node.sh');
+      console.warn('Run: ./scripts/sdk-e2e-infra.sh up');
     }
   }, 15000);
 

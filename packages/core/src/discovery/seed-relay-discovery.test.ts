@@ -1392,7 +1392,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
       // 4. New node discovers peers and registers with BootstrapService
       //
       // Prerequisites:
-      // - Genesis node running (deploy-genesis-node.sh)
+      // - SDK E2E infra running (./scripts/sdk-e2e-infra.sh up)
       // - Public Nostr relay accessible
       // - E2E test infrastructure available
       expect(true).toBe(false); // Placeholder -- implement when infra is ready
