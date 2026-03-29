@@ -100,7 +100,10 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
     );
 
     // Verify the retrieval URL can be constructed by decoding the base64 data
-    const decodedTxId = Buffer.from((result as { data?: string }).data!, 'base64').toString('utf-8');
+    const decodedTxId = Buffer.from(
+      (result as { data?: string }).data!,
+      'base64'
+    ).toString('utf-8');
     const retrievalUrl = `https://arweave.net/${decodedTxId}`;
     expect(retrievalUrl).toBe(`https://arweave.net/${KNOWN_TX_ID}`);
   });
