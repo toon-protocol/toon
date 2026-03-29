@@ -11,6 +11,7 @@ export {
 
 export {
   resolveRouteFees,
+  clearRouteFeesCache,
   type ResolveRouteFeesParams,
   type ResolveRouteFeesResult,
 } from './resolve-route-fees.js';

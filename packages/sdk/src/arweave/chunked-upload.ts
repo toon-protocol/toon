@@ -87,9 +87,12 @@ export async function uploadBlob(
     throw new Error(`Blob upload failed: ${result.message ?? 'unknown error'}`);
   }
 
-  // The tx ID is returned in the FULFILL data field, propagated via
-  // PublishEventResult.data. Falls back to eventId if data is absent.
-  return result.data ?? result.eventId;
+  // The tx ID is returned base64-encoded in the FULFILL data field.
+  // Decode it to get the raw Arweave tx ID string.
+  if (result.data) {
+    return Buffer.from(result.data, 'base64').toString('utf-8');
+  }
+  return result.eventId;
 }
 
 /**
@@ -153,10 +156,13 @@ export async function uploadBlobChunked(
     }
   }
 
-  // The final chunk's FULFILL data contains the Arweave tx ID
+  // The final chunk's FULFILL data contains the Arweave tx ID (base64-encoded)
   // lastResult is guaranteed to be set since totalChunks >= 1
   if (!lastResult) {
     throw new Error('No chunks were uploaded');
   }
-  return lastResult.data ?? lastResult.eventId;
+  if (lastResult.data) {
+    return Buffer.from(lastResult.data, 'base64').toString('utf-8');
+  }
+  return lastResult.eventId;
 }

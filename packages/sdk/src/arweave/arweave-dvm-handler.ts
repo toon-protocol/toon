@@ -97,7 +97,7 @@ export function createArweaveDvmHandler(
           // Intermediate chunk -- acknowledge receipt
           return {
             accept: true,
-            data: `ack:${parsed.chunkIndex}`,
+            data: Buffer.from(`ack:${parsed.chunkIndex}`).toString('base64'),
           };
         }
 
@@ -106,9 +106,10 @@ export function createArweaveDvmHandler(
         const assembled = result.assembled ?? Buffer.alloc(0);
         const { txId } = await turboAdapter.upload(assembled, uploadTags);
 
+        // Base64-encode txId for ILP FULFILL data field (connector validates base64)
         return {
           accept: true,
-          data: txId,
+          data: Buffer.from(txId).toString('base64'),
         };
       } catch (error) {
         // Log full error internally but return generic message to client (CWE-209)
@@ -133,9 +134,10 @@ export function createArweaveDvmHandler(
     // Single-packet upload
     try {
       const { txId } = await turboAdapter.upload(parsed.blobData, uploadTags);
+      // Base64-encode txId for ILP FULFILL data field (connector validates base64)
       return {
         accept: true,
-        data: txId,
+        data: Buffer.from(txId).toString('base64'),
       };
     } catch {
       // Generic message to avoid leaking Arweave SDK internals (CWE-209)

@@ -12,7 +12,7 @@
  * The legacy on-chain mock contract on Anvil uses 18 decimals (inherited
  * from the original ERC-20 deploy script in the connector repo). The
  * constants below reflect production USDC semantics (6 decimals). When
- * interacting with the Anvil mock contract directly (e.g., fund-peer-wallet.sh,
+ * interacting with the Anvil mock contract directly (e.g., via the
  * faucet), use 18 decimals for on-chain amounts. The pricing pipeline
  * (basePricePerByte * toonLength) is denomination-agnostic (bigint math)
  * and works correctly regardless of on-chain decimals.

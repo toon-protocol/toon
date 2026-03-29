@@ -43,7 +43,10 @@ export class TurboUploadAdapter implements ArweaveUploadAdapter {
     if (!this.initialized) {
       // Lazy-import to avoid loading @ardrive/turbo-sdk unless actually used
       const { TurboFactory } = await import('@ardrive/turbo-sdk/node');
-      this.turboClient = TurboFactory.unauthenticated();
+      const Arweave = (await import('arweave')).default;
+      const arweave = Arweave.init({});
+      const jwk = await arweave.crypto.generateJWK();
+      this.turboClient = TurboFactory.authenticated({ privateKey: jwk });
       this.initialized = true;
     }
     return this.turboClient;

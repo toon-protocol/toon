@@ -415,45 +415,6 @@ describe('Story 3.1: USDC Token Migration', () => {
   });
 
   // --------------------------------------------------------------------------
-  // T-3.1-09 [P2]: Deploy scripts reference USDC instead of AGENT
-  // AC: #4 — positive verification that migration is reflected in scripts
-  // --------------------------------------------------------------------------
-  describe('Deploy scripts USDC references (T-3.1-09)', () => {
-    it('[P2] deploy-genesis-node.sh references USDC in user-facing output', () => {
-      const scriptPath = resolve(monoRoot, 'deploy-genesis-node.sh');
-      const scriptSource = readFileSync(scriptPath, 'utf-8');
-
-      // Positive: script mentions USDC
-      expect(scriptSource).toContain('USDC');
-
-      // Negative: script does NOT mention AGENT as token name
-      expect(scriptSource).not.toMatch(/\bAGENT\b/);
-    });
-
-    it('[P2] deploy-peers.sh references USDC in user-facing output', () => {
-      const scriptPath = resolve(monoRoot, 'deploy-peers.sh');
-      const scriptSource = readFileSync(scriptPath, 'utf-8');
-
-      // Positive: script mentions USDC
-      expect(scriptSource).toContain('USDC');
-
-      // Negative: script does NOT mention AGENT as token name
-      expect(scriptSource).not.toMatch(/\bAGENT\b/);
-    });
-
-    it('[P2] fund-peer-wallet.sh references USDC in user-facing output', () => {
-      const scriptPath = resolve(monoRoot, 'fund-peer-wallet.sh');
-      const scriptSource = readFileSync(scriptPath, 'utf-8');
-
-      // Positive: script mentions USDC
-      expect(scriptSource).toContain('USDC');
-
-      // Negative: script does NOT mention AGENT as token name
-      expect(scriptSource).not.toMatch(/\bAGENT\b/);
-    });
-  });
-
-  // --------------------------------------------------------------------------
   // T-3.1-10 [P2]: basePricePerByte config has USDC denomination docs
   // AC: #2 — SDK create-node.ts documents USDC denomination for pricing
   // --------------------------------------------------------------------------
@@ -480,17 +441,6 @@ describe('Story 3.1: USDC Token Migration', () => {
   // AC: #1, #4 — token address configs and comments updated
   // --------------------------------------------------------------------------
   describe('Docker Compose USDC references (T-3.1-11)', () => {
-    it('[P2] docker-compose-genesis.yml has no AGENT references', () => {
-      const composePath = resolve(monoRoot, 'docker-compose-genesis.yml');
-      const composeSource = readFileSync(composePath, 'utf-8');
-
-      // Verify no AGENT references remain
-      expect(composeSource).not.toMatch(/\bAGENT\b/);
-
-      // Positive: contains USDC references
-      expect(composeSource).toContain('USDC');
-    });
-
     it('[P2] docker-compose-sdk-e2e.yml has no AGENT references', () => {
       const composePath = resolve(monoRoot, 'docker-compose-sdk-e2e.yml');
       const composeSource = readFileSync(composePath, 'utf-8');

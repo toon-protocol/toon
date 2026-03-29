@@ -218,7 +218,7 @@ describe('T-4.1-01: docker-compose-oyster.yml structure', () => {
     const attestation = compose.services['attestation-server'];
 
     // Assert -- attestation-server must have an explicit command override
-    // because the base image (toon:optimized) CMD is entrypoint-town.js,
+    // because the base image (toon:optimized) CMD is entrypoint-sdk.js,
     // not attestation-server.js. Without this, the service would run the wrong
     // entrypoint.
     expect(attestation.command).toBeDefined();
@@ -623,50 +623,6 @@ describe('T-4.1-06: attestation-server.ts placeholder', () => {
 // ===========================================================================
 
 describe('T-4.1-07: vsock proxy compatibility', () => {
-  it('T-4.1-07a: entrypoint-town.ts uses 0.0.0.0 for server binding, not localhost', async () => {
-    // Arrange
-    const entrypointPath = resolveFromRoot('docker/src/entrypoint-town.ts');
-    const content = await fs.readFile(entrypointPath, 'utf-8');
-
-    // Act -- check for localhost in server listen calls
-    // Allow localhost in comments and log messages, but not in actual listen calls
-    const lines = content.split('\n');
-    const codeLines = lines.filter(
-      (line) =>
-        !line.trim().startsWith('//') &&
-        !line.trim().startsWith('*') &&
-        !line.includes('console.') &&
-        !line.includes('nosemgrep')
-    );
-    const serverListenLines = codeLines.filter(
-      (line) => line.includes('listen') || line.includes('serve')
-    );
-
-    // Assert -- no localhost in server binding (should use 0.0.0.0 or omit host)
-    for (const line of serverListenLines) {
-      expect(line).not.toMatch(/['"]localhost['"]/);
-      expect(line).not.toMatch(/['"]127\.0\.0\.1['"]/);
-    }
-  });
-
-  it('T-4.1-07b: entrypoint-town.ts uses env vars for external URLs (not hardcoded)', async () => {
-    // Arrange
-    const entrypointPath = resolveFromRoot('docker/src/entrypoint-town.ts');
-    const content = await fs.readFile(entrypointPath, 'utf-8');
-
-    // Act -- check that connector URLs come from env vars
-    // The parseConfig() function in shared.ts handles this
-
-    // Assert -- connector URLs come from env vars (CONNECTOR_URL, CONNECTOR_ADMIN_URL)
-    // No hardcoded http://... URLs for external services in the main function
-    const mainFunctionMatch = content.match(/async function main[\s\S]+/);
-    expect(mainFunctionMatch).not.toBeNull();
-
-    // The connector URL should come from config (env vars), not hardcoded
-    expect(content).toMatch(/config\.connectorUrl/);
-    expect(content).toMatch(/config\.connectorAdminUrl/);
-  });
-
   it('T-4.1-07c: attestation-server.ts binds to 0.0.0.0, not localhost', async () => {
     // Arrange
     const serverPath = resolveFromRoot(ATTESTATION_SERVER_PATH);

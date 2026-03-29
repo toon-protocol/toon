@@ -99,7 +99,7 @@ describe('Arweave DVM Handler (Story 8.0)', () => {
       expect(turboAdapter.upload).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         accept: true,
-        data: 'mock-arweave-tx-id-abc123',
+        data: Buffer.from('mock-arweave-tx-id-abc123').toString('base64'),
       });
     });
 
@@ -116,7 +116,7 @@ describe('Arweave DVM Handler (Story 8.0)', () => {
       // Assert: data field is set (not metadata)
       expect(result.accept).toBe(true);
       expect((result as { accept: true; data?: string }).data).toBe(
-        'mock-arweave-tx-id-abc123'
+        Buffer.from('mock-arweave-tx-id-abc123').toString('base64')
       );
       // ctx.accept should NOT be called -- handler returns directly
       expect(ctx.accept).not.toHaveBeenCalled();
@@ -395,7 +395,10 @@ describe('Arweave DVM Handler (Story 8.0)', () => {
       const result = await handler(ctx);
 
       // Assert: accepted with ack, no upload
-      expect(result).toEqual({ accept: true, data: 'ack:2' });
+      expect(result).toEqual({
+        accept: true,
+        data: Buffer.from('ack:2').toString('base64'),
+      });
       expect(turboAdapter.upload).not.toHaveBeenCalled();
     });
 
@@ -438,7 +441,7 @@ describe('Arweave DVM Handler (Story 8.0)', () => {
       );
       expect(result).toEqual({
         accept: true,
-        data: 'mock-arweave-tx-id-abc123',
+        data: Buffer.from('mock-arweave-tx-id-abc123').toString('base64'),
       });
     });
   });

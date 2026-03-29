@@ -34,11 +34,77 @@ export interface ResolveRouteFeesResult {
   warnings: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Peer lookup cache: avoids rebuilding the ILP-address-keyed Map when the
+// same discoveredPeers array reference is passed across consecutive calls
+// (the common case during publishEvent bursts).
+// ---------------------------------------------------------------------------
+let _cachedPeersRef: DiscoveredPeer[] | null = null;
+let _cachedPeerFingerprint = '';
+let _cachedPeerMap: Map<string, DiscoveredPeer> | null = null;
+
+/**
+ * Compute a lightweight fingerprint of discovered peers for cache invalidation.
+ * Uses ILP addresses + feePerByte values so mutations to the array are detected.
+ */
+function peerFingerprint(peers: DiscoveredPeer[]): string {
+  let fp = `${peers.length}:`;
+  for (const p of peers) {
+    fp += `${p.peerInfo.ilpAddress}=${p.peerInfo.feePerByte};`;
+  }
+  return fp;
+}
+
+/**
+ * Build (or return cached) ILP-address-keyed lookup from discovered peers.
+ * Cache is invalidated when the array reference changes or contents are mutated.
+ */
+function getPeerByAddressMap(
+  discoveredPeers: DiscoveredPeer[]
+): Map<string, DiscoveredPeer> {
+  const fp = peerFingerprint(discoveredPeers);
+  if (
+    _cachedPeersRef === discoveredPeers &&
+    _cachedPeerFingerprint === fp &&
+    _cachedPeerMap
+  ) {
+    return _cachedPeerMap;
+  }
+
+  const peerByAddress = new Map<string, DiscoveredPeer>();
+  for (const peer of discoveredPeers) {
+    peerByAddress.set(peer.peerInfo.ilpAddress, peer);
+    if (peer.peerInfo.ilpAddresses) {
+      for (const addr of peer.peerInfo.ilpAddresses) {
+        peerByAddress.set(addr, peer);
+      }
+    }
+  }
+
+  _cachedPeersRef = discoveredPeers;
+  _cachedPeerFingerprint = fp;
+  _cachedPeerMap = peerByAddress;
+  return peerByAddress;
+}
+
+/**
+ * Clear the peer lookup cache. Useful in tests or when peer list changes
+ * without creating a new array reference.
+ */
+export function clearRouteFeesCache(): void {
+  _cachedPeersRef = null;
+  _cachedPeerFingerprint = '';
+  _cachedPeerMap = null;
+}
+
 /**
  * Resolves intermediary routing fees for a route from sender to destination.
  *
  * Uses LCA-based route resolution: intermediary hops are the ILP address
  * segments between the longest common ancestor and the destination's parent.
+ *
+ * The peer lookup map is cached by array reference to avoid rebuilding it
+ * on every call when the same discoveredPeers array is passed repeatedly.
  *
  * @returns Hop fees and any warnings about unknown intermediaries.
  */
@@ -85,17 +151,8 @@ export function resolveRouteFees(
     return { hopFees: [], warnings: [] };
   }
 
-  // Build ILP-address-keyed lookup from discovered peers for O(1) matching.
-  // A peer can match by its primary ilpAddress or any entry in ilpAddresses.
-  const peerByAddress = new Map<string, DiscoveredPeer>();
-  for (const peer of discoveredPeers) {
-    peerByAddress.set(peer.peerInfo.ilpAddress, peer);
-    if (peer.peerInfo.ilpAddresses) {
-      for (const addr of peer.peerInfo.ilpAddresses) {
-        peerByAddress.set(addr, peer);
-      }
-    }
-  }
+  // Use cached peer lookup map (avoids O(n) rebuild per call)
+  const peerByAddress = getPeerByAddressMap(discoveredPeers);
 
   // Resolve fees for each intermediary
   const hopFees: bigint[] = [];

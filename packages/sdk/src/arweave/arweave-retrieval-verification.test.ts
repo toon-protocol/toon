@@ -25,6 +25,7 @@ import type { HandlerContext } from '../handler-context.js';
 // ============================================================================
 
 const KNOWN_TX_ID = 'abc123XYZ_arweave_tx_id_for_retrieval';
+const KNOWN_TX_ID_B64 = Buffer.from(KNOWN_TX_ID).toString('base64');
 const FIXED_SECRET_KEY = new Uint8Array(32).fill(7);
 
 function createMockTurboAdapter(): ArweaveUploadAdapter & {
@@ -88,9 +89,9 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
     // Act
     const result = await handler(ctx);
 
-    // Assert: handler returns the txId in data field
+    // Assert: handler returns the txId base64-encoded in data field
     expect(result.accept).toBe(true);
-    expect((result as { data?: string }).data).toBe(KNOWN_TX_ID);
+    expect((result as { data?: string }).data).toBe(KNOWN_TX_ID_B64);
 
     // Verify the adapter received the original blob bytes
     expect(turboAdapter.upload).toHaveBeenCalledWith(
@@ -98,8 +99,12 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
       expect.any(Object)
     );
 
-    // Verify the retrieval URL can be constructed from the returned txId
-    const retrievalUrl = `https://arweave.net/${(result as { data?: string }).data}`;
+    // Verify the retrieval URL can be constructed by decoding the base64 data
+    const decodedTxId = Buffer.from(
+      (result as { data?: string }).data!,
+      'base64'
+    ).toString('utf-8');
+    const retrievalUrl = `https://arweave.net/${decodedTxId}`;
     expect(retrievalUrl).toBe(`https://arweave.net/${KNOWN_TX_ID}`);
   });
 
@@ -111,7 +116,7 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
       publishEvent: vi.fn().mockResolvedValue({
         success: true,
         eventId: 'a'.repeat(64),
-        data: KNOWN_TX_ID, // This is what the handler returns in data field
+        data: KNOWN_TX_ID_B64, // Handler returns base64-encoded txId
       }),
     };
     const blob = Buffer.from('test blob for retrieval');
@@ -122,7 +127,7 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
       pricePerByte: 10n,
     });
 
-    // Assert: client correctly extracts the txId from FULFILL data
+    // Assert: client correctly decodes the base64 txId from FULFILL data
     expect(txId).toBe(KNOWN_TX_ID);
     // The retrieval URL arweave.net/<txId> would return the original bytes
     expect(`https://arweave.net/${txId}`).toBe(
@@ -138,17 +143,17 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
         .mockResolvedValueOnce({
           success: true,
           eventId: 'a'.repeat(64),
-          data: 'ack:0',
+          data: Buffer.from('ack:0').toString('base64'),
         })
         .mockResolvedValueOnce({
           success: true,
           eventId: 'a'.repeat(64),
-          data: 'ack:1',
+          data: Buffer.from('ack:1').toString('base64'),
         })
         .mockResolvedValueOnce({
           success: true,
           eventId: 'a'.repeat(64),
-          data: KNOWN_TX_ID, // Final chunk returns real txId
+          data: KNOWN_TX_ID_B64, // Final chunk returns base64-encoded txId
         }),
     };
     const blob = Buffer.alloc(1_200_000, 0x42); // 1.2MB -> 3 chunks at 500KB
@@ -184,9 +189,12 @@ describe('Arweave Retrieval Verification (Story 8.0, AC #7)', () => {
 
     const data = (result as { data?: string }).data;
     expect(typeof data).toBe('string');
-    // Must not be JSON
-    expect(() => JSON.parse(data!)).toThrow();
-    // Must be a valid URL path segment (no spaces, no special chars that need encoding)
-    expect(data).toMatch(/^[A-Za-z0-9_-]+$/);
+    // Data is base64-encoded; decode to get the raw txId
+    const decoded = Buffer.from(data!, 'base64').toString('utf-8');
+    expect(typeof decoded).toBe('string');
+    // Decoded txId must not be JSON
+    expect(() => JSON.parse(decoded)).toThrow();
+    // Decoded txId must be a valid URL path segment (no spaces, no special chars that need encoding)
+    expect(decoded).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 });

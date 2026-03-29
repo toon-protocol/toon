@@ -6,54 +6,29 @@ This directory contains integration tests that verify the complete TOON protocol
 
 Before running integration tests, you need to have the following services running:
 
-### 1. Genesis Node
+### 1. SDK E2E Infrastructure
 
 ```bash
 # From repository root
-docker compose -p toon-genesis -f docker-compose-genesis.yml up -d
+./scripts/sdk-e2e-infra.sh up
 ```
 
 This starts:
 
-- Genesis BLS: `http://localhost:3100`
-- Genesis Relay: `ws://localhost:7100`
-- Genesis Connector: `http://localhost:8080` (API), `http://localhost:8081` (Admin)
-- Anvil (local Ethereum): `http://localhost:8545`
-- Forgejo: `http://localhost:3004`
+- Anvil (local Ethereum): `http://localhost:18545`
+- Peer 1 BLS: `http://localhost:19100`
+- Peer 1 Relay: `ws://localhost:19700`
+- Peer 2 BLS: `http://localhost:19110`
+- Peer 2 Relay: `ws://localhost:19710`
 
-### 2. Peer Nodes
+### 2. Wait for Bootstrap
 
-Deploy peer nodes using the deploy script:
-
-```bash
-# From repository root — deploys N peer nodes with auto-funding and bootstrap
-./deploy-peers.sh 3
-```
-
-Alternatively, for SDK E2E tests with a controlled 2-peer setup:
+After starting all services, wait for the infrastructure script to complete. You can verify connectivity:
 
 ```bash
-./scripts/sdk-e2e-infra.sh up
-```
-
-### 3. Wait for Bootstrap
-
-After starting all services, wait 10-15 seconds for:
-
-- All peers to bootstrap and discover each other
-- ILP connections to establish
-- Payment channels to open (if settlement is enabled)
-
-You can verify connectivity:
-
-```bash
-# Check genesis routing table
-curl http://localhost:8081/admin/peers | jq
-
 # Check peer health
-curl http://localhost:3110/health | jq  # Peer 1
-curl http://localhost:3120/health | jq  # Peer 2
-curl http://localhost:3130/health | jq  # Peer 3
+curl http://localhost:19100/health | jq  # Peer 1
+curl http://localhost:19110/health | jq  # Peer 2
 ```
 
 ## Running Tests
@@ -92,8 +67,8 @@ Tests complete relay network functionality:
 
 **Prerequisites:**
 
-- Genesis node running
-- Peer1, Peer2, Peer3 all running and bootstrapped
+- SDK E2E infrastructure running (`./scripts/sdk-e2e-infra.sh up`)
+- Peer1 and Peer2 running and bootstrapped
 - All peers connected via ILP
 
 ## Troubleshooting
@@ -126,18 +101,5 @@ Tests complete relay network functionality:
 Stop all services:
 
 ```bash
-# Genesis
-docker compose -p toon-genesis -f docker-compose-genesis.yml down
-
-# Peers (if using deploy-peers.sh)
-# Stop individual peer stacks as needed
-
-# SDK E2E infrastructure
 ./scripts/sdk-e2e-infra.sh down
-```
-
-Remove volumes (clears all data):
-
-```bash
-docker compose -p toon-genesis -f docker-compose-genesis.yml down -v
 ```
