@@ -53,7 +53,7 @@ import {
   TOKEN_ADDRESS,
   TOKEN_NETWORK_ADDRESS,
   REGISTRY_ADDRESS,
-  TEST_PRIVATE_KEY,
+  WORKFLOW_PRIVATE_KEY,
   CHAIN_ID,
   waitForEventOnRelay,
   waitForPeer2Bootstrap,
@@ -92,13 +92,15 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
         peers: [],
         routes: [],
         localDelivery: { enabled: false },
-        settlementInfra: {
-          enabled: true,
-          rpcUrl: ANVIL_RPC,
-          registryAddress: REGISTRY_ADDRESS,
-          tokenAddress: TOKEN_ADDRESS,
-          privateKey: TEST_PRIVATE_KEY,
-        },
+        chainProviders: [
+          {
+            chainType: 'evm' as const,
+            chainId: `evm:${CHAIN_ID}`,
+            rpcUrl: ANVIL_RPC,
+            registryAddress: REGISTRY_ADDRESS,
+            keyId: WORKFLOW_PRIVATE_KEY,
+          },
+        ],
       },
       connectorLogger
     );
