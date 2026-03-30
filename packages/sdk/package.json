@@ -54,7 +54,7 @@
     "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
-    "@toon-protocol/connector": ">=2.0.0"
+    "@toon-protocol/connector": ">=2.2.0"
   },
   "peerDependenciesMeta": {
     "@toon-protocol/connector": {
@@ -62,7 +62,7 @@
     }
   },
   "devDependencies": {
-    "@toon-protocol/connector": "^2.0.0",
+    "@toon-protocol/connector": "^2.2.0",
     "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
