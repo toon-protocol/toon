@@ -251,10 +251,27 @@ export {
 // Chain presets and multi-environment configuration
 export {
   resolveChainConfig,
+  resolveSolanaChainConfig,
+  resolveMinaChainConfig,
   buildEip712Domain,
+  buildEvmProviderEntry,
+  buildSolanaProviderEntry,
+  buildMinaProviderEntry,
   CHAIN_PRESETS,
+  SOLANA_CHAIN_PRESETS,
+  MINA_CHAIN_PRESETS,
   type ChainPreset,
   type ChainName,
+  type ChainType,
+  type SolanaChainName,
+  type MinaChainName,
+  type MultiChainName,
+  type SolanaChainPreset,
+  type MinaChainPreset,
+  type ChainProviderConfigEntry,
+  type EVMProviderConfigEntry,
+  type SolanaProviderConfigEntry,
+  type MinaProviderConfigEntry,
 } from './chain/chain-config.js';
 
 // x402 protocol support (shared ILP PREPARE construction)

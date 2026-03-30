@@ -126,8 +126,8 @@ describe('Docker SDK Publish Event E2E', () => {
     connector = new ConnectorNode(
       {
         nodeId: `test-${nostrPubkey.slice(0, 8)}`,
-        btpServerPort: 19900,
-        healthCheckPort: 19901,
+        btpServerPort: 19950,
+        healthCheckPort: 19951,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
         peers: [],
@@ -298,7 +298,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     expect(publishResult.success).toBe(true);
     expect(publishResult.eventId).toBe(event.id);
-    expect(publishResult.fulfillment).toBeDefined();
+    // fulfillment removed from connector v2.2.0 application API
 
     publishedEventIds.push(event.id);
 
@@ -372,7 +372,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     expect(publishResult.success).toBe(true);
     expect(publishResult.eventId).toBe(event.id);
-    expect(publishResult.fulfillment).toBeDefined();
+    // fulfillment removed from connector v2.2.0 application API
 
     publishedEventIds.push(event.id);
 
