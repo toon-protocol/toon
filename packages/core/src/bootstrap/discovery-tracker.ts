@@ -61,6 +61,8 @@ export interface DiscoveryTracker {
   setConnectorAdmin(admin: ConnectorAdminClient): void;
   /** Set channel client for payment channel opening (optional). */
   setChannelClient(client: ConnectorChannelClient): void;
+  /** Get negotiation metadata for a peer (for lazy channel opening). */
+  getPeerNegotiation(peerId: string): { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string } | undefined;
   /** Mark pubkeys as already-peered (e.g., from bootstrap phase). */
   addExcludedPubkeys(pubkeys: string[]): void;
 }
@@ -86,6 +88,8 @@ export function createDiscoveryTracker(
   const discoveredPeers = new Map<string, DiscoveredPeer>();
   /** Pubkeys that have been actively peered with via peerWith(). */
   const peeredPubkeys = new Set<string>();
+  /** Negotiation metadata per peer (for lazy channel opening). */
+  const peerNegotiations = new Map<string, { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string }>();
   /** Timestamps of the latest kind:10032 event per pubkey (stale-event filtering). */
   const peerTimestamps = new Map<string, number>();
 
@@ -244,9 +248,8 @@ export function createDiscoveryTracker(
         return;
       }
 
-      // Local chain selection + unilateral channel opening
+      // Local chain selection — store negotiation metadata for lazy channel opening
       if (
-        channelClient &&
         config.settlementInfo?.supportedChains?.length &&
         peerInfo.supportedChains?.length &&
         peerInfo.settlementAddresses
@@ -269,48 +272,27 @@ export function createDiscoveryTracker(
             const tokenNetwork = peerInfo.tokenNetworks?.[negotiatedChain];
 
             if (peerAddress) {
-              const channelResult = await channelClient.openChannel({
-                peerId,
+              // Store negotiation metadata for lazy channel opening
+              peerNegotiations.set(peerId, {
                 chain: negotiatedChain,
-                token: tokenAddress,
+                chainType: negotiatedChain.split(':')[0],
+                settlementAddress: peerAddress,
+                tokenAddress,
                 tokenNetwork,
-                peerAddress,
-                initialDeposit: '100000',
-                settlementTimeout: 86400,
               });
 
-              // Update registration with settlement info
-              await admin.addPeer({
-                id: peerId,
-                url: peerInfo.btpEndpoint,
-                authToken: '',
-                routes: [{ prefix: peerInfo.ilpAddress }],
-                settlement: {
-                  preference: negotiatedChain,
-                  ...(peerAddress && { evmAddress: peerAddress }),
-                  ...(tokenAddress && { tokenAddress }),
-                  ...(tokenNetwork && {
-                    tokenNetworkAddress: tokenNetwork,
-                  }),
-                  ...(channelResult.channelId && {
-                    channelId: channelResult.channelId,
-                  }),
-                },
-              });
-
-              emit({
-                type: 'bootstrap:channel-opened',
-                peerId,
-                channelId: channelResult.channelId,
+              console.log(
+                '[DiscoveryTracker] Negotiated %s with %s (lazy — channel deferred)',
                 negotiatedChain,
-              });
+                peerId
+              );
             }
           }
         } catch (error) {
           const reason =
             error instanceof Error ? error.message : 'Unknown error';
           console.warn(
-            '[DiscoveryTracker] Settlement failed for %s: %s',
+            '[DiscoveryTracker] Settlement negotiation failed for %s: %s',
             peerId,
             reason
           );
@@ -360,6 +342,10 @@ export function createDiscoveryTracker(
 
     setChannelClient(client: ConnectorChannelClient): void {
       channelClient = client;
+    },
+
+    getPeerNegotiation(peerId: string): { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string } | undefined {
+      return peerNegotiations.get(peerId);
     },
 
     addExcludedPubkeys(pubkeys: string[]): void {

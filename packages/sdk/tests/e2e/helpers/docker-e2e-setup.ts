@@ -74,6 +74,14 @@ export const SWARM_PRIVATE_KEY =
 
 export const CHAIN_ID = 31337;
 
+// Multi-chain constants
+export const SOLANA_RPC = 'http://localhost:19899';
+export const SOLANA_WS = 'ws://localhost:19900';
+export const SOLANA_PROGRAM_ID = process.env['SOLANA_PROGRAM_ID'] || '';
+export const MINA_GRAPHQL = 'http://localhost:19085/graphql';
+export const MINA_ACCOUNTS_MANAGER = 'http://localhost:19181';
+export const MINA_ZKAPP_ADDRESS = process.env['MINA_ZKAPP_ADDRESS'] || '';
+
 // ---------------------------------------------------------------------------
 // Anvil chain definition
 // ---------------------------------------------------------------------------
@@ -464,6 +472,59 @@ export async function checkAllServicesReady(): Promise<boolean> {
 /**
  * Skip check for E2E tests. In CI, throws; locally, logs and returns true to skip.
  */
+export async function waitForSolanaHealth(timeoutMs = 30000): Promise<boolean> {
+  return waitForServiceHealth(`${SOLANA_RPC}/health`, timeoutMs);
+}
+
+export async function waitForMinaHealth(timeoutMs = 180000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(MINA_GRAPHQL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '{syncStatus}' }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        const syncData = data['data'] as Record<string, unknown> | undefined;
+        if (syncData?.['syncStatus'] === 'SYNCED') return true;
+      }
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+export async function acquireMinaAccount(): Promise<{ pk: string; sk: string } | null> {
+  try {
+    const res = await fetch(`${MINA_ACCOUNTS_MANAGER}/acquire-account`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return (await res.json()) as { pk: string; sk: string };
+    }
+  } catch {
+    // non-fatal
+  }
+  return null;
+}
+
+export async function releaseMinaAccount(pk: string): Promise<void> {
+  try {
+    await fetch(`${MINA_ACCOUNTS_MANAGER}/release-account?pk=${pk}`, {
+      method: 'PUT',
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
 export function skipIfNotReady(servicesReady: boolean): boolean {
   if (!servicesReady) {
     if (process.env['CI']) {

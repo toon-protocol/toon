@@ -50,6 +50,10 @@ export interface BootstrapResult {
   negotiatedChain?: string;
   /** Peer's settlement address */
   settlementAddress?: string;
+  /** Token address for the negotiated chain */
+  tokenAddress?: string;
+  /** TokenNetwork/program/zkApp address for the negotiated chain */
+  tokenNetwork?: string;
 }
 
 /**
