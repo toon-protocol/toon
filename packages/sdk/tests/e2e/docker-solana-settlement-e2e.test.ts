@@ -38,6 +38,11 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import * as crypto from 'node:crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import { skipIfNotReady } from './helpers/docker-e2e-setup.js';
+import {
+  generateSolanaKeypair,
+  base58Encode,
+  base58Decode,
+} from '../../src/identity.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -78,63 +83,8 @@ const IX_DISCRIMINATORS = {
   CLAIM_FROM_CHANNEL: new Uint8Array([0x06, 0, 0, 0, 0, 0, 0, 0]),
 } as const;
 
-// ---------------------------------------------------------------------------
-// Base58 Encoding/Decoding
-// ---------------------------------------------------------------------------
-
-const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-function base58Encode(bytes: Uint8Array): string {
-  // Count leading zeros
-  let zeros = 0;
-  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) zeros++;
-
-  // Convert to bigint
-  let value = 0n;
-  for (const byte of bytes) {
-    value = value * 256n + BigInt(byte);
-  }
-
-  let result = '';
-  while (value > 0n) {
-    result = BASE58_ALPHABET[Number(value % 58n)] + result;
-    value = value / 58n;
-  }
-
-  // Add leading '1's for leading zeros
-  for (let i = 0; i < zeros; i++) {
-    result = '1' + result;
-  }
-
-  return result || '1';
-}
-
-function base58Decode(str: string): Uint8Array {
-  // Count leading '1's
-  let zeros = 0;
-  for (let i = 0; i < str.length && str[i] === '1'; i++) zeros++;
-
-  let value = 0n;
-  for (const ch of str) {
-    const idx = BASE58_ALPHABET.indexOf(ch);
-    if (idx === -1) throw new Error(`Invalid base58 character: ${ch}`);
-    value = value * 58n + BigInt(idx);
-  }
-
-  // Convert to bytes
-  const hex = value === 0n ? '' : value.toString(16).padStart(2, '0');
-  const hexPadded = hex.length % 2 ? '0' + hex : hex;
-  const rawBytes: number[] = [];
-  for (let i = 0; i < hexPadded.length; i += 2) {
-    rawBytes.push(parseInt(hexPadded.slice(i, i + 2), 16));
-  }
-
-  // Pad to 32 bytes if it looks like a Solana address
-  const result = new Uint8Array(zeros + rawBytes.length);
-  // Leading zeros are already zero in Uint8Array
-  result.set(rawBytes, zeros);
-  return result;
-}
+// Base58 encoding/decoding and Solana keypair generation imported from SDK:
+// import { generateSolanaKeypair, base58Encode, base58Decode } from '../../src/identity.js';
 
 // ---------------------------------------------------------------------------
 // Low-level Helpers
@@ -594,22 +544,28 @@ function writeCompactU16(buf: Uint8Array, offset: number, value: number): number
 }
 
 // ---------------------------------------------------------------------------
-// Keypair Generation
+// Keypair Generation (uses SDK identity module)
 // ---------------------------------------------------------------------------
 
+import type { SolanaIdentity } from '../../src/identity.js';
+
+/**
+ * Adapter type for backward compatibility with test code that accesses
+ * publicKey, privateKey, and pubkeyBase58 separately.
+ */
 interface Keypair {
   publicKey: Uint8Array;
   privateKey: Uint8Array;
   pubkeyBase58: string;
 }
 
+/** Wraps SDK's generateSolanaKeypair() into the Keypair shape used by tests. */
 function generateKeypair(): Keypair {
-  const privateKey = ed25519.utils.randomSecretKey();
-  const publicKey = ed25519.getPublicKey(privateKey);
+  const sol = generateSolanaKeypair();
   return {
-    publicKey,
-    privateKey,
-    pubkeyBase58: base58Encode(publicKey),
+    privateKey: sol.secretKey.slice(0, 32),
+    publicKey: sol.secretKey.slice(32),
+    pubkeyBase58: sol.publicKey,
   };
 }
 

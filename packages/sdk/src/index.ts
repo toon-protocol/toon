@@ -5,9 +5,23 @@
  */
 
 // Identity module
-export { generateMnemonic, fromMnemonic, fromSecretKey } from './identity.js';
+export {
+  generateMnemonic,
+  fromMnemonic,
+  fromMnemonicFull,
+  fromSecretKey,
+  generateSolanaKeypair,
+  base58Encode,
+  base58Decode,
+} from './identity.js';
 
-export type { NodeIdentity, FromMnemonicOptions } from './identity.js';
+export type {
+  NodeIdentity,
+  ToonIdentity,
+  SolanaIdentity,
+  MinaIdentity,
+  FromMnemonicOptions,
+} from './identity.js';
 
 // Error classes
 export {

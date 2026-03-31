@@ -18,7 +18,10 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { HDKey } from '@scure/bip32';
 import { getPublicKey } from 'nostr-tools/pure';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { ed25519 } from '@noble/curves/ed25519.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
+import { hmac } from '@noble/hashes/hmac.js';
+import { sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import { IdentityError } from './errors.js';
 
@@ -32,6 +35,37 @@ export interface NodeIdentity {
   pubkey: string;
   /** The EIP-55 checksummed EVM address (0x-prefixed, 42 characters). */
   evmAddress: string;
+}
+
+/**
+ * Solana Ed25519 identity derived via SLIP-0010 from a BIP-39 mnemonic.
+ */
+export interface SolanaIdentity {
+  /** 64-byte Ed25519 keypair (32-byte private key + 32-byte public key). */
+  secretKey: Uint8Array;
+  /** Base58-encoded Ed25519 public key (Solana address). */
+  publicKey: string;
+}
+
+/**
+ * Mina Pallas identity derived from a BIP-39 mnemonic via mina-signer.
+ */
+export interface MinaIdentity {
+  /** Hex-encoded Pallas private key. */
+  privateKey: string;
+  /** Base58 Mina public key (B62 prefix). */
+  publicKey: string;
+}
+
+/**
+ * Full multi-chain identity derived from a single BIP-39 mnemonic.
+ * Extends NodeIdentity (Nostr + EVM) with Solana and optionally Mina.
+ */
+export interface ToonIdentity extends NodeIdentity {
+  /** Solana Ed25519 identity (always populated from mnemonic derivation). */
+  solana: SolanaIdentity;
+  /** Mina Pallas identity (undefined when mina-signer is not installed). */
+  mina?: MinaIdentity;
 }
 
 /**
@@ -64,7 +98,7 @@ export function generateMnemonic(): string {
 export function fromMnemonic(
   mnemonic: string,
   options?: FromMnemonicOptions
-): NodeIdentity {
+): ToonIdentity {
   if (!validateMnemonic(mnemonic, wordlist)) {
     throw new IdentityError(
       `Invalid BIP-39 mnemonic: the provided words do not form a valid mnemonic phrase`
@@ -95,7 +129,12 @@ export function fromMnemonic(
     }
 
     const secretKey = hdKey.privateKey;
-    return deriveIdentity(secretKey);
+    const base = deriveIdentity(secretKey);
+
+    // Derive Solana Ed25519 identity from the same seed via SLIP-0010
+    const solana = deriveSolanaIdentity(seed);
+
+    return { ...base, solana };
   } catch (error: unknown) {
     if (error instanceof IdentityError) {
       throw error;
@@ -227,4 +266,232 @@ function toChecksumAddress(addressHex: string): string {
   }
 
   return checksummed;
+}
+
+// ---------------------------------------------------------------------------
+// SLIP-0010 Ed25519 HD Key Derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * SLIP-0010 master key and child key derivation for Ed25519.
+ *
+ * Ed25519 SLIP-0010 only supports hardened derivation. The path
+ * m/44'/501'/0'/0' is standard for Solana wallets.
+ *
+ * @param seed - The BIP-39 seed (64 bytes).
+ * @param path - Array of hardened indices (must have 0x80000000 bit set).
+ * @returns The derived 32-byte Ed25519 private key.
+ */
+function slip0010Derive(seed: Uint8Array, path: number[]): Uint8Array {
+  const encoder = new TextEncoder();
+
+  // Master key: HMAC-SHA512("ed25519 seed", seed)
+  let I = hmac(sha512, encoder.encode('ed25519 seed'), seed);
+  let key = I.slice(0, 32);
+  let chainCode = I.slice(32);
+
+  // Child derivation (hardened only)
+  for (const index of path) {
+    const data = new Uint8Array(37);
+    data[0] = 0x00;
+    data.set(key, 1);
+    // Write index as big-endian uint32
+    data[33] = (index >>> 24) & 0xff;
+    data[34] = (index >>> 16) & 0xff;
+    data[35] = (index >>> 8) & 0xff;
+    data[36] = index & 0xff;
+
+    I = hmac(sha512, chainCode, data);
+    key = I.slice(0, 32);
+    chainCode = I.slice(32);
+  }
+
+  return key;
+}
+
+/** Standard SLIP-0010 path for Solana: m/44'/501'/0'/0' (all hardened). */
+const SOLANA_PATH = [
+  0x8000002c, // 44'
+  0x800001f5, // 501'
+  0x80000000, // 0'
+  0x80000000, // 0'
+];
+
+/**
+ * Derives a Solana Ed25519 identity from a BIP-39 seed using SLIP-0010.
+ */
+function deriveSolanaIdentity(seed: Uint8Array): SolanaIdentity {
+  const privateKey = slip0010Derive(seed, SOLANA_PATH);
+  const publicKeyBytes = ed25519.getPublicKey(privateKey);
+
+  // Solana keypair = 32-byte private key + 32-byte public key = 64 bytes
+  const keypair = new Uint8Array(64);
+  keypair.set(privateKey, 0);
+  keypair.set(publicKeyBytes, 32);
+
+  return { secretKey: keypair, publicKey: base58Encode(publicKeyBytes) };
+}
+
+// ---------------------------------------------------------------------------
+// Mina Pallas Key Derivation (optional, requires mina-signer)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives a Mina Pallas identity from a BIP-39 seed.
+ *
+ * Uses BIP-32 secp256k1 derivation at path m/44'/12586'/0'/0/0 to produce
+ * a 32-byte scalar, then converts to Mina key format via mina-signer.
+ *
+ * @param seed - The BIP-39 seed (64 bytes).
+ * @returns The Mina identity, or undefined if mina-signer is not installed.
+ */
+async function deriveMinaIdentity(
+  seed: Uint8Array
+): Promise<MinaIdentity | undefined> {
+  const path = "m/44'/12586'/0'/0/0";
+  const hdKey = HDKey.fromMasterSeed(seed).derive(path);
+
+  if (!hdKey.privateKey) {
+    throw new IdentityError(`Failed to derive Mina private key at path ${path}`);
+  }
+
+  const keyBytes = new Uint8Array(hdKey.privateKey);
+  const hexKey = bytesToHex(keyBytes);
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MinaSignerLib: any = await import('mina-signer');
+    const Client =
+      'default' in MinaSignerLib ? MinaSignerLib.default : MinaSignerLib;
+    const client = new Client({ network: 'mainnet' });
+
+    const publicKey: string = client.derivePublicKey(hexKey);
+    return { privateKey: hexKey, publicKey };
+  } catch {
+    // mina-signer not installed -- graceful degradation
+    return undefined;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public Multi-Chain Functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives a full multi-chain ToonIdentity from a BIP-39 mnemonic,
+ * including async Mina derivation (requires mina-signer).
+ *
+ * Chains derived:
+ * - Nostr (secp256k1): m/44'/1237'/0'/0/{accountIndex}
+ * - EVM (secp256k1): same key as Nostr, Keccak-256 for address
+ * - Solana (Ed25519): m/44'/501'/0'/0' (SLIP-0010)
+ * - Mina (Pallas): m/44'/12586'/0'/0/0 (optional, requires mina-signer)
+ *
+ * @param mnemonic - A valid BIP-39 mnemonic (12 or 24 words).
+ * @param options - Optional derivation options (accountIndex defaults to 0).
+ * @returns The derived ToonIdentity with all chain identities populated.
+ * @throws {IdentityError} If the mnemonic is invalid.
+ */
+export async function fromMnemonicFull(
+  mnemonic: string,
+  options?: FromMnemonicOptions
+): Promise<ToonIdentity> {
+  // Derive Nostr + EVM + Solana synchronously
+  const identity = fromMnemonic(mnemonic, options);
+
+  // Attempt async Mina derivation
+  let seed: Uint8Array | undefined;
+  try {
+    seed = mnemonicToSeedSync(mnemonic);
+    const mina = await deriveMinaIdentity(seed);
+    if (mina) {
+      return { ...identity, mina };
+    }
+  } finally {
+    if (seed) {
+      seed.fill(0);
+    }
+  }
+
+  return identity;
+}
+
+/**
+ * Generates a random Solana Ed25519 keypair (non-deterministic).
+ *
+ * For deterministic derivation from a mnemonic, use fromMnemonic() instead.
+ *
+ * @returns A SolanaIdentity with random keypair.
+ */
+export function generateSolanaKeypair(): SolanaIdentity {
+  const privateKey = ed25519.utils.randomSecretKey();
+  const publicKeyBytes = ed25519.getPublicKey(privateKey);
+
+  const keypair = new Uint8Array(64);
+  keypair.set(privateKey, 0);
+  keypair.set(publicKeyBytes, 32);
+
+  return { secretKey: keypair, publicKey: base58Encode(publicKeyBytes) };
+}
+
+// ---------------------------------------------------------------------------
+// Base58 Encoding/Decoding
+// ---------------------------------------------------------------------------
+
+const BASE58_ALPHABET =
+  '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+/**
+ * Encodes a byte array to a Base58 string (Bitcoin/Solana alphabet).
+ */
+export function base58Encode(bytes: Uint8Array): string {
+  // Count leading zeros
+  let zeros = 0;
+  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) zeros++;
+
+  let value = 0n;
+  for (const byte of bytes) {
+    value = value * 256n + BigInt(byte);
+  }
+
+  let result = '';
+  while (value > 0n) {
+    result = BASE58_ALPHABET[Number(value % 58n)] + result;
+    value = value / 58n;
+  }
+
+  // Add leading '1's for leading zero bytes
+  for (let i = 0; i < zeros; i++) {
+    result = '1' + result;
+  }
+
+  return result || '1';
+}
+
+/**
+ * Decodes a Base58 string to a byte array (Bitcoin/Solana alphabet).
+ */
+export function base58Decode(str: string): Uint8Array {
+  // Count leading '1's (zero bytes)
+  let zeros = 0;
+  for (let i = 0; i < str.length && str[i] === '1'; i++) zeros++;
+
+  let value = 0n;
+  for (const ch of str) {
+    const idx = BASE58_ALPHABET.indexOf(ch);
+    if (idx === -1) throw new IdentityError(`Invalid base58 character: ${ch}`);
+    value = value * 58n + BigInt(idx);
+  }
+
+  // Convert bigint to bytes
+  const hex = value === 0n ? '' : value.toString(16);
+  const hexPadded = hex.length % 2 ? '0' + hex : hex;
+  const rawBytes: number[] = [];
+  for (let i = 0; i < hexPadded.length; i += 2) {
+    rawBytes.push(parseInt(hexPadded.slice(i, i + 2), 16));
+  }
+
+  const result = new Uint8Array(zeros + rawBytes.length);
+  result.set(rawBytes, zeros);
+  return result;
 }

@@ -86,10 +86,14 @@ describe('@toon-protocol/sdk public API exports', () => {
     // Type-only exports (interfaces, type aliases) are erased at runtime
     // and validated by tsc --noEmit instead.
     const expectedRuntimeExports = new Set([
-      // Identity (Story 1.1)
+      // Identity (Story 1.1 + multi-chain promotion)
       'generateMnemonic',
       'fromMnemonic',
+      'fromMnemonicFull',
       'fromSecretKey',
+      'generateSolanaKeypair',
+      'base58Encode',
+      'base58Decode',
       // Errors (Story 1.0)
       'IdentityError',
       'NodeError',

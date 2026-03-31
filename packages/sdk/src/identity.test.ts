@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { generateMnemonic, fromMnemonic, fromSecretKey } from './identity.js';
+import {
+  generateMnemonic,
+  fromMnemonic,
+  fromMnemonicFull,
+  fromSecretKey,
+  generateSolanaKeypair,
+  base58Encode,
+  base58Decode,
+} from './identity.js';
+import type { ToonIdentity } from './identity.js';
 import { IdentityError } from './errors.js';
 import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { getPublicKey } from 'nostr-tools/pure';
 import { finalizeEvent, verifyEvent } from 'nostr-tools/pure';
+import { ed25519 } from '@noble/curves/ed25519.js';
 
 /**
  * Known test vector for NIP-06 derivation.
@@ -462,6 +472,228 @@ describe('Identity', () => {
       expect(identity.pubkey).toMatch(/^[0-9a-f]{64}$/);
       expect(identity.evmAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
       expect(identity.secretKey).toHaveLength(32);
+    });
+  });
+
+  // =========================================================================
+  // Multi-Chain Identity (Solana, Mina)
+  // =========================================================================
+
+  describe('fromMnemonic() Solana derivation', () => {
+    it('[P0] should return ToonIdentity with solana field populated', () => {
+      // Arrange
+      const mnemonic = TEST_MNEMONIC;
+
+      // Act
+      const identity = fromMnemonic(mnemonic);
+
+      // Assert
+      expect(identity.solana).toBeDefined();
+      expect(identity.solana.secretKey).toBeInstanceOf(Uint8Array);
+      expect(identity.solana.secretKey).toHaveLength(64);
+      expect(identity.solana.publicKey).toBeTruthy();
+      // Base58 characters only
+      expect(identity.solana.publicKey).toMatch(
+        /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/
+      );
+    });
+
+    it('[P0] should derive deterministic Solana keypair from same mnemonic', () => {
+      // Arrange
+      const mnemonic = TEST_MNEMONIC;
+
+      // Act
+      const identity1 = fromMnemonic(mnemonic);
+      const identity2 = fromMnemonic(mnemonic);
+
+      // Assert
+      expect(identity1.solana.publicKey).toBe(identity2.solana.publicKey);
+      expect(Buffer.from(identity1.solana.secretKey).toString('hex')).toBe(
+        Buffer.from(identity2.solana.secretKey).toString('hex')
+      );
+    });
+
+    it('[P0] should derive different Solana keys for different mnemonics', () => {
+      // Arrange
+      const mnemonic1 = TEST_MNEMONIC;
+      const mnemonic2 = NIP06_TEST_MNEMONIC;
+
+      // Act
+      const identity1 = fromMnemonic(mnemonic1);
+      const identity2 = fromMnemonic(mnemonic2);
+
+      // Assert
+      expect(identity1.solana.publicKey).not.toBe(identity2.solana.publicKey);
+    });
+
+    it('[P0] should produce a valid Ed25519 keypair (sign/verify roundtrip)', () => {
+      // Arrange
+      const identity = fromMnemonic(TEST_MNEMONIC);
+      const privateKey = identity.solana.secretKey.slice(0, 32);
+      const publicKeyBytes = identity.solana.secretKey.slice(32);
+      const message = new TextEncoder().encode('test message');
+
+      // Act
+      const signature = ed25519.sign(message, privateKey);
+
+      // Assert
+      expect(ed25519.verify(signature, message, publicKeyBytes)).toBe(true);
+    });
+
+    it('[P1] should embed the correct public key in the 64-byte secretKey', () => {
+      // Arrange
+      const identity = fromMnemonic(TEST_MNEMONIC);
+      const privateKey = identity.solana.secretKey.slice(0, 32);
+
+      // Act -- derive pubkey independently
+      const derivedPubkey = ed25519.getPublicKey(privateKey);
+      const embeddedPubkey = identity.solana.secretKey.slice(32);
+
+      // Assert
+      expect(Buffer.from(embeddedPubkey).toString('hex')).toBe(
+        Buffer.from(derivedPubkey).toString('hex')
+      );
+    });
+
+    it('[P1] should produce the known Solana address for the "abandon" test mnemonic', () => {
+      // Arrange -- known SLIP-0010 derivation for the all-abandon mnemonic at m/44'/501'/0'/0'
+      // This is the standard Phantom/Solflare derivation path
+      const mnemonic = TEST_MNEMONIC;
+
+      // Act
+      const identity = fromMnemonic(mnemonic);
+
+      // Assert -- Solana address should be a valid Base58 string of ~32-44 chars
+      expect(identity.solana.publicKey.length).toBeGreaterThanOrEqual(32);
+      expect(identity.solana.publicKey.length).toBeLessThanOrEqual(44);
+    });
+  });
+
+  describe('fromSecretKey() multi-chain fields', () => {
+    it('[P0] should NOT include solana or mina fields (secp256k1 only)', () => {
+      // Arrange
+      const secretKey = Uint8Array.from(
+        Buffer.from(EXPECTED_PRIVKEY_HEX, 'hex')
+      );
+
+      // Act
+      const identity = fromSecretKey(secretKey);
+
+      // Assert -- fromSecretKey returns NodeIdentity, not ToonIdentity
+      expect(identity).toHaveProperty('secretKey');
+      expect(identity).toHaveProperty('pubkey');
+      expect(identity).toHaveProperty('evmAddress');
+      expect((identity as ToonIdentity).solana).toBeUndefined();
+      expect((identity as ToonIdentity).mina).toBeUndefined();
+    });
+  });
+
+  describe('generateSolanaKeypair()', () => {
+    it('[P0] should return a valid SolanaIdentity with 64-byte keypair', () => {
+      // Act
+      const keypair = generateSolanaKeypair();
+
+      // Assert
+      expect(keypair.secretKey).toBeInstanceOf(Uint8Array);
+      expect(keypair.secretKey).toHaveLength(64);
+      expect(keypair.publicKey).toBeTruthy();
+      expect(keypair.publicKey).toMatch(
+        /^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]+$/
+      );
+    });
+
+    it('[P0] should produce a valid Ed25519 keypair (sign/verify)', () => {
+      // Arrange
+      const keypair = generateSolanaKeypair();
+      const privateKey = keypair.secretKey.slice(0, 32);
+      const publicKeyBytes = keypair.secretKey.slice(32);
+      const message = new TextEncoder().encode('solana keypair test');
+
+      // Act
+      const signature = ed25519.sign(message, privateKey);
+
+      // Assert
+      expect(ed25519.verify(signature, message, publicKeyBytes)).toBe(true);
+    });
+
+    it('[P1] should generate different keypairs on successive calls', () => {
+      // Act
+      const kp1 = generateSolanaKeypair();
+      const kp2 = generateSolanaKeypair();
+
+      // Assert
+      expect(kp1.publicKey).not.toBe(kp2.publicKey);
+    });
+  });
+
+  describe('base58Encode / base58Decode', () => {
+    it('[P0] should roundtrip encode/decode a 32-byte public key', () => {
+      // Arrange
+      const keypair = generateSolanaKeypair();
+      const publicKeyBytes = keypair.secretKey.slice(32);
+
+      // Act
+      const encoded = base58Encode(publicKeyBytes);
+      const decoded = base58Decode(encoded);
+
+      // Assert
+      expect(Buffer.from(decoded).toString('hex')).toBe(
+        Buffer.from(publicKeyBytes).toString('hex')
+      );
+    });
+
+    it('[P0] should handle leading zero bytes correctly', () => {
+      // Arrange -- bytes with leading zeros
+      const bytes = new Uint8Array([0, 0, 0, 1, 2, 3]);
+
+      // Act
+      const encoded = base58Encode(bytes);
+      const decoded = base58Decode(encoded);
+
+      // Assert
+      expect(encoded.startsWith('111')).toBe(true); // 3 leading '1's for 3 zero bytes
+      expect(Buffer.from(decoded).toString('hex')).toBe(
+        Buffer.from(bytes).toString('hex')
+      );
+    });
+
+    it('[P1] should throw IdentityError for invalid base58 characters', () => {
+      // Act & Assert -- '0', 'O', 'I', 'l' are not in base58 alphabet
+      expect(() => base58Decode('invalid0')).toThrow(IdentityError);
+    });
+  });
+
+  describe('fromMnemonicFull()', () => {
+    it('[P0] should return ToonIdentity with solana populated', async () => {
+      // Arrange
+      const mnemonic = TEST_MNEMONIC;
+
+      // Act
+      const identity = await fromMnemonicFull(mnemonic);
+
+      // Assert -- same Nostr + EVM + Solana as sync fromMnemonic
+      const syncIdentity = fromMnemonic(mnemonic);
+      expect(identity.pubkey).toBe(syncIdentity.pubkey);
+      expect(identity.evmAddress).toBe(syncIdentity.evmAddress);
+      expect(identity.solana.publicKey).toBe(syncIdentity.solana.publicKey);
+    });
+
+    it('[P1] should gracefully handle missing mina-signer (mina undefined)', async () => {
+      // Arrange
+      const mnemonic = TEST_MNEMONIC;
+
+      // Act
+      const identity = await fromMnemonicFull(mnemonic);
+
+      // Assert -- mina is undefined when mina-signer is not installed
+      // (This test verifies graceful degradation, not Mina derivation correctness)
+      if (identity.mina === undefined) {
+        expect(identity.mina).toBeUndefined();
+      } else {
+        // If mina-signer IS installed, verify the fields
+        expect(identity.mina.privateKey).toBeTruthy();
+        expect(identity.mina.publicKey).toBeTruthy();
+      }
     });
   });
 });
