@@ -275,7 +275,7 @@ export function createDiscoveryTracker(
               // Store negotiation metadata for lazy channel opening
               peerNegotiations.set(peerId, {
                 chain: negotiatedChain,
-                chainType: negotiatedChain.split(':')[0],
+                chainType: negotiatedChain.split(':')[0] ?? negotiatedChain,
                 settlementAddress: peerAddress,
                 tokenAddress,
                 tokenNetwork,

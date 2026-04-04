@@ -355,9 +355,29 @@ export function createToonNode(config: ToonNodeConfig): ToonNode {
 
       try {
         // Wire the handlePacket callback to the connector (if supported)
-        // HTTP mode uses local delivery instead of callback
+        // HTTP mode uses local delivery instead of callback.
+        // Adapter translates HandlePacketResponse (flat code/message) to
+        // connector PaymentResponse (rejectReason: { code, message }).
         if (config.connector.setPacketHandler) {
-          config.connector.setPacketHandler(config.handlePacket);
+          const adaptedHandler = async (
+            request: HandlePacketRequest
+          ): Promise<HandlePacketResponse> => {
+            const result = await config.handlePacket(request);
+            if (result.accept) {
+              return result;
+            }
+            // Attach rejectReason for connector compatibility while preserving
+            // the HandlePacketResponse shape for type safety
+            const adapted = result as HandlePacketRejectResponse & {
+              rejectReason?: { code: string; message: string };
+            };
+            adapted.rejectReason = {
+              code: result.code,
+              message: result.message,
+            };
+            return adapted;
+          };
+          config.connector.setPacketHandler(adaptedHandler);
         }
 
         // Run bootstrap to discover and register peers
