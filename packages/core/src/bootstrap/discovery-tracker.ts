@@ -62,7 +62,15 @@ export interface DiscoveryTracker {
   /** Set channel client for payment channel opening (optional). */
   setChannelClient(client: ConnectorChannelClient): void;
   /** Get negotiation metadata for a peer (for lazy channel opening). */
-  getPeerNegotiation(peerId: string): { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string } | undefined;
+  getPeerNegotiation(peerId: string):
+    | {
+        chain: string;
+        chainType: string;
+        settlementAddress: string;
+        tokenAddress?: string;
+        tokenNetwork?: string;
+      }
+    | undefined;
   /** Mark pubkeys as already-peered (e.g., from bootstrap phase). */
   addExcludedPubkeys(pubkeys: string[]): void;
 }
@@ -81,7 +89,7 @@ export function createDiscoveryTracker(
   const excludedPubkeys = new Set<string>([pubkey]);
 
   let connectorAdmin: ConnectorAdminClient | undefined;
-  let channelClient: ConnectorChannelClient | undefined;
+  let _channelClient: ConnectorChannelClient | undefined;
   let listeners: BootstrapEventListener[] = [];
 
   /** Peers discovered via kind:10032 events (keyed by pubkey). */
@@ -89,7 +97,16 @@ export function createDiscoveryTracker(
   /** Pubkeys that have been actively peered with via peerWith(). */
   const peeredPubkeys = new Set<string>();
   /** Negotiation metadata per peer (for lazy channel opening). */
-  const peerNegotiations = new Map<string, { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string }>();
+  const peerNegotiations = new Map<
+    string,
+    {
+      chain: string;
+      chainType: string;
+      settlementAddress: string;
+      tokenAddress?: string;
+      tokenNetwork?: string;
+    }
+  >();
   /** Timestamps of the latest kind:10032 event per pubkey (stale-event filtering). */
   const peerTimestamps = new Map<string, number>();
 
@@ -341,10 +358,18 @@ export function createDiscoveryTracker(
     },
 
     setChannelClient(client: ConnectorChannelClient): void {
-      channelClient = client;
+      _channelClient = client;
     },
 
-    getPeerNegotiation(peerId: string): { chain: string; chainType: string; settlementAddress: string; tokenAddress?: string; tokenNetwork?: string } | undefined {
+    getPeerNegotiation(peerId: string):
+      | {
+          chain: string;
+          chainType: string;
+          settlementAddress: string;
+          tokenAddress?: string;
+          tokenNetwork?: string;
+        }
+      | undefined {
       return peerNegotiations.get(peerId);
     },
 

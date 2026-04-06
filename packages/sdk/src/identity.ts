@@ -352,7 +352,9 @@ async function deriveMinaIdentity(
   const hdKey = HDKey.fromMasterSeed(seed).derive(path);
 
   if (!hdKey.privateKey) {
-    throw new IdentityError(`Failed to derive Mina private key at path ${path}`);
+    throw new IdentityError(
+      `Failed to derive Mina private key at path ${path}`
+    );
   }
 
   const keyBytes = new Uint8Array(hdKey.privateKey);

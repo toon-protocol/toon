@@ -547,7 +547,7 @@ function writeCompactU16(buf: Uint8Array, offset: number, value: number): number
 // Keypair Generation (uses SDK identity module)
 // ---------------------------------------------------------------------------
 
-import type { SolanaIdentity } from '../../src/identity.js';
+// SolanaIdentity type available from '../../src/identity.js' if needed
 
 /**
  * Adapter type for backward compatibility with test code that accesses

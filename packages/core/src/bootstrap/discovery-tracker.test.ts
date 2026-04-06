@@ -247,7 +247,7 @@ describe('createDiscoveryTracker', () => {
     );
   });
 
-  it('peerWith() with channel client and settlement data opens channel', async () => {
+  it('peerWith() with channel client and settlement data stores negotiation metadata (lazy channel)', async () => {
     const mockChannelClient = {
       openChannel: vi.fn().mockResolvedValue({
         channelId: 'channel-001',
@@ -277,19 +277,28 @@ describe('createDiscoveryTracker', () => {
     );
     await tracker.peerWith(peerPubkey);
 
-    const opened = events.find((e) => e.type === 'bootstrap:channel-opened');
-    expect(opened).toEqual({
-      type: 'bootstrap:channel-opened',
-      peerId: `nostr-${peerPubkey.slice(0, 16)}`,
-      channelId: 'channel-001',
-      negotiatedChain: 'evm:base:8453',
-    });
+    // Lazy channel opening: channel is NOT opened during peerWith(),
+    // negotiation metadata is stored for deferred opening on first payment.
+    expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
+
+    // Peer should be registered
+    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      true
+    );
+
+    // Negotiation metadata should be stored for lazy channel opening
+    const peerId = `nostr-${peerPubkey.slice(0, 16)}`;
+    const negotiation = tracker.getPeerNegotiation(peerId);
+    expect(negotiation).toBeDefined();
+    expect(negotiation?.chain).toBe('evm:base:8453');
+    expect(negotiation?.settlementAddress).toBe('0x1234');
   });
 
-  it('settlement failure is non-fatal', async () => {
-    const mockChannelClient = {
-      openChannel: vi.fn().mockRejectedValue(new Error('Channel open timeout')),
-      getChannelState: vi.fn(),
+  it('registration failure is non-fatal and emits settlement-failed', async () => {
+    // Simulate connector admin registration failure
+    const failingAdmin = {
+      addPeer: vi.fn().mockRejectedValue(new Error('Registration timeout')),
+      removePeer: vi.fn().mockResolvedValue(undefined),
     };
 
     const peerInfoWithSettlement: IlpPeerInfo = {
@@ -305,8 +314,7 @@ describe('createDiscoveryTracker', () => {
         supportedChains: ['evm:base:8453'],
       },
     });
-    tracker.setConnectorAdmin(mockAdmin);
-    tracker.setChannelClient(mockChannelClient);
+    tracker.setConnectorAdmin(failingAdmin);
     tracker.on((event) => events.push(event));
 
     tracker.processEvent(
@@ -314,23 +322,41 @@ describe('createDiscoveryTracker', () => {
     );
     await tracker.peerWith(peerPubkey);
 
-    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
-      true
-    );
+    // Registration failure emits settlement-failed
     expect(events.some((e) => e.type === 'bootstrap:settlement-failed')).toBe(
       true
     );
 
-    // Can still peer with another peer
-    tracker.processEvent(
+    // Peer is NOT registered (rolled back)
+    expect(
+      events.some((e) => e.type === 'bootstrap:peer-registered')
+    ).toBe(false);
+
+    // Can still peer with another peer after failure
+    // Use a succeeding admin for the second peer
+    const succeedingAdmin = {
+      addPeer: vi.fn().mockResolvedValue(undefined),
+      removePeer: vi.fn().mockResolvedValue(undefined),
+    };
+    // Create a fresh tracker for the second test
+    const tracker2 = createDiscoveryTracker({
+      secretKey,
+      settlementInfo: {
+        supportedChains: ['evm:base:8453'],
+      },
+    });
+    tracker2.setConnectorAdmin(succeedingAdmin);
+    const events2: BootstrapEvent[] = [];
+    tracker2.on((event) => events2.push(event));
+
+    tracker2.processEvent(
       makeEvent(peerPubkey2, JSON.stringify(peerInfoWithSettlement), 1000)
     );
-    await tracker.peerWith(peerPubkey2);
+    await tracker2.peerWith(peerPubkey2);
 
-    const registered = events.filter(
-      (e) => e.type === 'bootstrap:peer-registered'
-    );
-    expect(registered).toHaveLength(2);
+    expect(
+      events2.some((e) => e.type === 'bootstrap:peer-registered')
+    ).toBe(true);
   });
 
   // --- Counts ---

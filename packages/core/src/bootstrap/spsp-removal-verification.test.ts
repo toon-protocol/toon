@@ -279,12 +279,15 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       simulateRelayResponse(VALID_PEER_INFO_WITH_SETTLEMENT);
       const result = await bootstrapPromise;
 
-      // Verify result has settlement data
-      expect(result.channelId).toBe('channel-002');
+      // Lazy channels: negotiation metadata stored but no channelId yet
+      expect(result.channelId).toBeUndefined();
       expect(result.negotiatedChain).toBe('evm:base:8453');
       expect(result.settlementAddress).toBe('0xPEER_ADDRESS');
 
-      // Verify connector was re-registered with settlement field
+      // Channel is NOT opened eagerly — deferred until first payment
+      expect(channelClient.openChannel).not.toHaveBeenCalled();
+
+      // Verify connector was re-registered with settlement field (no channelId)
       const calls = admin.addPeer.mock.calls;
       // Last call should include settlement
       const lastCall = calls[calls.length - 1]?.[0] as {
@@ -301,7 +304,6 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       expect(lastCall.settlement?.evmAddress).toBe('0xPEER_ADDRESS');
       expect(lastCall.settlement?.tokenAddress).toBe('0xTOKEN');
       expect(lastCall.settlement?.tokenNetworkAddress).toBe('0xTOKEN_NETWORK');
-      expect(lastCall.settlement?.channelId).toBe('channel-002');
     });
 
     it('should NOT include settlement field when peer has no supported chains', async () => {
@@ -347,7 +349,7 @@ describe('Story 2.7: SPSP Removal Verification', () => {
   // =========================================================================
 
   describe('AC #3/#5: peerWith() flow without SPSP', () => {
-    it('should open channel unilaterally using kind:10032 settlement data', async () => {
+    it('should store negotiation metadata for lazy channel opening using kind:10032 settlement data', async () => {
       const admin = createMockConnectorAdmin();
       const channelClient = createMockChannelClient('channel-003');
 
@@ -373,27 +375,14 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       const bootstrapPromise = service.bootstrapWithPeer(createKnownPeer());
       await vi.waitFor(() => expect(capturedWs).not.toBeNull());
       simulateRelayResponse(VALID_PEER_INFO_WITH_SETTLEMENT);
-      await bootstrapPromise;
+      const result = await bootstrapPromise;
 
-      // Channel was opened unilaterally (not via SPSP handshake)
-      expect(channelClient.openChannel).toHaveBeenCalledWith(
-        expect.objectContaining({
-          peerId: `nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`,
-          chain: 'evm:base:8453',
-          token: '0xTOKEN',
-          tokenNetwork: '0xTOKEN_NETWORK',
-          peerAddress: '0xPEER_ADDRESS',
-        })
-      );
+      // Lazy channels: channel is NOT opened during bootstrap
+      expect(channelClient.openChannel).not.toHaveBeenCalled();
 
-      // Verify bootstrap:channel-opened event was emitted
-      const opened = events.find((e) => e.type === 'bootstrap:channel-opened');
-      expect(opened).toEqual({
-        type: 'bootstrap:channel-opened',
-        peerId: `nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`,
-        channelId: 'channel-003',
-        negotiatedChain: 'evm:base:8453',
-      });
+      // Negotiation metadata is stored for deferred channel opening
+      expect(result.negotiatedChain).toBe('evm:base:8453');
+      expect(result.settlementAddress).toBe('0xPEER_ADDRESS');
 
       // Verify NO SPSP-related events were emitted (kinds 23194/23195)
       // Since SPSP is removed, there should be no events referencing SPSP
@@ -501,12 +490,17 @@ describe('Story 2.7: SPSP Removal Verification', () => {
   // =========================================================================
 
   describe('AC #7: bootstrap:settlement-failed event', () => {
-    it('should emit bootstrap:settlement-failed when channel opening fails (non-fatal)', async () => {
+    it('should emit bootstrap:settlement-failed when settlement re-registration fails (non-fatal)', async () => {
+      // With lazy channels, openChannel() is NOT called during bootstrap.
+      // settlement-failed is emitted when the settlement negotiation/re-registration
+      // phase itself throws (e.g., connectorAdmin.addPeer fails during settlement update).
       const admin = createMockConnectorAdmin();
-      const channelClient = createMockChannelClient(
-        'channel-fail',
-        true // shouldFail
-      );
+      // Make the second addPeer call (settlement update) fail
+      admin.addPeer
+        .mockResolvedValueOnce(undefined) // Initial registration succeeds
+        .mockRejectedValueOnce(new Error('Settlement registration failed')); // Settlement update fails
+
+      const channelClient = createMockChannelClient('channel-fail');
 
       const events: BootstrapEvent[] = [];
       const service = new BootstrapService(
@@ -541,13 +535,18 @@ describe('Story 2.7: SPSP Removal Verification', () => {
       expect(settlementFailed).toEqual({
         type: 'bootstrap:settlement-failed',
         peerId: `nostr-${VALID_PEER_PUBKEY.slice(0, 16)}`,
-        reason: expect.stringContaining('Channel open timeout'),
+        reason: expect.stringContaining('Settlement registration failed'),
       });
     });
 
     it('event type should be bootstrap:settlement-failed not bootstrap:handshake-failed', async () => {
       const admin = createMockConnectorAdmin();
-      const channelClient = createMockChannelClient('ch', true);
+      // Make settlement re-registration fail to trigger the event
+      admin.addPeer
+        .mockResolvedValueOnce(undefined) // Initial registration
+        .mockRejectedValueOnce(new Error('Settlement error')); // Settlement update
+
+      const channelClient = createMockChannelClient('ch');
 
       const events: BootstrapEvent[] = [];
       const service = new BootstrapService(
@@ -719,7 +718,7 @@ describe('Story 2.7: SPSP Removal Verification', () => {
   // =========================================================================
 
   describe('AC #1/#2: Settlement integrated into registration phase', () => {
-    it('channel opening happens during registration (no separate handshaking phase)', async () => {
+    it('settlement negotiation happens during registration (no separate handshaking phase, lazy channel)', async () => {
       const admin = createMockConnectorAdmin();
       const channelClient = createMockChannelClient('channel-reg');
       const runtime = createMockIlpClient();
@@ -765,22 +764,18 @@ describe('Story 2.7: SPSP Removal Verification', () => {
         'ready',
       ]);
 
-      // Channel opening happened (during registration phase)
-      const channelOpened = events.find(
-        (e) => e.type === 'bootstrap:channel-opened'
-      );
-      expect(channelOpened).toBeDefined();
+      // Lazy channels: no channel-opened event during bootstrap
+      // Channel opening is deferred until first payment
+      expect(channelClient.openChannel).not.toHaveBeenCalled();
 
-      // The channel-opened event occurred BEFORE the announcing phase
-      const channelOpenedIdx = events.findIndex(
-        (e) => e.type === 'bootstrap:channel-opened'
-      );
-      const announcingIdx = events.findIndex(
-        (e) =>
-          e.type === 'bootstrap:phase' &&
-          (e as { phase: BootstrapPhase }).phase === 'announcing'
-      );
-      expect(channelOpenedIdx).toBeLessThan(announcingIdx);
+      // Settlement negotiation metadata is stored during registration
+      // (connector re-registered with settlement field)
+      const addPeerCalls = admin.addPeer.mock.calls;
+      expect(addPeerCalls.length).toBeGreaterThanOrEqual(2); // initial + settlement update
+      const lastCall = addPeerCalls[addPeerCalls.length - 1]?.[0] as {
+        settlement?: { preference: string };
+      };
+      expect(lastCall.settlement?.preference).toBe('evm:base:8453');
     });
 
     it('local chain selection runs against peer kind:10032 supported chains', async () => {
@@ -821,12 +816,17 @@ describe('Story 2.7: SPSP Removal Verification', () => {
 
       // Local chain selection picked evm:base:8453 (the only intersection)
       expect(result.negotiatedChain).toBe('evm:base:8453');
-      expect(channelClient.openChannel).toHaveBeenCalledWith(
-        expect.objectContaining({
-          chain: 'evm:base:8453',
-          peerAddress: '0xPEER',
-        })
-      );
+
+      // Lazy channels: openChannel() is NOT called during bootstrap
+      expect(channelClient.openChannel).not.toHaveBeenCalled();
+
+      // Settlement metadata stored in connector re-registration
+      const addPeerCalls = admin.addPeer.mock.calls;
+      const lastCall = addPeerCalls[addPeerCalls.length - 1]?.[0] as {
+        settlement?: { preference: string; evmAddress?: string };
+      };
+      expect(lastCall.settlement?.preference).toBe('evm:base:8453');
+      expect(lastCall.settlement?.evmAddress).toBe('0xPEER');
     });
 
     it('no chain match results in peer registered without settlement (non-fatal)', async () => {
