@@ -328,9 +328,9 @@ describe('createDiscoveryTracker', () => {
     );
 
     // Peer is NOT registered (rolled back)
-    expect(
-      events.some((e) => e.type === 'bootstrap:peer-registered')
-    ).toBe(false);
+    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      false
+    );
 
     // Can still peer with another peer after failure
     // Use a succeeding admin for the second peer
@@ -354,9 +354,9 @@ describe('createDiscoveryTracker', () => {
     );
     await tracker2.peerWith(peerPubkey2);
 
-    expect(
-      events2.some((e) => e.type === 'bootstrap:peer-registered')
-    ).toBe(true);
+    expect(events2.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      true
+    );
   });
 
   // --- Counts ---
