@@ -71,6 +71,9 @@ export const DVM_SUBMISSION_PRIVATE_KEY =
 // Account #9 — docker-swarm-e2e
 export const SWARM_PRIVATE_KEY =
   '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' as const;
+// Account #10 — docker-pet-dvm-e2e
+export const PET_DVM_PRIVATE_KEY =
+  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897' as const;
 
 export const CHAIN_ID = 31337;
 
