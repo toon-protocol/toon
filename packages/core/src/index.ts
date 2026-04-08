@@ -24,6 +24,9 @@ export {
   ILP_ROOT_PREFIX,
   PREFIX_CLAIM_KIND,
   PREFIX_GRANT_KIND,
+  PET_INTERACTION_REQUEST_KIND,
+  PET_INTERACTION_RESULT_KIND,
+  PET_INTERACTION_EVENT_KIND,
 } from './constants.js';
 
 // ILP address derivation and BTP prefix exchange
