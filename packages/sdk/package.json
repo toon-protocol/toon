@@ -1,6 +1,6 @@
 {
   "name": "@toon-protocol/sdk",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "description": "TOON SDK for building ILP-gated Nostr services",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,6 +22,9 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:e2e:docker": "vitest run --config vitest.e2e.config.ts -- tests/e2e/docker-publish-event-e2e.test.ts",
+    "test:e2e:docker:solana": "vitest run --config vitest.e2e.config.ts -- tests/e2e/docker-solana-settlement-e2e.test.ts",
+    "test:e2e:docker:mina": "vitest run --config vitest.e2e.config.ts -- tests/e2e/docker-mina-settlement-e2e.test.ts",
+    "test:e2e:docker:pet": "vitest run --config vitest.e2e.config.ts -- tests/e2e/docker-pet-dvm-e2e.test.ts",
     "test:watch": "vitest"
   },
   "keywords": [
@@ -54,15 +57,19 @@
     "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
-    "@toon-protocol/connector": ">=2.0.0"
+    "@toon-protocol/connector": ">=2.2.0",
+    "mina-signer": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "@toon-protocol/connector": {
       "optional": true
+    },
+    "mina-signer": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@toon-protocol/connector": "^2.0.0",
+    "@toon-protocol/connector": "^2.2.0",
     "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",

@@ -53,7 +53,7 @@ import {
   TOKEN_ADDRESS,
   TOKEN_NETWORK_ADDRESS,
   REGISTRY_ADDRESS,
-  TEST_PRIVATE_KEY,
+  DVM_SUBMISSION_PRIVATE_KEY,
   CHAIN_ID,
   waitForEventOnRelay,
   checkAllServicesReady,
@@ -167,13 +167,15 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
         peers: [],
         routes: [],
         localDelivery: { enabled: false },
-        settlementInfra: {
-          enabled: true,
-          rpcUrl: ANVIL_RPC,
-          registryAddress: REGISTRY_ADDRESS,
-          tokenAddress: TOKEN_ADDRESS,
-          privateKey: TEST_PRIVATE_KEY,
-        },
+        chainProviders: [
+          {
+            chainType: 'evm' as const,
+            chainId: `evm:${CHAIN_ID}`,
+            rpcUrl: ANVIL_RPC,
+            registryAddress: REGISTRY_ADDRESS,
+            keyId: DVM_SUBMISSION_PRIVATE_KEY,
+          },
+        ],
       },
       connectorLogger
     );

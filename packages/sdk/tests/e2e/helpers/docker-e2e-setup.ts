@@ -42,19 +42,48 @@ export const TOKEN_NETWORK_ADDRESS =
 export const REGISTRY_ADDRESS =
   '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512' as const;
 
-// Test account (Anvil Account #3)
+// Per-test-file Anvil accounts to avoid nonce contention.
+// Docker infra uses: Account #0 (peer1), Account #2 (peer2).
+// Each test file gets its own account so concurrent tests don't conflict.
+
+// Account #3 — docker-publish-event-e2e
 export const TEST_PRIVATE_KEY =
   '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' as const;
 export const TEST_EVM_ADDRESS =
   '0x90F79bf6EB2c4f870365E785982E1f101E93b906' as const;
 
-// Settlement test accounts (Anvil Account #4 and #5 — unused by Docker infra)
+// Account #4 — settlement tests within docker-publish-event-e2e
 export const SETTLEMENT_PRIVATE_KEY_A =
   '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' as const;
+// Account #5 — settlement tests within docker-publish-event-e2e
 export const SETTLEMENT_PRIVATE_KEY_B =
   '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' as const;
 
+// Account #6 — docker-workflow-chain-e2e
+export const WORKFLOW_PRIVATE_KEY =
+  '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' as const;
+// Account #7 — docker-dvm-lifecycle-e2e
+export const DVM_LIFECYCLE_PRIVATE_KEY =
+  '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' as const;
+// Account #8 — docker-dvm-submission-e2e
+export const DVM_SUBMISSION_PRIVATE_KEY =
+  '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' as const;
+// Account #9 — docker-swarm-e2e
+export const SWARM_PRIVATE_KEY =
+  '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' as const;
+// Account #10 — docker-pet-dvm-e2e
+export const PET_DVM_PRIVATE_KEY =
+  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897' as const;
+
 export const CHAIN_ID = 31337;
+
+// Multi-chain constants
+export const SOLANA_RPC = 'http://localhost:19899';
+export const SOLANA_WS = 'ws://localhost:19900';
+export const SOLANA_PROGRAM_ID = process.env['SOLANA_PROGRAM_ID'] || '';
+export const MINA_GRAPHQL = 'http://localhost:19085/graphql';
+export const MINA_ACCOUNTS_MANAGER = 'http://localhost:19181';
+export const MINA_ZKAPP_ADDRESS = process.env['MINA_ZKAPP_ADDRESS'] || '';
 
 // ---------------------------------------------------------------------------
 // Anvil chain definition
@@ -446,6 +475,59 @@ export async function checkAllServicesReady(): Promise<boolean> {
 /**
  * Skip check for E2E tests. In CI, throws; locally, logs and returns true to skip.
  */
+export async function waitForSolanaHealth(timeoutMs = 30000): Promise<boolean> {
+  return waitForServiceHealth(`${SOLANA_RPC}/health`, timeoutMs);
+}
+
+export async function waitForMinaHealth(timeoutMs = 180000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(MINA_GRAPHQL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: '{syncStatus}' }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        const syncData = data['data'] as Record<string, unknown> | undefined;
+        if (syncData?.['syncStatus'] === 'SYNCED') return true;
+      }
+    } catch {
+      // retry
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+export async function acquireMinaAccount(): Promise<{ pk: string; sk: string } | null> {
+  try {
+    const res = await fetch(`${MINA_ACCOUNTS_MANAGER}/acquire-account`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return (await res.json()) as { pk: string; sk: string };
+    }
+  } catch {
+    // non-fatal
+  }
+  return null;
+}
+
+export async function releaseMinaAccount(pk: string): Promise<void> {
+  try {
+    await fetch(`${MINA_ACCOUNTS_MANAGER}/release-account?pk=${pk}`, {
+      method: 'PUT',
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch {
+    // non-fatal
+  }
+}
+
 export function skipIfNotReady(servicesReady: boolean): boolean {
   if (!servicesReady) {
     if (process.env['CI']) {

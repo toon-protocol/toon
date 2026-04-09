@@ -620,7 +620,7 @@ describe('BootstrapService', () => {
     expect(runtime.sendIlpPacketWithClaim).not.toHaveBeenCalled();
   });
 
-  it('should use sendIlpPacketWithClaim when channelId exists from bootstrap result', async () => {
+  it('should use sendIlpPacket (without claim) when lazy channels are enabled (no channelId)', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockIlpClient();
 
@@ -662,7 +662,7 @@ describe('BootstrapService', () => {
     const bootstrapPromise = service.bootstrap();
     await vi.waitFor(() => expect(capturedWs).not.toBeNull());
 
-    // Peer info with settlement support so channel can be opened
+    // Peer info with settlement support — lazy channels store metadata only
     const peerInfoWithSettlement: IlpPeerInfo = {
       ...VALID_PEER_INFO,
       supportedChains: ['evm:anvil:31337'],
@@ -673,13 +673,12 @@ describe('BootstrapService', () => {
 
     await bootstrapPromise;
 
-    // With channelId + claimSigner + sendIlpPacketWithClaim, should use claim path
-    expect(runtime.sendIlpPacketWithClaim).toHaveBeenCalled();
-    expect(runtime.sendIlpPacket).not.toHaveBeenCalled();
+    // Lazy channels: no channelId in result, so sendIlpPacket (without claim) is used
+    expect(runtime.sendIlpPacket).toHaveBeenCalled();
+    expect(runtime.sendIlpPacketWithClaim).not.toHaveBeenCalled();
 
-    // Verify the claim was passed
-    const claimCall = runtime.sendIlpPacketWithClaim.mock.calls[0];
-    expect(claimCall?.[1]).toEqual({ type: 'mock-claim' });
+    // Channel is NOT opened eagerly — negotiation metadata stored for deferred opening
+    expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
 
     // Verify bootstrap:announced event
     const announced = events.find((e) => e.type === 'bootstrap:announced');

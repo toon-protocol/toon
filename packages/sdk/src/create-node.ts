@@ -51,6 +51,7 @@ import {
   buildPrefixClaimEvent,
   validatePrefix,
 } from '@toon-protocol/core';
+import type { ChainProviderConfigEntry } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
 import type {
   IlpClient,
@@ -185,6 +186,26 @@ export interface NodeConfig {
   ardriveEnabled?: boolean;
   /** Per-kind pricing overrides */
   kindPricing?: Record<number, bigint>;
+  /**
+   * Multi-chain provider configuration for the embedded connector.
+   * When provided, passed directly to ConnectorNode as `chainProviders`.
+   * Takes priority over the legacy `settlementInfra` auto-configuration.
+   * Only used when auto-creating an embedded connector.
+   */
+  chainProviders?: ChainProviderConfigEntry[];
+  /**
+   * NIP-59 transport privacy configuration for the embedded connector.
+   * When enabled, per-packet claims are wrapped in three-layer encryption.
+   * Only used when auto-creating an embedded connector.
+   */
+  nip59?: { enabled: boolean };
+  /**
+   * Per-peer NIP-59 public keys for claim encryption.
+   * Map of peer ID to compressed secp256k1 public key (hex, 66 chars).
+   * Applied to peer configs when registering peers with the connector.
+   * Only used when auto-creating an embedded connector.
+   */
+  peerNip59PublicKeys?: Record<string, string>;
   /** Config-based handler registration (alternative to post-creation .on()) */
   handlers?: Record<number, Handler>;
   /** Config-based default handler (alternative to post-creation .onDefault()) */
@@ -807,6 +828,10 @@ export function createNode(config: NodeConfig): ServiceNode {
       const hasSettlementAddresses =
         chainConfig.registryAddress && chainConfig.tokenNetworkAddress;
 
+      // Build connector config: chainProviders takes priority over settlementInfra
+      const hasChainProviders =
+        config.chainProviders !== undefined && config.chainProviders.length > 0;
+
       autoCreatedConnector = new ConnectorNodeClass(
         {
           nodeId,
@@ -816,15 +841,23 @@ export function createNode(config: NodeConfig): ServiceNode {
           peers: [],
           routes: [],
           localDelivery: { enabled: false },
-          ...(hasSettlementAddresses && {
-            settlementInfra: {
-              enabled: true,
-              rpcUrl: chainConfig.rpcUrl,
-              registryAddress: chainConfig.registryAddress,
-              tokenAddress: chainConfig.usdcAddress,
-              privateKey: settlementPrivateKey,
-            },
+          // Multi-chain: use chainProviders when provided
+          ...(hasChainProviders && {
+            chainProviders: config.chainProviders,
           }),
+          // Legacy: fall back to settlementInfra when chainProviders absent
+          ...(!hasChainProviders &&
+            hasSettlementAddresses && {
+              settlementInfra: {
+                enabled: true,
+                rpcUrl: chainConfig.rpcUrl,
+                registryAddress: chainConfig.registryAddress,
+                tokenAddress: chainConfig.usdcAddress,
+                privateKey: settlementPrivateKey,
+              },
+            }),
+          // NIP-59 transport privacy
+          ...(config.nip59 && { nip59: config.nip59 }),
         },
         connectorLogger
       );

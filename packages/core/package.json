@@ -1,6 +1,6 @@
 {
   "name": "@toon-protocol/core",
-  "version": "1.2.0",
+  "version": "1.4.1",
   "description": "Core library for Nostr-based ILP peer discovery and settlement",
   "type": "module",
   "main": "./dist/index.js",
@@ -57,7 +57,7 @@
     "ws": "^8.18.0"
   },
   "peerDependencies": {
-    "@toon-protocol/connector": ">=2.0.0"
+    "@toon-protocol/connector": ">=2.2.0"
   },
   "peerDependenciesMeta": {
     "@toon-protocol/connector": {

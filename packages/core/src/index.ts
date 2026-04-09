@@ -24,6 +24,9 @@ export {
   ILP_ROOT_PREFIX,
   PREFIX_CLAIM_KIND,
   PREFIX_GRANT_KIND,
+  PET_INTERACTION_REQUEST_KIND,
+  PET_INTERACTION_RESULT_KIND,
+  PET_INTERACTION_EVENT_KIND,
 } from './constants.js';
 
 // ILP address derivation and BTP prefix exchange
@@ -251,10 +254,27 @@ export {
 // Chain presets and multi-environment configuration
 export {
   resolveChainConfig,
+  resolveSolanaChainConfig,
+  resolveMinaChainConfig,
   buildEip712Domain,
+  buildEvmProviderEntry,
+  buildSolanaProviderEntry,
+  buildMinaProviderEntry,
   CHAIN_PRESETS,
+  SOLANA_CHAIN_PRESETS,
+  MINA_CHAIN_PRESETS,
   type ChainPreset,
   type ChainName,
+  type ChainType,
+  type SolanaChainName,
+  type MinaChainName,
+  type MultiChainName,
+  type SolanaChainPreset,
+  type MinaChainPreset,
+  type ChainProviderConfigEntry,
+  type EVMProviderConfigEntry,
+  type SolanaProviderConfigEntry,
+  type MinaProviderConfigEntry,
 } from './chain/chain-config.js';
 
 // x402 protocol support (shared ILP PREPARE construction)

@@ -146,6 +146,12 @@ export const PREFIX_GRANT_KIND = 10037;
  * The genesis node uses this directly -- it does not derive its address from a pubkey.
  * All other nodes derive addresses as children of their upstream peer's prefix.
  */
+export const ILP_ROOT_PREFIX = 'g.toon';
+
+// ---------------------------------------------------------------------------
+// Arweave / Blob Storage DVM Event Kinds
+// ---------------------------------------------------------------------------
+
 /**
  * Blob Storage DVM kind (kind 5094).
  * Used for permanent blob storage requests (e.g., Arweave uploads).
@@ -162,4 +168,31 @@ export const BLOB_STORAGE_REQUEST_KIND = 5094;
  */
 export const BLOB_STORAGE_RESULT_KIND = 6094;
 
-export const ILP_ROOT_PREFIX = 'g.toon';
+// ---------------------------------------------------------------------------
+// Pet DVM Event Kinds (Epic 11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Pet Interaction Request DVM kind (kind 5900).
+ * Used for pet interaction requests (feed, play, clean, etc.).
+ * Kind 5900 chosen to leave room for future DVM kinds in 5000-5899 range.
+ * Payment is carried in the ILP PREPARE packet (prepaid model).
+ */
+export const PET_INTERACTION_REQUEST_KIND = 5900;
+
+/**
+ * Pet Interaction Result DVM kind (kind 6900).
+ * Result kind = request kind + 1000 per NIP-90 convention.
+ * In the prepaid model, the new pet state is returned in the ILP FULFILL
+ * data field as base64-encoded JSON.
+ */
+export const PET_INTERACTION_RESULT_KIND = 6900;
+
+/**
+ * Pet Interaction Event kind (kind 14919).
+ * Optimistic interaction event published to relays after processing.
+ * Contains action details, stat changes, and brain hash.
+ * No proof or mina_tx tags -- those are added by the proof settlement
+ * pipeline after ZK proof generation.
+ */
+export const PET_INTERACTION_EVENT_KIND = 14919;

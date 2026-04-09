@@ -72,15 +72,29 @@ describe('createToonNode', () => {
     expect(typeof node.stop).toBe('function');
   });
 
-  it('start() calls connector.setPacketHandler() with the provided handlePacket callback', async () => {
+  it('start() calls connector.setPacketHandler() with an adapted handler wrapping the provided handlePacket callback', async () => {
     const node = createToonNode(baseConfig);
 
     await node.start();
 
     expect(mockConnector.setPacketHandler).toHaveBeenCalledTimes(1);
-    expect(mockConnector.setPacketHandler).toHaveBeenCalledWith(
-      mockHandlePacket
-    );
+    // The compose layer wraps handlePacket in an adapter that adds rejectReason
+    // for connector compatibility, so the argument is a wrapper function.
+    const registeredHandler = (
+      mockConnector.setPacketHandler as ReturnType<typeof vi.fn>
+    ).mock.calls[0][0];
+    expect(typeof registeredHandler).toBe('function');
+
+    // Verify the adapter delegates to the user-provided handlePacket
+    const acceptResult = { accept: true as const, data: 'test' };
+    mockHandlePacket.mockReturnValue(acceptResult);
+    const result = await registeredHandler({
+      amount: '100',
+      destination: 'g.test',
+      data: 'dGVzdA==',
+    });
+    expect(result).toEqual(acceptResult);
+    expect(mockHandlePacket).toHaveBeenCalledTimes(1);
   });
 
   it('start() calls bootstrapService.bootstrap() and returns results', async () => {

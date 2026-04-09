@@ -261,8 +261,8 @@ describe('ServiceNode.publishEvent() E2E (Story 2.6)', () => {
     // Assert: success result shape (AC#4)
     expect(result.success).toBe(true);
     expect(result.eventId).toBe(event.id);
-    expect(result.fulfillment).toBeDefined();
-    expect(typeof result.fulfillment).toBe('string');
+    // fulfillment removed from connector v2.2.0 application API (handled internally)
+    // Verify success shape without fulfillment assertion
 
     // Assert: receiver's handler received exactly one event
     expect(receivedEvents).toHaveLength(1);

@@ -402,35 +402,16 @@ export class BootstrapService {
           const tokenNetwork = peerInfo.tokenNetworks?.[negotiatedChain];
 
           if (peerAddress) {
+            // Lazy channels: store negotiation metadata instead of opening channel
             console.log(
-              `[Bootstrap] Opening channel on ${negotiatedChain} with ${registeredPeerId}...`
+              `[Bootstrap] Negotiated ${negotiatedChain} with ${registeredPeerId} (lazy — channel deferred)`
             );
-            const channelResult = await this.channelClient.openChannel({
-              peerId: registeredPeerId,
-              chain: negotiatedChain,
-              token: tokenAddress,
-              tokenNetwork,
-              peerAddress,
-              initialDeposit: '100000',
-              settlementTimeout: 86400,
-            });
-
-            result.channelId = channelResult.channelId;
             result.negotiatedChain = negotiatedChain;
             result.settlementAddress = peerAddress;
+            result.tokenAddress = tokenAddress;
+            result.tokenNetwork = tokenNetwork;
 
-            console.log(
-              `[Bootstrap] Opened channel ${channelResult.channelId} with ${registeredPeerId}`
-            );
-
-            this.emit({
-              type: 'bootstrap:channel-opened',
-              peerId: registeredPeerId,
-              channelId: channelResult.channelId,
-              negotiatedChain,
-            });
-
-            // Update peer registration with settlement info
+            // Update peer registration with settlement info (no channelId yet)
             if (this.connectorAdmin) {
               await this.connectorAdmin.addPeer({
                 id: registeredPeerId,
@@ -442,9 +423,6 @@ export class BootstrapService {
                   ...(peerAddress && { evmAddress: peerAddress }),
                   ...(tokenAddress && { tokenAddress }),
                   ...(tokenNetwork && { tokenNetworkAddress: tokenNetwork }),
-                  ...(channelResult.channelId && {
-                    channelId: channelResult.channelId,
-                  }),
                 },
               });
             }
