@@ -35,6 +35,29 @@ export interface IlpPeerInfo {
   feePerByte?: string;
   /** Prefix pricing for prefix claim marketplace. basePrice is in USDC micro-units as a non-negative integer string. */
   prefixPricing?: { basePrice: string };
+  /** Token pairs this peer can swap, with current rates. Absent = no swap support. */
+  swapPairs?: SwapPair[];
+}
+
+/**
+ * Declarative advertisement of a token swap pair supported by a swap-capable peer (Mill).
+ *
+ * Source and target assets use the same `{blockchain}:{network}[:{chainId}]` chain format
+ * as `IlpPeerInfo.supportedChains`. Rate is serialized as a decimal string (not a float) to
+ * preserve arbitrary precision — D12-006. Min/max amounts are source-asset micro-unit integer
+ * strings that may exceed `Number.MAX_SAFE_INTEGER`; compare via `BigInt`.
+ */
+export interface SwapPair {
+  /** Source asset */
+  from: { assetCode: string; assetScale: number; chain: string };
+  /** Target asset */
+  to: { assetCode: string; assetScale: number; chain: string };
+  /** Exchange rate as decimal string (target units per source unit) */
+  rate: string;
+  /** Minimum swap amount per packet in source asset micro-units (optional) */
+  minAmount?: string;
+  /** Maximum swap amount per packet in source asset micro-units (optional) */
+  maxAmount?: string;
 }
 
 /**

@@ -7,6 +7,7 @@ import type { NostrEvent } from 'nostr-tools/pure';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { ToonError } from '../errors.js';
 import { isValidIlpAddressStructure } from '../address/ilp-address-validation.js';
+import { assertSwapPairForBuild } from './swap-pair-validation.js';
 import type { IlpPeerInfo } from '../types.js';
 
 /**
@@ -23,6 +24,7 @@ import type { IlpPeerInfo } from '../types.js';
  * @throws {ToonError} With code `INVALID_FEE` if `feePerByte` is not a non-negative integer string
  * @throws {ToonError} With code `ADDRESS_EMPTY_ADDRESSES` if `ilpAddresses` is an empty array
  * @throws {ToonError} With code `ADDRESS_INVALID_PREFIX` if any element of `ilpAddresses` is invalid
+ * @throws {ToonError} With code `INVALID_SWAP_PAIR` if any element of `swapPairs` is structurally invalid
  */
 export function buildIlpPeerInfoEvent(
   info: IlpPeerInfo,
@@ -65,6 +67,25 @@ export function buildIlpPeerInfoEvent(
       ...info,
       ilpAddress: primaryAddress,
     };
+  }
+
+  // Validate swapPairs (Story 12.1). Empty array is legal (swap peer with no
+  // currently active pairs); undefined means "no swap support" and is omitted
+  // from the serialized JSON via JSON.stringify's default undefined handling.
+  // Defensive runtime check: the TypeScript signature forbids non-array values,
+  // but a JS caller (or any untyped boundary) could still pass garbage — reject
+  // that with a typed `ToonError` rather than a generic `TypeError` from
+  // `.forEach` on a non-array.
+  if (info.swapPairs !== undefined) {
+    if (!Array.isArray(info.swapPairs)) {
+      throw new ToonError(
+        'swapPairs must be an array when provided',
+        'INVALID_SWAP_PAIR'
+      );
+    }
+    info.swapPairs.forEach((pair, index) => {
+      assertSwapPairForBuild(pair, index);
+    });
   }
 
   return finalizeEvent(
