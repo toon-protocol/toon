@@ -30,6 +30,7 @@ export {
   HandlerError,
   VerificationError,
   PricingError,
+  GiftWrapError,
 } from './errors.js';
 
 // Handler context
@@ -119,6 +120,29 @@ export type {
   UploadBlobOptions,
   UploadBlobChunkedOptions,
 } from './arweave/index.js';
+
+// Gift wrap (Story 12.2)
+export {
+  wrapSwapPacket,
+  unwrapSwapPacket,
+  wrapSwapPacketToToon,
+  unwrapSwapPacketFromToon,
+  encryptFulfillClaim,
+  decryptFulfillClaim,
+} from './gift-wrap.js';
+
+export type {
+  WrapSwapPacketParams,
+  WrapSwapPacketResult,
+  UnwrapSwapPacketParams,
+  UnwrapSwapPacketResult,
+  WrapSwapPacketToToonParams,
+  WrapSwapPacketToToonResult,
+  UnwrapSwapPacketFromToonParams,
+  EncryptFulfillClaimParams,
+  EncryptFulfillClaimResult,
+  DecryptFulfillClaimParams,
+} from './gift-wrap.js';
 
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';

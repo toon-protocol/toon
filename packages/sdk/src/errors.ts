@@ -59,3 +59,14 @@ export class PricingError extends ToonError {
     this.name = 'PricingError';
   }
 }
+
+/**
+ * Error thrown when NIP-59 gift wrap or NIP-44 FULFILL encryption operations fail.
+ * Used for wrap/unwrap failures, decryption errors, and malformed gift wrap events.
+ */
+export class GiftWrapError extends ToonError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'GIFT_WRAP_ERROR', cause);
+    this.name = 'GiftWrapError';
+  }
+}

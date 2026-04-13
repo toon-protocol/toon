@@ -128,6 +128,14 @@ describe('@toon-protocol/sdk public API exports', () => {
       'ChunkManager',
       'uploadBlob',
       'uploadBlobChunked',
+      // Gift wrap (Story 12.2)
+      'GiftWrapError',
+      'wrapSwapPacket',
+      'unwrapSwapPacket',
+      'wrapSwapPacketToToon',
+      'unwrapSwapPacketFromToon',
+      'encryptFulfillClaim',
+      'decryptFulfillClaim',
     ]);
 
     // Act
