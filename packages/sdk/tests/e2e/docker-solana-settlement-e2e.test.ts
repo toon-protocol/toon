@@ -52,7 +52,8 @@ const SOLANA_RPC = 'http://localhost:19899';
 
 /** Well-known Solana program addresses (base58) */
 const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
-const ASSOCIATED_TOKEN_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
+const ASSOCIATED_TOKEN_PROGRAM_ID =
+  'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
 const SYSTEM_PROGRAM_ID = '11111111111111111111111111111111';
 const RENT_SYSVAR_ID = 'SysvarRent111111111111111111111111111111111';
 const CLOCK_SYSVAR_ID = 'SysvarC1ock11111111111111111111111111111111';
@@ -72,7 +73,9 @@ const DEPOSIT_AMOUNT = 50_000n;
 const TRANSFER_AMOUNT = 10_000n;
 
 /** On-chain discriminator for channel account: ASCII "pchannel" */
-const CHANNEL_DISCRIMINATOR = new Uint8Array([0x70, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c]);
+const CHANNEL_DISCRIMINATOR = new Uint8Array([
+  0x70, 0x63, 0x68, 0x61, 0x6e, 0x6e, 0x65, 0x6c,
+]);
 
 /** Instruction discriminators -- must match Rust exactly */
 const IX_DISCRIMINATORS = {
@@ -167,7 +170,7 @@ function isOnCurve(bytes: Uint8Array): boolean {
   if (y >= P) return true;
 
   const y2 = (y * y) % P;
-  const D = ((P - ((121665n * modInverse(121666n, P)) % P)) + P) % P;
+  const D = (P - ((121665n * modInverse(121666n, P)) % P) + P) % P;
   const numerator = (y2 - 1n + P) % P;
   const denominator = (D * y2 + 1n) % P;
   const denominatorInv = modInverse(denominator, P);
@@ -187,7 +190,10 @@ function isOnCurve(bytes: Uint8Array): boolean {
  * Find a program-derived address (PDA) from seeds and a program ID.
  * Matches Solana's find_program_address algorithm.
  */
-function findPDA(seeds: Uint8Array[], programId: Uint8Array): { pda: Uint8Array; bump: number } {
+function findPDA(
+  seeds: Uint8Array[],
+  programId: Uint8Array
+): { pda: Uint8Array; bump: number } {
   const PDA_MARKER = new TextEncoder().encode('ProgramDerivedAddress');
 
   for (let bump = 255; bump >= 0; bump--) {
@@ -229,12 +235,7 @@ function deriveChannelPDA(
   programId: Uint8Array
 ): { pda: Uint8Array; bump: number } {
   const [min, max] = sortPubkeys(participantA, participantB);
-  const seeds = [
-    new TextEncoder().encode('channel'),
-    min,
-    max,
-    tokenMint,
-  ];
+  const seeds = [new TextEncoder().encode('channel'), min, max, tokenMint];
   return findPDA(seeds, programId);
 }
 
@@ -266,7 +267,10 @@ function deriveATA(wallet: Uint8Array, mint: Uint8Array): Uint8Array {
 
 let rpcIdCounter = 1;
 
-async function solanaRpc(method: string, params: unknown[] = []): Promise<unknown> {
+async function solanaRpc(
+  method: string,
+  params: unknown[] = []
+): Promise<unknown> {
   const res = await fetch(SOLANA_RPC, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -278,21 +282,34 @@ async function solanaRpc(method: string, params: unknown[] = []): Promise<unknow
     }),
     signal: AbortSignal.timeout(30000),
   });
-  const json = (await res.json()) as { result?: unknown; error?: { message: string; code: number } };
+  const json = (await res.json()) as {
+    result?: unknown;
+    error?: { message: string; code: number };
+  };
   if (json.error) {
-    throw new Error(`Solana RPC error [${method}]: ${json.error.message} (code ${json.error.code})`);
+    throw new Error(
+      `Solana RPC error [${method}]: ${json.error.message} (code ${json.error.code})`
+    );
   }
   return json.result;
 }
 
-async function getLatestBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
-  const result = (await solanaRpc('getLatestBlockhash', [{ commitment: 'confirmed' }])) as {
+async function getLatestBlockhash(): Promise<{
+  blockhash: string;
+  lastValidBlockHeight: number;
+}> {
+  const result = (await solanaRpc('getLatestBlockhash', [
+    { commitment: 'confirmed' },
+  ])) as {
     value: { blockhash: string; lastValidBlockHeight: number };
   };
   return result.value;
 }
 
-async function requestAirdrop(pubkey: string, lamports: number): Promise<string> {
+async function requestAirdrop(
+  pubkey: string,
+  lamports: number
+): Promise<string> {
   return (await solanaRpc('requestAirdrop', [pubkey, lamports])) as string;
 }
 
@@ -302,36 +319,60 @@ async function getAccountInfo(pubkey: string): Promise<{
   lamports: number;
   owner: string;
 } | null> {
-  const result = (await solanaRpc('getAccountInfo', [pubkey, { encoding: 'base64' }])) as {
-    value: { data: [string, string]; executable: boolean; lamports: number; owner: string } | null;
+  const result = (await solanaRpc('getAccountInfo', [
+    pubkey,
+    { encoding: 'base64' },
+  ])) as {
+    value: {
+      data: [string, string];
+      executable: boolean;
+      lamports: number;
+      owner: string;
+    } | null;
   };
   return result.value;
 }
 
-async function getMinimumBalanceForRentExemption(dataLen: number): Promise<number> {
-  return (await solanaRpc('getMinimumBalanceForRentExemption', [dataLen])) as number;
+async function getMinimumBalanceForRentExemption(
+  dataLen: number
+): Promise<number> {
+  return (await solanaRpc('getMinimumBalanceForRentExemption', [
+    dataLen,
+  ])) as number;
 }
 
 async function sendRawTransaction(serializedTx: string): Promise<string> {
   return (await solanaRpc('sendTransaction', [
     serializedTx,
-    { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed' },
+    {
+      encoding: 'base64',
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    },
   ])) as string;
 }
 
-async function waitForConfirmation(signature: string, timeoutMs = 30000): Promise<void> {
+async function waitForConfirmation(
+  signature: string,
+  timeoutMs = 30000
+): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const result = (await solanaRpc('getSignatureStatuses', [[signature]])) as {
       value: ({ confirmationStatus: string } | null)[];
     };
     const status = result.value[0];
-    if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+    if (
+      status?.confirmationStatus === 'confirmed' ||
+      status?.confirmationStatus === 'finalized'
+    ) {
       return;
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Transaction ${signature} not confirmed within ${timeoutMs}ms`);
+  throw new Error(
+    `Transaction ${signature} not confirmed within ${timeoutMs}ms`
+  );
 }
 
 /**
@@ -392,7 +433,11 @@ async function buildAndSendTransaction(
   const accountMap = new Map<string, AccountEntry>();
 
   // Fee payer first
-  accountMap.set(feePayerPubkey, { pubkey: feePayerPubkey, isSigner: true, isWritable: true });
+  accountMap.set(feePayerPubkey, {
+    pubkey: feePayerPubkey,
+    isSigner: true,
+    isWritable: true,
+  });
 
   for (const ix of instructions) {
     for (const key of ix.keys) {
@@ -406,7 +451,11 @@ async function buildAndSendTransaction(
     }
     // Program ID is a non-signer, read-only account
     if (!accountMap.has(ix.programId)) {
-      accountMap.set(ix.programId, { pubkey: ix.programId, isSigner: false, isWritable: false });
+      accountMap.set(ix.programId, {
+        pubkey: ix.programId,
+        isSigner: false,
+        isWritable: false,
+      });
     }
   }
 
@@ -420,8 +469,12 @@ async function buildAndSendTransaction(
   });
 
   const numSigners = accounts.filter((a) => a.isSigner).length;
-  const numReadonlySigners = accounts.filter((a) => a.isSigner && !a.isWritable).length;
-  const numReadonlyNonSigners = accounts.filter((a) => !a.isSigner && !a.isWritable).length;
+  const numReadonlySigners = accounts.filter(
+    (a) => a.isSigner && !a.isWritable
+  ).length;
+  const numReadonlyNonSigners = accounts.filter(
+    (a) => !a.isSigner && !a.isWritable
+  ).length;
 
   const accountIndexMap = new Map<string, number>();
   accounts.forEach((a, i) => accountIndexMap.set(a.pubkey, i));
@@ -450,7 +503,7 @@ async function buildAndSendTransaction(
     if (ix.data.length >= 16384) instructionSize += 1;
   }
 
-  const messageSize = 3 + (32 * accounts.length) + 32 + instructionSize;
+  const messageSize = 3 + 32 * accounts.length + 32 + instructionSize;
   const message = new Uint8Array(messageSize);
   let offset = 0;
 
@@ -503,7 +556,9 @@ async function buildAndSendTransaction(
   // Build signatures array (64 bytes each, in account order)
   const signatures: Uint8Array[] = [];
   for (const signerPubkey of signerPubkeys) {
-    const signer = allSigners.find((s) => base58Encode(s.publicKey) === signerPubkey);
+    const signer = allSigners.find(
+      (s) => base58Encode(s.publicKey) === signerPubkey
+    );
     if (!signer) {
       throw new Error(`Missing signer for ${signerPubkey}`);
     }
@@ -512,7 +567,7 @@ async function buildAndSendTransaction(
   }
 
   // Serialize the full transaction: compact-u16 sig count + signatures + message
-  const txSize = 1 + (signatures.length * 64) + finalMessage.length;
+  const txSize = 1 + signatures.length * 64 + finalMessage.length;
   const tx = new Uint8Array(txSize);
   let txOffset = 0;
   txOffset = writeCompactU16(tx, txOffset, signatures.length);
@@ -522,14 +577,20 @@ async function buildAndSendTransaction(
   }
   tx.set(finalMessage, txOffset);
 
-  const txBase64 = Buffer.from(tx.slice(0, txOffset + finalMessage.length)).toString('base64');
+  const txBase64 = Buffer.from(
+    tx.slice(0, txOffset + finalMessage.length)
+  ).toString('base64');
   const txSig = await sendRawTransaction(txBase64);
   await waitForConfirmation(txSig);
   return txSig;
 }
 
 /** Write a compact-u16 value and return the new offset. */
-function writeCompactU16(buf: Uint8Array, offset: number, value: number): number {
+function writeCompactU16(
+  buf: Uint8Array,
+  offset: number,
+  value: number
+): number {
   if (value < 0x80) {
     buf[offset++] = value;
   } else if (value < 0x4000) {
@@ -598,7 +659,12 @@ async function createMint(
   initMintData[0] = 0; // InitializeMint
   initMintData[1] = decimals;
   const authorityBytes = base58Decode(mintAuthority);
-  initMintData.set(authorityBytes.length <= 32 ? padTo32(authorityBytes) : authorityBytes.slice(0, 32), 2);
+  initMintData.set(
+    authorityBytes.length <= 32
+      ? padTo32(authorityBytes)
+      : authorityBytes.slice(0, 32),
+    2
+  );
   initMintData[34] = 0; // No freeze authority
 
   await buildAndSendTransaction(
@@ -608,14 +674,22 @@ async function createMint(
         programId: SYSTEM_PROGRAM_ID,
         keys: [
           { pubkey: payer.pubkeyBase58, isSigner: true, isWritable: true },
-          { pubkey: mintKeypair.pubkeyBase58, isSigner: true, isWritable: true },
+          {
+            pubkey: mintKeypair.pubkeyBase58,
+            isSigner: true,
+            isWritable: true,
+          },
         ],
         data: createIxData,
       },
       {
         programId: TOKEN_PROGRAM_ID,
         keys: [
-          { pubkey: mintKeypair.pubkeyBase58, isSigner: false, isWritable: true },
+          {
+            pubkey: mintKeypair.pubkeyBase58,
+            isSigner: false,
+            isWritable: true,
+          },
           { pubkey: RENT_SYSVAR_ID, isSigner: false, isWritable: false },
         ],
         data: initMintData,
@@ -669,7 +743,8 @@ async function mintTo(
   data[0] = 7; // MintTo instruction
   writeU64LE(data, 1, amount);
 
-  const signers = mintAuthority.pubkeyBase58 === payer.pubkeyBase58 ? [] : [mintAuthority];
+  const signers =
+    mintAuthority.pubkeyBase58 === payer.pubkeyBase58 ? [] : [mintAuthority];
 
   await buildAndSendTransaction(
     payer,
@@ -679,7 +754,11 @@ async function mintTo(
         keys: [
           { pubkey: mint, isSigner: false, isWritable: true },
           { pubkey: destination, isSigner: false, isWritable: true },
-          { pubkey: mintAuthority.pubkeyBase58, isSigner: true, isWritable: false },
+          {
+            pubkey: mintAuthority.pubkeyBase58,
+            isSigner: true,
+            isWritable: false,
+          },
         ],
         data,
       },
@@ -773,7 +852,12 @@ async function openChannel(
   const mintBytes = padTo32(base58Decode(mintPubkey));
   const programBytes = padTo32(base58Decode(programId));
 
-  const { pda: channelPDABytes } = deriveChannelPDA(aBytes, bBytes, mintBytes, programBytes);
+  const { pda: channelPDABytes } = deriveChannelPDA(
+    aBytes,
+    bBytes,
+    mintBytes,
+    programBytes
+  );
   const channelPDA = base58Encode(channelPDABytes);
 
   const { pda: vaultPDABytes } = deriveVaultPDA(channelPDABytes, programBytes);
@@ -784,7 +868,8 @@ async function openChannel(
   ixData.set(IX_DISCRIMINATORS.INITIALIZE_CHANNEL, 0);
   writeU64LE(ixData, 8, challengeDuration);
 
-  const signers = payer.pubkeyBase58 === participantA.pubkeyBase58 ? [] : [participantA];
+  const signers =
+    payer.pubkeyBase58 === participantA.pubkeyBase58 ? [] : [participantA];
 
   await buildAndSendTransaction(
     payer,
@@ -793,8 +878,16 @@ async function openChannel(
         programId,
         keys: [
           { pubkey: payer.pubkeyBase58, isSigner: true, isWritable: true },
-          { pubkey: participantA.pubkeyBase58, isSigner: false, isWritable: false },
-          { pubkey: participantB.pubkeyBase58, isSigner: false, isWritable: false },
+          {
+            pubkey: participantA.pubkeyBase58,
+            isSigner: false,
+            isWritable: false,
+          },
+          {
+            pubkey: participantB.pubkeyBase58,
+            isSigner: false,
+            isWritable: false,
+          },
           { pubkey: mintPubkey, isSigner: false, isWritable: false },
           { pubkey: channelPDA, isSigner: false, isWritable: true },
           { pubkey: vaultPDA, isSigner: false, isWritable: true },
@@ -868,7 +961,11 @@ function signBalanceProof(
   transferredAmount: bigint,
   signer: Keypair
 ): Uint8Array {
-  const message = buildBalanceProofMessage(channelPDA, nonce, transferredAmount);
+  const message = buildBalanceProofMessage(
+    channelPDA,
+    nonce,
+    transferredAmount
+  );
   return ed25519.sign(message, signer.privateKey);
 }
 
@@ -879,7 +976,11 @@ function buildEd25519PrecompileIx(
   signature: Uint8Array,
   pubkey: Uint8Array,
   message: Uint8Array
-): { programId: string; keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[]; data: Uint8Array } {
+): {
+  programId: string;
+  keys: { pubkey: string; isSigner: boolean; isWritable: boolean }[];
+  data: Uint8Array;
+} {
   const HEADER_SIZE = 16;
   const totalSize = HEADER_SIZE + 64 + 32 + message.length;
   const ixData = new Uint8Array(totalSize);
@@ -895,12 +996,14 @@ function buildEd25519PrecompileIx(
   // signature_offset (u16 LE)
   ixData[2] = sigOffset & 0xff;
   ixData[3] = (sigOffset >> 8) & 0xff;
-  ixData[4] = 0xff; ixData[5] = 0xff; // same instruction
+  ixData[4] = 0xff;
+  ixData[5] = 0xff; // same instruction
 
   // public_key_offset (u16 LE)
   ixData[6] = pkOffset & 0xff;
   ixData[7] = (pkOffset >> 8) & 0xff;
-  ixData[8] = 0xff; ixData[9] = 0xff;
+  ixData[8] = 0xff;
+  ixData[9] = 0xff;
 
   // message_data_offset (u16 LE)
   ixData[10] = msgOffset & 0xff;
@@ -908,7 +1011,8 @@ function buildEd25519PrecompileIx(
   // message_data_size (u16 LE)
   ixData[12] = message.length & 0xff;
   ixData[13] = (message.length >> 8) & 0xff;
-  ixData[14] = 0xff; ixData[15] = 0xff;
+  ixData[14] = 0xff;
+  ixData[15] = 0xff;
 
   // Inline data
   ixData.set(signature, sigOffset);
@@ -930,10 +1034,18 @@ async function claimFromChannel(
   transferredAmount: bigint,
   signature: Uint8Array
 ): Promise<string> {
-  const balanceProofMsg = buildBalanceProofMessage(channelPDA, nonce, transferredAmount);
+  const balanceProofMsg = buildBalanceProofMessage(
+    channelPDA,
+    nonce,
+    transferredAmount
+  );
 
   // Instruction 0: Ed25519 precompile
-  const ed25519Ix = buildEd25519PrecompileIx(signature, claimer.publicKey, balanceProofMsg);
+  const ed25519Ix = buildEd25519PrecompileIx(
+    signature,
+    claimer.publicKey,
+    balanceProofMsg
+  );
 
   // Instruction 1: claim_from_channel
   const claimData = new Uint8Array(24);
@@ -1098,11 +1210,20 @@ describe('Docker Solana Settlement E2E', () => {
     participantB = generateKeypair();
 
     // Airdrop SOL for transaction fees
-    const airdropSig1 = await requestAirdrop(payer.pubkeyBase58, 10_000_000_000);
+    const airdropSig1 = await requestAirdrop(
+      payer.pubkeyBase58,
+      10_000_000_000
+    );
     await waitForConfirmation(airdropSig1);
-    const airdropSig2 = await requestAirdrop(participantA.pubkeyBase58, 2_000_000_000);
+    const airdropSig2 = await requestAirdrop(
+      participantA.pubkeyBase58,
+      2_000_000_000
+    );
     await waitForConfirmation(airdropSig2);
-    const airdropSig3 = await requestAirdrop(participantB.pubkeyBase58, 2_000_000_000);
+    const airdropSig3 = await requestAirdrop(
+      participantB.pubkeyBase58,
+      2_000_000_000
+    );
     await waitForConfirmation(airdropSig3);
 
     // -------------------------------------------------------------------
@@ -1163,7 +1284,12 @@ describe('Docker Solana Settlement E2E', () => {
     const bBytes = padTo32(participantB.publicKey);
     const mintBytes = padTo32(base58Decode(mintKeypair.pubkeyBase58));
     const progBytes = padTo32(base58Decode(programId));
-    const { pda: expectedPDABytes } = deriveChannelPDA(aBytes, bBytes, mintBytes, progBytes);
+    const { pda: expectedPDABytes } = deriveChannelPDA(
+      aBytes,
+      bBytes,
+      mintBytes,
+      progBytes
+    );
     const expectedPDA = base58Encode(expectedPDABytes);
 
     // Open channel (payer pays for account creation)
@@ -1184,7 +1310,10 @@ describe('Docker Solana Settlement E2E', () => {
 
     // Verify participants are correctly stored (order may be sorted)
     const participants = [state.participantA, state.participantB].sort();
-    const expected = [participantA.pubkeyBase58, participantB.pubkeyBase58].sort();
+    const expected = [
+      participantA.pubkeyBase58,
+      participantB.pubkeyBase58,
+    ].sort();
     expect(participants).toEqual(expected);
 
     // Verify token mint
@@ -1269,7 +1398,8 @@ describe('Docker Solana Settlement E2E', () => {
 
     // Verify on-chain nonce and transferred amount updated
     const state = await fetchChannelState(channelPDA);
-    const totalTransferred = state.transferredAmountA + state.transferredAmountB;
+    const totalTransferred =
+      state.transferredAmountA + state.transferredAmountB;
     expect(totalTransferred).toBe(TRANSFER_AMOUNT);
   });
 
@@ -1320,7 +1450,9 @@ describe('Docker Solana Settlement E2E', () => {
     const balanceAfterA = await getSplTokenBalance(ataA);
     const balanceAfterB = await getSplTokenBalance(ataB);
 
-    expect(balanceAfterA).toBe(balanceBeforeA + DEPOSIT_AMOUNT - TRANSFER_AMOUNT);
+    expect(balanceAfterA).toBe(
+      balanceBeforeA + DEPOSIT_AMOUNT - TRANSFER_AMOUNT
+    );
     expect(balanceAfterB).toBe(balanceBeforeB + TRANSFER_AMOUNT);
   });
 });

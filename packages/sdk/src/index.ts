@@ -31,6 +31,7 @@ export {
   VerificationError,
   PricingError,
   GiftWrapError,
+  SwapHandlerError,
 } from './errors.js';
 
 // Handler context
@@ -143,6 +144,18 @@ export type {
   EncryptFulfillClaimResult,
   DecryptFulfillClaimParams,
 } from './gift-wrap.js';
+
+// Swap handler (Story 12.3)
+export { createSwapHandler, findSwapPair, applyRate } from './swap-handler.js';
+
+export type {
+  CreateSwapHandlerConfig,
+  ClaimIssuer,
+  IssueClaimParams,
+  IssueClaimResult,
+  ApplyRateParams,
+  SwapHandlerLogger,
+} from './swap-handler.js';
 
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';

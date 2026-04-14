@@ -136,6 +136,11 @@ describe('@toon-protocol/sdk public API exports', () => {
       'unwrapSwapPacketFromToon',
       'encryptFulfillClaim',
       'decryptFulfillClaim',
+      // Swap handler (Story 12.3)
+      'SwapHandlerError',
+      'createSwapHandler',
+      'findSwapPair',
+      'applyRate',
     ]);
 
     // Act

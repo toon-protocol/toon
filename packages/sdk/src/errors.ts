@@ -70,3 +70,16 @@ export class GiftWrapError extends ToonError {
     this.name = 'GiftWrapError';
   }
 }
+
+/**
+ * Error thrown when Mill swap handler orchestration fails.
+ * Used for rate-conversion errors (invalid format, zero, overflow guards),
+ * unsupported pair lookups, and issuer-boundary failures that are NOT
+ * gift-wrap-specific. Gift-wrap failures continue to surface as `GiftWrapError`.
+ */
+export class SwapHandlerError extends ToonError {
+  constructor(message: string, cause?: Error) {
+    super(message, 'SWAP_HANDLER_ERROR', cause);
+    this.name = 'SwapHandlerError';
+  }
+}

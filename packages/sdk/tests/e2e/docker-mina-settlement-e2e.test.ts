@@ -109,7 +109,10 @@ const GIFTWRAP_HKDF_INFO = new TextEncoder().encode('nip59-giftwrap');
 /**
  * Compute ECDH shared secret (x-coordinate only, 32 bytes).
  */
-function computeSharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array {
+function computeSharedSecret(
+  privateKey: Uint8Array,
+  publicKey: Uint8Array
+): Uint8Array {
   const sharedPoint = secp256k1.getSharedSecret(privateKey, publicKey, true);
   return sharedPoint.slice(1);
 }
@@ -118,13 +121,23 @@ function computeSharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uin
  * Lazily import @noble/ciphers/chacha for ChaCha20-Poly1305.
  * This may not be directly available; we use dynamic import.
  */
-let chachaModule: { chacha20poly1305: (key: Uint8Array, nonce: Uint8Array, aad?: Uint8Array) => { encrypt: (data: Uint8Array) => Uint8Array; decrypt: (data: Uint8Array) => Uint8Array } } | null = null;
+let chachaModule: {
+  chacha20poly1305: (
+    key: Uint8Array,
+    nonce: Uint8Array,
+    aad?: Uint8Array
+  ) => {
+    encrypt: (data: Uint8Array) => Uint8Array;
+    decrypt: (data: Uint8Array) => Uint8Array;
+  };
+} | null = null;
 
 async function getChacha(): Promise<typeof chachaModule> {
   if (!chachaModule) {
     try {
       // @ts-expect-error -- @noble/ciphers may not be installed; dynamic import with try/catch handles this
-      chachaModule = await import('@noble/ciphers/chacha') as typeof chachaModule;
+      chachaModule =
+        (await import('@noble/ciphers/chacha')) as typeof chachaModule;
     } catch {
       return null;
     }
@@ -189,8 +202,17 @@ async function wrapClaim(
 
   // Layer 2: Seal -- encrypt rumor with ECDH(sender, receiver), sign ciphertext
   const senderPubKey = secp256k1.getPublicKey(senderPrivateKey, true);
-  const sealSharedSecret = computeSharedSecret(senderPrivateKey, receiverPublicKey);
-  const sealKey = hkdf(sha256, sealSharedSecret, undefined, SEAL_HKDF_INFO, HKDF_KEY_BYTES);
+  const sealSharedSecret = computeSharedSecret(
+    senderPrivateKey,
+    receiverPublicKey
+  );
+  const sealKey = hkdf(
+    sha256,
+    sealSharedSecret,
+    undefined,
+    SEAL_HKDF_INFO,
+    HKDF_KEY_BYTES
+  );
   const sealCiphertext = await chachaEncrypt(rumorBytes, sealKey, senderPubKey);
 
   // Sign seal ciphertext
@@ -209,8 +231,17 @@ async function wrapClaim(
   const ephemeralPrivKey = randomBytes(32);
   const ephemeralPubKey = secp256k1.getPublicKey(ephemeralPrivKey, true);
 
-  const giftWrapSharedSecret = computeSharedSecret(ephemeralPrivKey, receiverPublicKey);
-  const giftWrapKey = hkdf(sha256, giftWrapSharedSecret, undefined, GIFTWRAP_HKDF_INFO, HKDF_KEY_BYTES);
+  const giftWrapSharedSecret = computeSharedSecret(
+    ephemeralPrivKey,
+    receiverPublicKey
+  );
+  const giftWrapKey = hkdf(
+    sha256,
+    giftWrapSharedSecret,
+    undefined,
+    GIFTWRAP_HKDF_INFO,
+    HKDF_KEY_BYTES
+  );
   const giftWrapCiphertext = await chachaEncrypt(sealPayloadBytes, giftWrapKey);
 
   // Zero ephemeral key
@@ -238,8 +269,17 @@ async function unwrapClaim(
   const ephemeralPubKey = hexToBytes(wrapped.ephemeralPublicKey);
   const encryptedPayload = base64ToBytes(wrapped.encryptedPayload);
 
-  const giftWrapSharedSecret = computeSharedSecret(receiverPrivateKey, ephemeralPubKey);
-  const giftWrapKey = hkdf(sha256, giftWrapSharedSecret, undefined, GIFTWRAP_HKDF_INFO, HKDF_KEY_BYTES);
+  const giftWrapSharedSecret = computeSharedSecret(
+    receiverPrivateKey,
+    ephemeralPubKey
+  );
+  const giftWrapKey = hkdf(
+    sha256,
+    giftWrapSharedSecret,
+    undefined,
+    GIFTWRAP_HKDF_INFO,
+    HKDF_KEY_BYTES
+  );
   const sealPayloadBytes = await chachaDecrypt(encryptedPayload, giftWrapKey);
 
   // Step 2: Parse seal payload and verify sender signature
@@ -258,8 +298,17 @@ async function unwrapClaim(
   }
 
   // Step 3: Decrypt seal layer
-  const sealSharedSecret = computeSharedSecret(receiverPrivateKey, senderPubKey);
-  const sealKey = hkdf(sha256, sealSharedSecret, undefined, SEAL_HKDF_INFO, HKDF_KEY_BYTES);
+  const sealSharedSecret = computeSharedSecret(
+    receiverPrivateKey,
+    senderPubKey
+  );
+  const sealKey = hkdf(
+    sha256,
+    sealSharedSecret,
+    undefined,
+    SEAL_HKDF_INFO,
+    HKDF_KEY_BYTES
+  );
   const rumorBytes = await chachaDecrypt(sealCiphertext, sealKey, senderPubKey);
 
   // Step 4: Parse rumor -> MinaClaimMessage
@@ -294,11 +343,21 @@ async function acquireFundedAccount(): Promise<MinaFundedAccount> {
       `Failed to acquire funded account: ${response.status} ${response.statusText}`
     );
   }
-  const data = (await response.json()) as { pk?: string; sk?: string; balance?: string };
+  const data = (await response.json()) as {
+    pk?: string;
+    sk?: string;
+    balance?: string;
+  };
   if (!data.pk || !data.sk) {
-    throw new Error(`Unexpected response: missing pk or sk. Got: ${JSON.stringify(data)}`);
+    throw new Error(
+      `Unexpected response: missing pk or sk. Got: ${JSON.stringify(data)}`
+    );
   }
-  return { publicKey: data.pk, privateKey: data.sk, balance: data.balance ?? '0' };
+  return {
+    publicKey: data.pk,
+    privateKey: data.sk,
+    balance: data.balance ?? '0',
+  };
 }
 
 /**
@@ -558,7 +617,8 @@ describe('Docker Mina Settlement E2E', () => {
 
     // Dynamic import of o1js (lazy loading pattern used by the SDK)
     const o1js = await import('o1js');
-    const { PrivateKey, PublicKey, Field, AccountUpdate, Mina, fetchAccount } = o1js;
+    const { PrivateKey, PublicKey, Field, AccountUpdate, Mina, fetchAccount } =
+      o1js;
 
     // Import the zkApp contract
     let PaymentChannel: ReturnType<typeof Function>;
@@ -606,7 +666,13 @@ describe('Docker Mina Settlement E2E', () => {
     const txn = await Mina.transaction(signerPublicKey, async () => {
       AccountUpdate.fundNewAccount(signerPublicKey);
       await zkApp.deploy();
-      await zkApp.initializeChannel(pubA, pubB, Field(0), settlementTimeout, tokenId);
+      await zkApp.initializeChannel(
+        pubA,
+        pubB,
+        Field(0),
+        settlementTimeout,
+        tokenId
+      );
     });
     await txn.prove();
     const sentTx = await txn.sign([signerPrivateKey, zkAppPrivateKey]).send();
@@ -616,10 +682,14 @@ describe('Docker Mina Settlement E2E', () => {
     console.log(`Channel open tx: ${sentTx.hash}`);
 
     // Wait for block inclusion
-    await waitForInclusion(async () => {
-      const state = await queryZkAppState(channelZkAppAddress);
-      return state !== null && state.length > 0;
-    }, 120_000, 10_000);
+    await waitForInclusion(
+      async () => {
+        const state = await queryZkAppState(channelZkAppAddress);
+        return state !== null && state.length > 0;
+      },
+      120_000,
+      10_000
+    );
 
     // Verify on-chain state
     const zkAppState = await queryZkAppState(channelZkAppAddress);
@@ -685,12 +755,16 @@ describe('Docker Mina Settlement E2E', () => {
     console.log(`Deposit tx: ${sentTx.hash}`);
 
     // Wait for block inclusion and verify depositTotal changed
-    await waitForInclusion(async () => {
-      const stateAfter = await queryZkAppState(channelZkAppAddress);
-      if (!stateAfter) return false;
-      // Check that at least one state field changed (deposit should update depositTotal)
-      return JSON.stringify(stateAfter) !== JSON.stringify(stateBefore);
-    }, 120_000, 10_000);
+    await waitForInclusion(
+      async () => {
+        const stateAfter = await queryZkAppState(channelZkAppAddress);
+        if (!stateAfter) return false;
+        // Check that at least one state field changed (deposit should update depositTotal)
+        return JSON.stringify(stateAfter) !== JSON.stringify(stateBefore);
+      },
+      120_000,
+      10_000
+    );
 
     const stateAfter = await queryZkAppState(channelZkAppAddress);
     expect(stateAfter).not.toBeNull();
@@ -737,16 +811,28 @@ describe('Docker Mina Settlement E2E', () => {
     const channelHashField = Poseidon.hash([channelPubKey.x]);
 
     const nonce = Field(1n);
-    const signature = Signature.create(signerPrivateKey, [commitment, nonce, channelHashField]);
+    const signature = Signature.create(signerPrivateKey, [
+      commitment,
+      nonce,
+      channelHashField,
+    ]);
     expect(signature).toBeDefined();
 
     // Verify the signature
-    const isValid = signature.verify(signerPublicKey, [commitment, nonce, channelHashField]);
+    const isValid = signature.verify(signerPublicKey, [
+      commitment,
+      nonce,
+      channelHashField,
+    ]);
     expect(isValid.toBoolean()).toBe(true);
 
     // Verify with wrong message fails
     const wrongCommitment = Poseidon.hash([Field(999n), Field(1n), salt]);
-    const isInvalid = signature.verify(signerPublicKey, [wrongCommitment, nonce, channelHashField]);
+    const isInvalid = signature.verify(signerPublicKey, [
+      wrongCommitment,
+      nonce,
+      channelHashField,
+    ]);
     expect(isInvalid.toBoolean()).toBe(false);
   }, 120_000);
 
@@ -762,7 +848,15 @@ describe('Docker Mina Settlement E2E', () => {
     }
 
     const o1js = await import('o1js');
-    const { PrivateKey, PublicKey, Field, Poseidon, Signature, Mina, fetchAccount } = o1js;
+    const {
+      PrivateKey,
+      PublicKey,
+      Field,
+      Poseidon,
+      Signature,
+      Mina,
+      fetchAccount,
+    } = o1js;
 
     let PaymentChannel: ReturnType<typeof Function>;
     try {
@@ -790,7 +884,11 @@ describe('Docker Mina Settlement E2E', () => {
     const closeNonce = Field(1n);
 
     // Compute Poseidon commitment for the final balances
-    const _balanceCommitment = Poseidon.hash([finalBalanceA, finalBalanceB, salt]);
+    const _balanceCommitment = Poseidon.hash([
+      finalBalanceA,
+      finalBalanceB,
+      salt,
+    ]);
 
     // Both participants sign the close parameters
     // The message signed is [balanceA, balanceB, salt, nonce]
@@ -826,13 +924,19 @@ describe('Docker Mina Settlement E2E', () => {
     console.log(`Close tx: ${closeSent.hash}`);
 
     // Wait for close to be included
-    await waitForInclusion(async () => {
-      const state = await queryZkAppState(channelZkAppAddress);
-      if (!state) return false;
-      // Look for channel state field changing to CLOSING (2)
-      // The exact field index depends on contract layout
-      return state.some((field) => field === String(MINA_CHANNEL_STATE.CLOSING));
-    }, 120_000, 10_000);
+    await waitForInclusion(
+      async () => {
+        const state = await queryZkAppState(channelZkAppAddress);
+        if (!state) return false;
+        // Look for channel state field changing to CLOSING (2)
+        // The exact field index depends on contract layout
+        return state.some(
+          (field) => field === String(MINA_CHANNEL_STATE.CLOSING)
+        );
+      },
+      120_000,
+      10_000
+    );
 
     console.log('Channel close confirmed on-chain');
 
@@ -868,18 +972,26 @@ describe('Docker Mina Settlement E2E', () => {
     console.log(`Settle tx: ${settleSent.hash}`);
 
     // Wait for settlement to be included
-    await waitForInclusion(async () => {
-      const state = await queryZkAppState(channelZkAppAddress);
-      if (!state) return false;
-      return state.some((field) => field === String(MINA_CHANNEL_STATE.SETTLED));
-    }, 120_000, 10_000);
+    await waitForInclusion(
+      async () => {
+        const state = await queryZkAppState(channelZkAppAddress);
+        if (!state) return false;
+        return state.some(
+          (field) => field === String(MINA_CHANNEL_STATE.SETTLED)
+        );
+      },
+      120_000,
+      10_000
+    );
 
     console.log('Channel settlement confirmed on-chain');
 
     // Verify final channel state is SETTLED
     const finalState = await queryZkAppState(channelZkAppAddress);
     expect(finalState).not.toBeNull();
-    expect(finalState!.some((field) => field === String(MINA_CHANNEL_STATE.SETTLED))).toBe(true);
+    expect(
+      finalState!.some((field) => field === String(MINA_CHANNEL_STATE.SETTLED))
+    ).toBe(true);
 
     // Verify balances changed (participant accounts should have received MINA back)
     const balanceAfterA = await queryAccountBalance(accountA!.publicKey);
@@ -921,11 +1033,15 @@ describe('Docker Mina Settlement E2E', () => {
       messageId: `mina-claim-${Date.now()}`,
       timestamp: new Date().toISOString(),
       senderId: 'peer-alice',
-      zkAppAddress: accountA?.publicKey ?? 'B62qre3erTHfzQckNuibViWQGyyKwZseztqrjPZBv6SQF384Rg6ESAy',
+      zkAppAddress:
+        accountA?.publicKey ??
+        'B62qre3erTHfzQckNuibViWQGyyKwZseztqrjPZBv6SQF384Rg6ESAy',
       tokenId: 'MINA',
       balanceCommitment: '12345678901234567890123456789012345678901234567890',
       nonce: 7,
-      proof: Buffer.from('mock-zk-snark-proof-data-for-testing').toString('base64'),
+      proof: Buffer.from('mock-zk-snark-proof-data-for-testing').toString(
+        'base64'
+      ),
       salt: '98765432109876543210',
       network: 'lightnet',
     };
@@ -938,7 +1054,11 @@ describe('Docker Mina Settlement E2E', () => {
     const receiverPubKey = secp256k1.getPublicKey(receiverPrivKey, true);
 
     // Wrap (three layers: Rumor -> Seal -> Gift Wrap)
-    const wrapped = await wrapClaim(originalClaim, senderPrivKey, receiverPubKey);
+    const wrapped = await wrapClaim(
+      originalClaim,
+      senderPrivKey,
+      receiverPubKey
+    );
 
     // Verify wrapped structure
     expect(wrapped.version).toBe('1.0');
