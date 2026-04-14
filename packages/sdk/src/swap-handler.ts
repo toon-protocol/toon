@@ -27,6 +27,7 @@ import type { SwapPair } from '@toon-protocol/core';
 import { GiftWrapError, SwapHandlerError } from './errors.js';
 import { unwrapSwapPacketFromToon, encryptFulfillClaim } from './gift-wrap.js';
 import type { Handler } from './handler-registry.js';
+import { base58Decode } from './identity.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,8 +41,24 @@ export interface IssueClaimParams {
   targetAmount: bigint;
   /** The `SwapPair` this packet is being priced against. */
   pair: SwapPair;
-  /** The sender's real pubkey (extracted from the unwrapped seal). */
+  /**
+   * The sender's real Nostr pubkey (extracted from the unwrapped seal).
+   *
+   * Identity-layer key only: used by the Mill for inventory ledger keying and
+   * the sender→channel sticky binding (`channelState.reserve()` /
+   * `channelState.release()`). The Mill MUST NOT pass this to chain-layer
+   * signers as the balance-proof `recipient` — use {@link chainRecipient}
+   * for that (Story 12.9 D12-011).
+   */
   senderPubkey: string;
+  /**
+   * The sender's chain-specific payout address for `pair.to.chain`
+   * (Story 12.9 AC-10). Extracted and format-validated from the rumor's
+   * `chain-recipient` tag by the swap handler. REQUIRED. This is the
+   * address the Mill's `PaymentChannelSigner` MUST use as the balance-proof
+   * `recipient` (e.g., 20-byte EVM address, 32-byte Solana Ed25519 pubkey).
+   */
+  chainRecipient: string;
   /** The inner rumor (for optional Mill-side context; may be ignored by the issuer). */
   rumor: UnsignedEvent;
 }
@@ -267,7 +284,6 @@ export class BoundedSeenPacketIds {
   *entries(): IterableIterator<[string, string]> {
     for (const k of this.#map.keys()) yield [k, k];
   }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +399,57 @@ function splitAssetChain(
   const chain = raw.slice(idx + 1);
   if (!assetCode || !chain) return null;
   return { assetCode, chain };
+}
+
+// ---------------------------------------------------------------------------
+// Story 12.9 AC-2 / AC-8 — chain-recipient format validation
+// ---------------------------------------------------------------------------
+//
+// Duplicated (intentionally small) from `stream-swap.ts` to avoid a circular
+// module cycle (`stream-swap` imports `applyRate` from this file). Guardrail
+// 8.5 sanctions local duplication rather than introducing a shared helper
+// package. Rules MUST match the sender-side validator byte-for-byte.
+
+const SWAP_HANDLER_EVM_ADDRESS_REGEX = /^0x[0-9a-f]{40}$/;
+const SWAP_HANDLER_BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
+
+/**
+ * Validate a chain-recipient address against `chain`. MUST remain in sync
+ * with `validateChainAddress(value, chain, 'address')` in `stream-swap.ts`.
+ */
+export function validateChainRecipient(value: string, chain: string): boolean {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (chain.startsWith('evm:')) {
+    return SWAP_HANDLER_EVM_ADDRESS_REGEX.test(value);
+  }
+  if (chain.startsWith('solana:')) {
+    if (!SWAP_HANDLER_BASE58_REGEX.test(value)) return false;
+    if (value.length < 32 || value.length > 44) return false;
+    try {
+      return base58Decode(value).length === 32;
+    } catch {
+      return false;
+    }
+  }
+  if (chain.startsWith('mina:')) {
+    return SWAP_HANDLER_BASE58_REGEX.test(value) && value.length >= 32;
+  }
+  return value.length > 0;
+}
+
+/**
+ * Extract the sender-supplied chain-recipient address from the rumor's
+ * `chain-recipient` tag (Story 12.9 AC-8). Returns `null` if the tag is
+ * missing or malformed for `chain`.
+ */
+export function findChainRecipient(
+  rumor: UnsignedEvent,
+  chain: string
+): string | null {
+  const raw = findTagValue(rumor, 'chain-recipient');
+  if (!raw) return null;
+  if (!validateChainRecipient(raw, chain)) return null;
+  return raw;
 }
 
 // ---------------------------------------------------------------------------
@@ -514,6 +581,21 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       return ctx.reject('F06', 'Unsupported swap pair');
     }
 
+    // Story 12.9 AC-1 / AC-8: extract and validate the `chain-recipient`
+    // tag from the inner rumor. Missing or malformed values are treated as
+    // a malformed rumor (T00, consistent with other opaque-internal-error
+    // paths) — the sender may retry with a corrected address.
+    const chainRecipient = findChainRecipient(rumor, pair.to.chain);
+    if (!chainRecipient) {
+      logger.debug({
+        event: 'swap_handler.malformed_rumor',
+        destination: ctx.destination,
+        reason: 'missing_or_malformed_chain_recipient',
+        chain: pair.to.chain,
+      });
+      return ctx.reject('T00', 'Internal error');
+    }
+
     // AC-11: replay protection check. We RESERVE the packetId synchronously
     // here (before the first `await`) so that two concurrent invocations with
     // an identical packet ID cannot both pass the `has()` gate. Because the
@@ -593,6 +675,7 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
         targetAmount,
         pair,
         senderPubkey,
+        chainRecipient,
         rumor,
       });
       claim = result.claim;

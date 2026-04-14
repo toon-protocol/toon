@@ -843,3 +843,48 @@ describe('FULFILL encryption — edge cases', () => {
     expect(decrypted).toEqual(largeClaimData);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 12.9 AC-15 — chain-recipient tag round-trips through the NIP-59 wrap
+// / TOON encode / decode / unwrap cycle. The encryption layer treats the
+// rumor's tag array as opaque, so this is a one-assertion regression guard
+// that prevents an encoder change from silently truncating unknown tags.
+// ---------------------------------------------------------------------------
+
+describe('Story 12.9 AC-15 — chain-recipient tag round-trip', () => {
+  it('preserves the chain-recipient tag across wrap → TOON encode → decode → unwrap', () => {
+    const FIXTURE_EVM_RECIPIENT = '0x' + '11'.repeat(20);
+    const rumor: UnsignedEvent = {
+      kind: 20032,
+      created_at: Math.floor(Date.now() / 1000),
+      content: '',
+      pubkey: senderPubkey,
+      tags: [
+        ['swap-from', 'USDC:evm:base:8453'],
+        ['swap-to', 'ETH:evm:base:8453'],
+        ['amount', '1000000'],
+        ['seq', '1', '1'],
+        ['nonce', 'deadbeef'],
+        ['chain-recipient', FIXTURE_EVM_RECIPIENT],
+      ],
+    };
+
+    const { ilpPrepare } = wrapSwapPacketToToon({
+      rumor,
+      senderSecretKey,
+      recipientPubkey,
+      destination: 'g.toon.mill.12_9',
+      amount: 1_000_000n,
+    });
+    const toonData = new Uint8Array(Buffer.from(ilpPrepare.data, 'base64'));
+    const { rumor: decoded } = unwrapSwapPacketFromToon({
+      toonData,
+      recipientSecretKey,
+    });
+
+    expect(decoded.tags).toContainEqual([
+      'chain-recipient',
+      FIXTURE_EVM_RECIPIENT,
+    ]);
+  });
+});

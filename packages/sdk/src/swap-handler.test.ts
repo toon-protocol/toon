@@ -94,14 +94,34 @@ const ETH_BASE_PAIR: SwapPair = {
   rate: '2800',
 };
 
+/**
+ * Shared Story 12.9 fixture: 20-byte lowercased EVM recipient used as
+ * the default `chain-recipient` tag value on synthetic rumors.
+ */
+const FIXTURE_EVM_RECIPIENT = '0x' + '11'.repeat(20);
+
 function makeRumor(overrides: {
   fromTag?: string;
   toTag?: string;
   extraTags?: string[][];
+  /**
+   * Story 12.9: rumor-level `chain-recipient` tag. Defaults to
+   * {@link FIXTURE_EVM_RECIPIENT}. Pass `null` to omit the tag entirely
+   * (for AC-1 missing-tag tests); pass a string to override.
+   */
+  chainRecipient?: string | null;
 }): UnsignedEvent {
   const tags: string[][] = [];
   tags.push(['swap-from', overrides.fromTag ?? 'USDC:evm:base:8453']);
   tags.push(['swap-to', overrides.toTag ?? 'ETH:evm:base:8453']);
+  // Story 12.9 AC-1/AC-8: emit the `chain-recipient` tag by default so
+  // existing test rumors remain valid once the handler enforces presence.
+  if (overrides.chainRecipient !== null) {
+    tags.push([
+      'chain-recipient',
+      overrides.chainRecipient ?? FIXTURE_EVM_RECIPIENT,
+    ]);
+  }
   if (overrides.extraTags) tags.push(...overrides.extraTags);
   return {
     kind: 10032,
@@ -1112,9 +1132,8 @@ describe('[Story 12.8] DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction (AC-10, AC-14,
   });
 
   it('AC-10 — BoundedSeenPacketIds caps size at 10_000 after 10_001 inserts', async () => {
-    const { BoundedSeenPacketIds, DEFAULT_SEEN_PACKET_IDS_CAP } = await import(
-      './swap-handler.js'
-    );
+    const { BoundedSeenPacketIds, DEFAULT_SEEN_PACKET_IDS_CAP } =
+      await import('./swap-handler.js');
     const s = new BoundedSeenPacketIds();
     for (let i = 0; i < DEFAULT_SEEN_PACKET_IDS_CAP + 1; i++) {
       s.add(`id-${i}`);
@@ -1168,5 +1187,155 @@ describe('[Story 12.8] DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction (AC-10, AC-14,
       expect(r.accept).toBe(true);
     }
     expect(custom.size).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 12.9 — chain-recipient tag: handler extraction, validation, threading
+// ---------------------------------------------------------------------------
+
+describe('Story 12.9 — chain-recipient tag handling', () => {
+  it('[P0] T-5: missing `chain-recipient` tag on rumor → ctx.reject T00 (AC-1, AC-8, AC-14a)', async () => {
+    const { issuer, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    // Omit the chain-recipient tag entirely.
+    const rumor = makeRumor({ chainRecipient: null });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(false);
+    if (!res.accept) {
+      expect(res.code).toBe('T00');
+      expect(res.message).toBe('Internal error');
+    }
+    expect(issueClaim).not.toHaveBeenCalled();
+  });
+
+  it('[P0] T-6a: malformed EVM `chain-recipient` (not 20-byte hex) → T00 (AC-2, AC-8, AC-14b)', async () => {
+    const { issuer, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({ chainRecipient: '0xNOTHEX' });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(false);
+    if (!res.accept) expect(res.code).toBe('T00');
+    expect(issueClaim).not.toHaveBeenCalled();
+  });
+
+  it('[P1] T-6b: malformed Solana `chain-recipient` → T00 (AC-2, AC-8, AC-14b)', async () => {
+    // Construct a swap pair targeting solana.
+    const SOLANA_PAIR: SwapPair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+      to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
+      rate: '0.01',
+    };
+    const { issuer, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [SOLANA_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({
+      toTag: 'SOL:solana:mainnet',
+      chainRecipient: '!!!not-base58!!!',
+    });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(false);
+    if (!res.accept) expect(res.code).toBe('T00');
+    expect(issueClaim).not.toHaveBeenCalled();
+  });
+
+  it('[P2] T-6c: malformed Mina `chain-recipient` (short base58) → T00 (AC-2, AC-8, AC-14b)', async () => {
+    // Story 12.9 AC-14b enumerates per-chain malformed cases. T-6a covers
+    // EVM, T-6b covers Solana; this pins the mina:* branch of the local
+    // `validateChainRecipient` duplicate in swap-handler.ts so a future
+    // edit that drifts from `validateChainAddress` (stream-swap.ts) would
+    // fail fast.
+    const MINA_PAIR: SwapPair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+      to: { assetCode: 'MINA', assetScale: 9, chain: 'mina:mainnet' },
+      rate: '0.01',
+    };
+    const { issuer, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [MINA_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({
+      toTag: 'MINA:mina:mainnet',
+      chainRecipient: 'abc', // base58 charset but < 32 chars
+    });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(false);
+    if (!res.accept) expect(res.code).toBe('T00');
+    expect(issueClaim).not.toHaveBeenCalled();
+  });
+
+  it('[P0] T-7: happy path threads validated chainRecipient into IssueClaimParams (AC-9, AC-14c)', async () => {
+    const { issuer, calls, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({ chainRecipient: FIXTURE_EVM_RECIPIENT });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(true);
+    expect(issueClaim).toHaveBeenCalledTimes(1);
+    const params = calls[0]!;
+    expect(params.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
+    // senderPubkey preserved (not overridden by the new field).
+    expect(params.senderPubkey).toBe(senderPubkey);
+    expect(params.senderPubkey).not.toBe(params.chainRecipient);
+  });
+
+  it('[P2] T-7 (AC-3): tag ordering is irrelevant (parse by name)', async () => {
+    const { issuer, calls } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    // Build a rumor where chain-recipient precedes swap-from / swap-to.
+    const customRumor: UnsignedEvent = {
+      kind: 10032,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['chain-recipient', FIXTURE_EVM_RECIPIENT],
+        ['nonce', 'deadbeef'],
+        ['swap-to', 'ETH:evm:base:8453'],
+        ['swap-from', 'USDC:evm:base:8453'],
+        ['amount', '1000000'],
+      ],
+      content: 'swap',
+      pubkey: senderPubkey,
+    };
+    const res = await handler(makeGiftWrappedCtx({ rumor: customRumor }));
+    expect(res.accept).toBe(true);
+    expect(calls[0]!.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
+  });
+
+  it('[P0] T-8: IssueClaimParams TYPE shape includes both senderPubkey and chainRecipient (AC-10)', () => {
+    // Compile-time shape guard: if a future change removes either field, this
+    // block will fail TypeScript compilation. The `satisfies` operator binds
+    // the literal to the interface without widening.
+    const shape = {
+      sourceAmount: 1n,
+      targetAmount: 1n,
+      pair: USDC_BASE_PAIR,
+      senderPubkey: 'a'.repeat(64),
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      rumor: makeRumor({}),
+    } satisfies IssueClaimParams;
+    // Runtime sanity — the two fields are separate and non-aliasing.
+    expect(shape.senderPubkey).not.toBe(shape.chainRecipient);
+    expect(typeof shape.chainRecipient).toBe('string');
+    expect(typeof shape.senderPubkey).toBe('string');
   });
 });

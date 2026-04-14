@@ -95,6 +95,18 @@ export interface StreamSwapParams {
   pair: SwapPair;
   /** Sender's 32-byte secp256k1 secret key. Used for seal signing AND FULFILL decryption. */
   senderSecretKey: Uint8Array;
+  /**
+   * Sender's chain-specific payout address for `pair.to.chain` (Story 12.9 AC-4).
+   *
+   * REQUIRED. The Nostr `senderPubkey` (identity layer) cannot be used as the
+   * on-chain `recipient` in a balance-proof because they are cryptographically
+   * independent keys (D12-011). For `evm:*` chains this must be a 20-byte
+   * lowercased `0x`-prefixed hex address; for `solana:*` a base58 pubkey that
+   * decodes to 32 bytes; for `mina:*` a base58 public-key string. The value
+   * is validated at `streamSwapControlled()` entry via `validateChainAddress`
+   * and echoed on every rumor as the `chain-recipient` tag (AC-6).
+   */
+  chainRecipient: string;
   /** Total source-asset amount to swap (source micro-units). */
   totalAmount: bigint;
   /** Even-split packet count. EXACTLY ONE of this or `packetAmounts` is required. */
@@ -297,7 +309,14 @@ function chunkAmount(total: bigint, count: number): bigint[] {
   return out;
 }
 
-/** Build the kind:20032 unsigned "swap rumor" event per AC-4. */
+/** Build the kind:20032 unsigned "swap rumor" event per AC-4.
+ *
+ * Story 12.9 AC-1/AC-6: the returned rumor MUST include a `chain-recipient`
+ * tag carrying the sender-supplied chain-format payout address for
+ * `pair.to.chain`. The value is echoed verbatim per packet — no case-folding
+ * or transformation beyond what the sender-side `validateChainAddress`
+ * accepts.
+ */
 function buildSwapRumor(input: {
   senderPubkey: string;
   pair: SwapPair;
@@ -306,6 +325,7 @@ function buildSwapRumor(input: {
   totalPackets: number;
   nonce: Uint8Array;
   createdAt: number;
+  chainRecipient: string;
 }): UnsignedEvent {
   const {
     senderPubkey,
@@ -315,6 +335,7 @@ function buildSwapRumor(input: {
     totalPackets,
     nonce,
     createdAt,
+    chainRecipient,
   } = input;
   return {
     kind: 20032,
@@ -327,6 +348,7 @@ function buildSwapRumor(input: {
       ['amount', sourceAmount.toString()],
       ['seq', String(packetIndex), String(totalPackets)],
       ['nonce', Buffer.from(nonce).toString('hex')],
+      ['chain-recipient', chainRecipient],
     ],
   };
 }
@@ -343,7 +365,7 @@ const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
  *
  * Returns true for valid formats; false otherwise.
  */
-function validateChainAddress(
+export function validateChainAddress(
   value: string,
   chain: string,
   kind: 'channelId' | 'address'
@@ -741,6 +763,31 @@ function validateParams(params: StreamSwapParams): void {
       `rateDeviationThreshold must be a non-negative finite number, got ${params.rateDeviationThreshold}`
     );
   }
+
+  // Story 12.9 AC-4 / AC-5: `chainRecipient` is REQUIRED and MUST validate
+  // against `pair.to.chain`. Defense-in-depth for JS callers who bypass the
+  // TS interface (the field is declared non-optional on StreamSwapParams).
+  if (
+    typeof params.chainRecipient !== 'string' ||
+    params.chainRecipient.length === 0
+  ) {
+    throw new StreamSwapError(
+      'INVALID_STATE',
+      'chainRecipient must be a non-empty string (sender payout address for pair.to.chain)'
+    );
+  }
+  if (
+    !validateChainAddress(
+      params.chainRecipient,
+      params.pair.to.chain,
+      'address'
+    )
+  ) {
+    throw new StreamSwapError(
+      'INVALID_CHAIN_RECIPIENT',
+      `chainRecipient ${params.chainRecipient} is malformed for chain ${params.pair.to.chain}`
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -956,6 +1003,7 @@ async function runLoop(
       totalPackets,
       nonce,
       createdAt: Math.floor(Date.now() / 1000),
+      chainRecipient: params.chainRecipient,
     });
 
     let toonData: Uint8Array;
@@ -1044,6 +1092,31 @@ async function runLoop(
       errors.push({
         packetIndex,
         cause: err instanceof Error ? err : new Error(String(err)),
+      });
+      continue;
+    }
+
+    // Story 12.9 AC-7: when the Mill echoes a `recipient` in FULFILL metadata
+    // (Story 12.6 settlement context), it MUST equal the sender-supplied
+    // `chainRecipient`. A mismatch indicates the Mill is substituting its own
+    // address — refuse to accumulate the claim and surface a per-packet
+    // rejection with a clear reason code. Missing recipient = legacy
+    // (pre-12.6) metadata, permitted.
+    if (
+      metadata.recipient !== undefined &&
+      metadata.recipient !== params.chainRecipient
+    ) {
+      logger.warn({
+        event: 'stream_swap.recipient_mismatch',
+        packetIndex,
+        expected: params.chainRecipient,
+        actual: metadata.recipient,
+      });
+      rejections.push({
+        packetIndex,
+        sourceAmount,
+        code: 'MILL_RECIPIENT_MISMATCH',
+        message: `Mill echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
       });
       continue;
     }

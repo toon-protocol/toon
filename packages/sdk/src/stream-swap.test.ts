@@ -28,6 +28,13 @@ import {
 } from './stream-swap';
 import { StreamSwapError } from './errors';
 
+/**
+ * Shared Story 12.9 fixture: 20-byte lowercased EVM payout address used as
+ * the default `chainRecipient` for all `StreamSwapParams` constructions in
+ * this suite. Chain-format-valid for `evm:*` so validateChainAddress passes.
+ */
+const FIXTURE_EVM_RECIPIENT = '0x' + '11'.repeat(20);
+
 // ---------------------------------------------------------------------------
 // MockMill harness
 // ---------------------------------------------------------------------------
@@ -194,6 +201,7 @@ describe('AC-2 — StreamSwapParams validation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
     };
@@ -297,6 +305,7 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
     });
@@ -319,6 +328,7 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 3,
     });
@@ -342,6 +352,7 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetAmounts: [100n, 200n, 300n, 400n],
     });
@@ -373,6 +384,7 @@ describe('AC-6 / T-038 / T-040 — packet loop + claim accumulation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 500n,
       packetCount,
     });
@@ -413,6 +425,7 @@ describe('AC-6 / T-038 / T-040 — packet loop + claim accumulation', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 300n,
       packetCount: 3,
     });
@@ -444,6 +457,7 @@ describe('AC-7 / T-041 / T-046 — onPacket callback + PacketProgress', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 400n,
       packetCount: 4,
       onPacket,
@@ -473,6 +487,7 @@ describe('AC-7 / T-041 / T-046 — onPacket callback + PacketProgress', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 500n,
       packetCount: 5,
       onPacket: (p) => {
@@ -506,6 +521,7 @@ describe('AC-6 / T-043 — rate deviation abort', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       rateDeviationThreshold: 0.02,
@@ -539,6 +555,7 @@ describe('AC-6 / T-044 — partial failure tolerance', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
     });
@@ -569,6 +586,7 @@ describe('AC-6 / T-045 — single-packet mode', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -596,6 +614,7 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 500n,
       packetCount: 5,
       onPacket: (p) => {
@@ -625,6 +644,7 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       onPacket: (p) => {
@@ -651,6 +671,7 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -678,6 +699,7 @@ describe('AC-6 — AbortSignal integration', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       signal: ac.signal,
@@ -743,6 +765,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -770,6 +793,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -795,6 +819,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -820,6 +845,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -856,6 +882,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -893,6 +920,7 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -924,6 +952,7 @@ describe('AC-4 — rumor tag shape', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 300n,
       packetCount: 3,
     });
@@ -969,6 +998,7 @@ describe('T-047 — stress: 1000 packets', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100_000n,
       packetCount: 1000,
     });
@@ -996,6 +1026,7 @@ describe('AC-2 — additional validation cases', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
     };
@@ -1062,6 +1093,7 @@ describe('AC-7 — onPacket async rejection', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 500n,
       packetCount: 5,
       onPacket: async (p) => {
@@ -1093,6 +1125,7 @@ describe('AC-7 — onPacket async rejection', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
       onPacket: (p) => {
@@ -1146,6 +1179,7 @@ describe('AC-8 — empty claimBytes corner case', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
       logger: {
@@ -1190,6 +1224,7 @@ describe('AC-9 — StreamSwapResult bookkeeping fields', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 500n,
       packetCount: 5,
     });
@@ -1215,6 +1250,7 @@ describe('AC-9 — StreamSwapResult bookkeeping fields', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       onPacket: (p) => {
@@ -1246,6 +1282,7 @@ describe('AC-10 — controller state machine edges', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       onPacket: (p) => {
@@ -1275,6 +1312,7 @@ describe('AC-10 — controller state machine edges', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
       onPacket: () => {
@@ -1299,6 +1337,7 @@ describe('AC-10 — controller state machine edges', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 1000n,
       packetCount: 10,
       onPacket: (p) => {
@@ -1327,6 +1366,7 @@ describe('AC-10 — controller state machine edges', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -1361,6 +1401,7 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 400n,
       packetCount: 4,
     });
@@ -1391,6 +1432,7 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -1421,6 +1463,7 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
         millIlpAddress: 'g.toon.mill1',
         pair: badPair,
         senderSecretKey,
+        chainRecipient: FIXTURE_EVM_RECIPIENT,
         totalAmount: 100n,
         packetCount: 1,
       })
@@ -1442,6 +1485,7 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
         millIlpAddress: 'g.toon.mill1',
         pair: badPair,
         senderSecretKey,
+        chainRecipient: FIXTURE_EVM_RECIPIENT,
         totalAmount: 100n,
         packetCount: 1,
       })
@@ -1465,6 +1509,7 @@ describe('Pass #3: pair immutability — caller mutation after call does not poi
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 2,
     });
@@ -1494,6 +1539,7 @@ describe('Pass #3: base64 strictness in decodeFulfillMetadata', () => {
       millIlpAddress: 'g.toon.mill1',
       pair: samplePair(),
       senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -1578,6 +1624,16 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     return Buffer.from(JSON.stringify(base)).toString('base64');
   }
 
+  /**
+   * Default `chainRecipient` per chain family used by this suite's helpers.
+   * Must match whatever `recipient` the mill echoes in FULFILL metadata,
+   * because Story 12.9 AC-7 tightens a sender-side equality check.
+   */
+  function chainRecipientFor(pair: SwapPair): string {
+    if (pair.to.chain.startsWith('solana:')) return SOLANA_RECIPIENT;
+    return EVM_RECIPIENT;
+  }
+
   /** Spin up a streamSwap with a single-packet mill returning the given data. */
   async function runWithData(data: string, pair: SwapPair = EVM_PAIR) {
     const senderSecretKey = generateSecretKey();
@@ -1593,6 +1649,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: chainRecipientFor(pair),
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -1622,6 +1679,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
       millIlpAddress: 'g.toon.mill1',
       pair,
       senderSecretKey,
+      chainRecipient: chainRecipientFor(pair),
       totalAmount: 100n,
       packetCount: 1,
     });
@@ -1852,5 +1910,220 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
       'FULFILL_DECODE_FAILED'
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 12.9 — sender-side chain-recipient threading
+// (AC-4, AC-5, AC-6, AC-7, AC-13)
+// ---------------------------------------------------------------------------
+
+describe('Story 12.9 — chainRecipient threading (sender)', () => {
+  const senderSecretKey12_9 = generateSecretKey();
+  const millSecretKey12_9 = generateSecretKey();
+  const millPubkey12_9 = getPublicKey(millSecretKey12_9);
+
+  function evmBase(): StreamSwapParams {
+    const pair = samplePair();
+    const mill = makeMockMill(pair, millSecretKey12_9);
+    return {
+      client: makeClient(mill, senderSecretKey12_9),
+      millPubkey: millPubkey12_9,
+      millIlpAddress: 'g.toon.mill1',
+      pair,
+      senderSecretKey: senderSecretKey12_9,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 1_000n,
+      packetCount: 1,
+    };
+  }
+
+  it('[P0] T-1: streamSwap throws when chainRecipient is missing (AC-4, AC-13a)', async () => {
+    const { chainRecipient: _cr, ...rest } = evmBase();
+    void _cr;
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional missing field
+      streamSwap(rest as any)
+    ).rejects.toMatchObject({
+      name: 'StreamSwapError',
+      code: 'INVALID_STATE',
+    });
+  });
+
+  it('[P0] T-2a: EVM malformed chainRecipient throws INVALID_CHAIN_RECIPIENT (AC-2, AC-5)', async () => {
+    const base = evmBase();
+    await expect(
+      streamSwap({ ...base, chainRecipient: '0xNOTHEX' })
+    ).rejects.toMatchObject({
+      name: 'StreamSwapError',
+      code: 'INVALID_CHAIN_RECIPIENT',
+    });
+  });
+
+  it('[P1] T-2b: Solana malformed chainRecipient throws INVALID_CHAIN_RECIPIENT (AC-2, AC-5)', async () => {
+    const solanaPair: SwapPair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+      to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
+      rate: '0.01',
+    };
+    const mill = makeMockMill(solanaPair, millSecretKey12_9);
+    await expect(
+      streamSwap({
+        client: makeClient(mill, senderSecretKey12_9),
+        millPubkey: millPubkey12_9,
+        millIlpAddress: 'g.toon.mill1',
+        pair: solanaPair,
+        senderSecretKey: senderSecretKey12_9,
+        chainRecipient: '!!!not-base58!!!',
+        totalAmount: 1_000n,
+        packetCount: 1,
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_CHAIN_RECIPIENT' });
+  });
+
+  it('[P1] T-2c: Mina malformed chainRecipient throws INVALID_CHAIN_RECIPIENT (AC-2, AC-5, AC-13b)', async () => {
+    // Story 12.9 AC-13b explicitly enumerates chain families (evm, solana,
+    // mina, unknown). This case pins the mina:* branch of
+    // `validateChainAddress` (base58 charset + length >= 32 chars). A short
+    // base58 string ('abc') MUST be rejected before any packet is sent.
+    const minaPair: SwapPair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+      to: { assetCode: 'MINA', assetScale: 9, chain: 'mina:mainnet' },
+      rate: '0.01',
+    };
+    const mill = makeMockMill(minaPair, millSecretKey12_9);
+    await expect(
+      streamSwap({
+        client: makeClient(mill, senderSecretKey12_9),
+        millPubkey: millPubkey12_9,
+        millIlpAddress: 'g.toon.mill1',
+        pair: minaPair,
+        senderSecretKey: senderSecretKey12_9,
+        chainRecipient: 'abc', // base58 but < 32 chars
+        totalAmount: 1_000n,
+        packetCount: 1,
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_CHAIN_RECIPIENT' });
+    // Validation MUST fire pre-packet — mill never invoked.
+    expect(mill.fn).not.toHaveBeenCalled();
+  });
+
+  it('[P2] T-2d: Unknown chain family rejects empty chainRecipient and permits non-empty opaque string (AC-2, AC-13b)', async () => {
+    // Story 12.9 AC-13b enumerates "unknown" as a chain family. The
+    // `validateChainAddress` contract for unknown chains is "permit any
+    // non-empty string; settlement layer will surface UNSUPPORTED_CHAIN".
+    //
+    // The sender pipeline enforces this in two stages:
+    //   (a) a type/value guard rejects empty strings with INVALID_STATE
+    //       (shares the entry-guard shape with senderSecretKey absence);
+    //   (b) `validateChainAddress` then format-checks per chain family —
+    //       for unknown chains it only requires `.length > 0`, which (a)
+    //       already guaranteed, so `INVALID_CHAIN_RECIPIENT` never fires
+    //       for the "unknown" branch. A non-empty opaque string therefore
+    //       passes validation and defers UNSUPPORTED_CHAIN to settlement.
+    //
+    // This test pins both halves of that contract so a future refactor
+    // that collapses the two guards cannot regress the fall-through.
+    const unknownPair: SwapPair = {
+      from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+      to: { assetCode: 'FOO', assetScale: 6, chain: 'cosmos:foo-1' },
+      rate: '0.5',
+    };
+    const mill = makeMockMill(unknownPair, millSecretKey12_9);
+    // (a) Empty string → INVALID_STATE (non-empty guard fires first).
+    await expect(
+      streamSwap({
+        client: makeClient(mill, senderSecretKey12_9),
+        millPubkey: millPubkey12_9,
+        millIlpAddress: 'g.toon.mill1',
+        pair: unknownPair,
+        senderSecretKey: senderSecretKey12_9,
+        chainRecipient: '',
+        totalAmount: 1_000n,
+        packetCount: 1,
+      })
+    ).rejects.toMatchObject({
+      name: 'StreamSwapError',
+      code: 'INVALID_STATE',
+    });
+    expect(mill.fn).not.toHaveBeenCalled();
+    // (b) Non-empty opaque string → permitted (no INVALID_CHAIN_RECIPIENT);
+    // the mock mill is exercised and the swap resolves.
+    await expect(
+      streamSwap({
+        client: makeClient(mill, senderSecretKey12_9),
+        millPubkey: millPubkey12_9,
+        millIlpAddress: 'g.toon.mill1',
+        pair: unknownPair,
+        senderSecretKey: senderSecretKey12_9,
+        chainRecipient: 'opaque-payout-identifier',
+        totalAmount: 1_000n,
+        packetCount: 1,
+      })
+    ).resolves.toBeDefined();
+  });
+
+  it('[P0] T-3: buildSwapRumor emits chain-recipient tag on every packet (AC-1, AC-6, AC-13c)', async () => {
+    const pair = samplePair();
+    const mill = makeMockMill(pair, millSecretKey12_9);
+    await streamSwap({
+      client: makeClient(mill, senderSecretKey12_9),
+      millPubkey: millPubkey12_9,
+      millIlpAddress: 'g.toon.mill1',
+      pair,
+      senderSecretKey: senderSecretKey12_9,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 3_000n,
+      packetCount: 3,
+    });
+    expect(mill.unwrappedRumors).toHaveLength(3);
+    for (const rumor of mill.unwrappedRumors) {
+      const tag = rumor.tags.find((t) => t[0] === 'chain-recipient');
+      expect(tag).toBeDefined();
+      expect(tag![1]).toBe(FIXTURE_EVM_RECIPIENT);
+    }
+  });
+
+  it('[P1] T-4: FULFILL recipient mismatch is rejected with MILL_RECIPIENT_MISMATCH (AC-7)', async () => {
+    const pair = samplePair();
+    const senderPubkey = getPublicKey(senderSecretKey12_9);
+    // Mill that echoes a *different* recipient than the sender supplied.
+    const badMill = vi.fn(async () => {
+      const { ciphertext, ephemeralPubkey } = encryptFulfillClaim({
+        claimData: new Uint8Array([0x01]),
+        senderPubkey,
+      });
+      const metadata = {
+        claim: Buffer.from(ciphertext).toString('base64'),
+        ephemeralPubkey,
+        targetAmount: '1',
+        channelId: '0x' + 'a'.repeat(64),
+        nonce: '1',
+        cumulativeAmount: '1',
+        recipient: '0x' + 'b'.repeat(40), // NOT FIXTURE_EVM_RECIPIENT
+        millSignerAddress: '0x' + 'c'.repeat(40),
+      };
+      return {
+        accepted: true,
+        data: Buffer.from(JSON.stringify(metadata)).toString('base64'),
+      };
+    });
+    const result = await streamSwap({
+      client: {
+        sendSwapPacket:
+          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+        getPublicKey: () => senderPubkey,
+      },
+      millPubkey: millPubkey12_9,
+      millIlpAddress: 'g.toon.mill1',
+      pair,
+      senderSecretKey: senderSecretKey12_9,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 100n,
+      packetCount: 1,
+    });
+    expect(result.claims).toHaveLength(0);
+    expect(result.rejections).toHaveLength(1);
+    expect(result.rejections[0]!.code).toBe('MILL_RECIPIENT_MISMATCH');
   });
 });

@@ -100,6 +100,7 @@ export class StreamSwapError extends Error {
     | 'INVALID_CHUNKING'
     | 'INVALID_PAIR'
     | 'INVALID_STATE'
+    | 'INVALID_CHAIN_RECIPIENT'
     | 'FULFILL_DECODE_FAILED';
   // Not declared on Error in lib.es5; ES2022 adds it, but some tsconfigs
   // still target older libs. Declare explicitly for cross-version safety.
