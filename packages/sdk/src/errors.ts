@@ -83,3 +83,43 @@ export class SwapHandlerError extends ToonError {
     this.name = 'SwapHandlerError';
   }
 }
+
+/**
+ * Error thrown by the sender-side `streamSwap()` API (Story 12.5).
+ *
+ * All failures are categorized by a narrow `code` so callers can branch on
+ * cause. `INVALID_*` codes are construction-time validation failures (thrown
+ * synchronously before any packet fires). `FULFILL_DECODE_FAILED` surfaces
+ * when the Mill returns `accepted: true` but the FULFILL data cannot be
+ * decoded — this is a non-fatal per-packet error and is captured in
+ * `StreamSwapResult.errors[]`.
+ */
+export class StreamSwapError extends Error {
+  readonly code:
+    | 'INVALID_AMOUNT'
+    | 'INVALID_CHUNKING'
+    | 'INVALID_PAIR'
+    | 'INVALID_STATE'
+    | 'FULFILL_DECODE_FAILED';
+  // Not declared on Error in lib.es5; ES2022 adds it, but some tsconfigs
+  // still target older libs. Declare explicitly for cross-version safety.
+  declare readonly cause?: unknown;
+
+  constructor(
+    code: StreamSwapError['code'],
+    message: string,
+    options?: { cause?: unknown }
+  ) {
+    super(message);
+    this.name = 'StreamSwapError';
+    this.code = code;
+    if (options && 'cause' in options) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
+}

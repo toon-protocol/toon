@@ -143,7 +143,13 @@ export function applyRate(params: ApplyRateParams): bigint {
   if (!RATE_REGEX.test(rate)) {
     throw new SwapHandlerError(`Invalid rate format: ${rate}`);
   }
-  if (rate === '0') {
+  // Reject any zero-valued rate regardless of decimal presentation.
+  // RATE_REGEX matches `'0'`, `'0.0'`, `'0.00'`, etc. — all semantically
+  // "not quoting". Previous check only caught the bare `'0'` form, letting
+  // `'0.0'` slip through and produce a zero-valued targetAmount that the
+  // sender's rate-deviation guard could not catch (expectedTargetAmount=0n
+  // skips the deviation math). (Story 12.5 code-review pass #3.)
+  if (/^0(\.0+)?$/.test(rate)) {
     throw new SwapHandlerError('Rate is zero (pair not quoting)');
   }
   if (sourceAmount <= 0n) {
@@ -477,9 +483,15 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       ephemeralPubkey,
     });
 
+    // Story 12.5: emit the Mill-computed `targetAmount` (decimal string) so
+    // the sender can run an end-to-end rate-deviation check without having to
+    // parse the opaque chain-specific `claimBytes`. This is additive and
+    // backward compatible — legacy senders that ignore the field get the
+    // same {claim, ephemeralPubkey, claimId?} shape they always did.
     const metadata: Record<string, unknown> = {
       claim: claimBase64,
       ephemeralPubkey,
+      targetAmount: targetAmount.toString(),
     };
     if (claimId !== undefined) metadata['claimId'] = claimId;
 

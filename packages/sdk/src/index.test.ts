@@ -141,6 +141,10 @@ describe('@toon-protocol/sdk public API exports', () => {
       'createSwapHandler',
       'findSwapPair',
       'applyRate',
+      // Stream swap sender API (Story 12.5)
+      'StreamSwapError',
+      'streamSwap',
+      'streamSwapControlled',
     ]);
 
     // Act

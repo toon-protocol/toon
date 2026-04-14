@@ -215,6 +215,12 @@ describe('T-017 Handler unwraps valid gift-wrapped packet and accepts (AC-4, AC-
       expect(typeof res.metadata!['claim']).toBe('string');
       expect(typeof res.metadata!['ephemeralPubkey']).toBe('string');
       expect(res.metadata!['claimId']).toBe('test-claim-1');
+      // Story 12.5 extension: Mill MUST emit the computed targetAmount as a
+      // decimal string so senders can rate-deviation-check without parsing
+      // chain-specific claim bytes. Without this, streamSwap's
+      // rateDeviationThreshold feature silently no-ops against real Mills.
+      expect(typeof res.metadata!['targetAmount']).toBe('string');
+      expect(res.metadata!['targetAmount']).toMatch(/^[0-9]+$/);
     }
     expect(calls).toHaveLength(1);
   });
@@ -707,6 +713,17 @@ describe('applyRate helper (AC-8)', () => {
     expect(() =>
       applyRate({ sourceAmount: 1n, fromScale: 6, toScale: 6, rate: '0' })
     ).toThrow(/Rate is zero/);
+  });
+
+  // Story 12.5 code-review pass #3 regression — fractional zero rates like
+  // "0.0", "0.00", "0.000000" must also be rejected (previously slipped past
+  // the strict-equality check and produced a silent zero-valued targetAmount).
+  it('[P1] throws SwapHandlerError on fractional zero rate (0.0, 0.00, 0.000)', () => {
+    for (const rate of ['0.0', '0.00', '0.000', '0.000000']) {
+      expect(() =>
+        applyRate({ sourceAmount: 1n, fromScale: 6, toScale: 6, rate })
+      ).toThrow(/Rate is zero/);
+    }
   });
 
   it('[P1] throws SwapHandlerError when sourceAmount <= 0', () => {

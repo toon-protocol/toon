@@ -32,6 +32,7 @@ export {
   PricingError,
   GiftWrapError,
   SwapHandlerError,
+  StreamSwapError,
 } from './errors.js';
 
 // Handler context
@@ -156,6 +157,18 @@ export type {
   ApplyRateParams,
   SwapHandlerLogger,
 } from './swap-handler.js';
+
+// Stream swap sender API (Story 12.5)
+export { streamSwap, streamSwapControlled } from './stream-swap.js';
+
+export type {
+  StreamSwapParams,
+  StreamSwapResult,
+  AccumulatedClaim,
+  PacketProgress,
+  RateMonitorCallback,
+  StreamSwapController,
+} from './stream-swap.js';
 
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
