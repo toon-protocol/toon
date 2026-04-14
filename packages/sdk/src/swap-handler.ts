@@ -46,12 +46,30 @@ export interface IssueClaimParams {
   rumor: UnsignedEvent;
 }
 
-/** Result returned from {@link ClaimIssuer.issueClaim}. */
+/**
+ * Result returned from {@link ClaimIssuer.issueClaim}.
+ *
+ * Story 12.6 extension: additive settlement-context fields let the sender
+ * reconstruct the balance-proof message hash for signature verification and
+ * on-chain settlement (see `buildSettlementTx()`).
+ */
 export interface IssueClaimResult {
   /** Signed claim bytes ready for NIP-44 encryption (chain-specific format). */
   claim: Uint8Array;
   /** Optional Mill-side claim ID for logging/tracing. */
   claimId?: string;
+  // --- Story 12.6 settlement-context fields (additive, all optional for
+  // one-story-cycle backward compat; the Mill SHOULD emit all of them) ---
+  /** Channel identifier on the target chain. */
+  channelId?: string;
+  /** Balance-proof nonce (monotonically increasing per channel). */
+  nonce?: bigint;
+  /** Cumulative transferred amount on the channel (target micro-units). */
+  cumulativeAmount?: bigint;
+  /** Recipient address (the sender's target-asset address). */
+  recipient?: string;
+  /** Mill's on-chain signer address. */
+  millSignerAddress?: string;
 }
 
 /**
@@ -428,6 +446,11 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     // AC-9: delegate to claim issuer
     let claim: Uint8Array;
     let claimId: string | undefined;
+    let settlementChannelId: string | undefined;
+    let settlementNonce: bigint | undefined;
+    let settlementCumulative: bigint | undefined;
+    let settlementRecipient: string | undefined;
+    let settlementMillSigner: string | undefined;
     try {
       const result = await config.claimIssuer.issueClaim({
         sourceAmount: ctx.amount,
@@ -438,6 +461,11 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       });
       claim = result.claim;
       claimId = result.claimId;
+      settlementChannelId = result.channelId;
+      settlementNonce = result.nonce;
+      settlementCumulative = result.cumulativeAmount;
+      settlementRecipient = result.recipient;
+      settlementMillSigner = result.millSignerAddress;
     } catch (err) {
       const code = (err as { code?: unknown })?.code;
       const message = err instanceof Error ? err.message : String(err);
@@ -494,6 +522,23 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       targetAmount: targetAmount.toString(),
     };
     if (claimId !== undefined) metadata['claimId'] = claimId;
+    // Story 12.6: thread settlement-context fields through when the claim
+    // issuer emits them. All-or-nothing: a Mill that supplies settlement
+    // fields MUST supply all five, since the sender's FULFILL decoder
+    // enforces all-present-or-all-absent.
+    if (
+      settlementChannelId !== undefined &&
+      settlementNonce !== undefined &&
+      settlementCumulative !== undefined &&
+      settlementRecipient !== undefined &&
+      settlementMillSigner !== undefined
+    ) {
+      metadata['channelId'] = settlementChannelId;
+      metadata['nonce'] = settlementNonce.toString();
+      metadata['cumulativeAmount'] = settlementCumulative.toString();
+      metadata['recipient'] = settlementRecipient;
+      metadata['millSignerAddress'] = settlementMillSigner;
+    }
 
     return ctx.accept(metadata);
   };

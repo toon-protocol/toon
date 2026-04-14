@@ -34,6 +34,7 @@ import type { SwapPair } from '@toon-protocol/core';
 
 import { StreamSwapError } from './errors.js';
 import { wrapSwapPacketToToon, decryptFulfillClaim } from './gift-wrap.js';
+import { base58Decode } from './identity.js';
 import { applyRate } from './swap-handler.js';
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,13 @@ export interface PacketProgress {
  *
  * @stable — Story 12.6 (`buildSettlementTx()`) depends on this shape.
  * Breaking changes require a coordinated migration.
+ *
+ * Story 12.6 ADDITIVE extension: the settlement-context fields
+ * `channelId`, `nonce`, `cumulativeAmount`, `recipient`, and
+ * `millSignerAddress` are marked optional (`?:`) for one story-cycle of
+ * backward compat but are REQUIRED in practice: Story 12.6's
+ * `buildSettlementTx()` throws `MISSING_SETTLEMENT_METADATA` when any of
+ * these are absent.
  */
 export interface AccumulatedClaim {
   /** 0-indexed position in the swap's packet stream. */
@@ -193,6 +201,17 @@ export interface AccumulatedClaim {
   pair: SwapPair;
   /** Unix ms timestamp when this claim was accepted. */
   receivedAt: number;
+  // --- Story 12.6 settlement-context fields (additive) ---
+  /** Channel identifier on the target chain (lowercase hex with 0x prefix for EVM; base58 for Solana). */
+  channelId?: string;
+  /** Balance-proof nonce (decimal string). Monotonically increasing within a channel. */
+  nonce?: string;
+  /** Cumulative transferred amount on the channel (target micro-units, decimal string). */
+  cumulativeAmount?: string;
+  /** Recipient address (the sender's target-asset address). */
+  recipient?: string;
+  /** Mill's on-chain signer address. */
+  millSignerAddress?: string;
 }
 
 /**
@@ -312,16 +331,74 @@ function buildSwapRumor(input: {
   };
 }
 
+const EVM_CHANNEL_ID_REGEX = /^0x[0-9a-f]{64}$/;
+const EVM_ADDRESS_REGEX = /^0x[0-9a-f]{40}$/;
+const DECIMAL_UINT_REGEX = /^(0|[1-9]\d*)$/;
+// Permissive base58 charset (Bitcoin alphabet — no 0, O, I, l).
+const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
+
+/**
+ * Validate a chain-specific address or channelId string. `chain` is the
+ * `pair.to.chain` string (e.g., `'evm:base:8453'`, `'solana:mainnet'`).
+ *
+ * Returns true for valid formats; false otherwise.
+ */
+function validateChainAddress(
+  value: string,
+  chain: string,
+  kind: 'channelId' | 'address'
+): boolean {
+  if (chain.startsWith('evm:')) {
+    if (kind === 'channelId') return EVM_CHANNEL_ID_REGEX.test(value);
+    return EVM_ADDRESS_REGEX.test(value);
+  }
+  if (chain.startsWith('solana:')) {
+    // AC-3: base58 decode MUST succeed AND length MUST be 32 bytes. A pure
+    // regex + char-length sanity check is too loose — a malformed "32-char"
+    // base58 string may decode to 22–24 bytes and slip through.
+    if (!BASE58_REGEX.test(value)) return false;
+    if (value.length < 32 || value.length > 44) return false;
+    try {
+      return base58Decode(value).length === 32;
+    } catch {
+      return false;
+    }
+  }
+  if (chain.startsWith('mina:')) {
+    return BASE58_REGEX.test(value) && value.length >= 32;
+  }
+  // Unknown chain — permit; settlement layer will surface UNSUPPORTED_CHAIN.
+  return value.length > 0;
+}
+
 /**
  * Decode the FULFILL response `data` (base64-encoded JSON metadata) into
- * the `{ claim, ephemeralPubkey, claimId? }` shape per AC-12.
+ * the `{ claim, ephemeralPubkey, claimId?, targetAmount?, ...settlement }`
+ * shape.
+ *
+ * Story 12.6 extension: also parses the settlement-context fields
+ * (`channelId`, `nonce`, `cumulativeAmount`, `recipient`, `millSignerAddress`).
+ * If ANY one of these is present, ALL five MUST be present and well-formed
+ * — partial presence is treated as malformed metadata.
+ *
+ * @param chain Optional `pair.to.chain` string for per-chain format validation
+ *   of channelId / recipient / millSignerAddress. When omitted, format checks
+ *   fall back to a length-only sanity check.
  */
-function decodeFulfillMetadata(data: string | undefined): {
+function decodeFulfillMetadata(
+  data: string | undefined,
+  chain?: string
+): {
   claim: string;
   ephemeralPubkey: string;
   claimId?: string;
   /** Optional Mill-reported actual target amount (decimal string). Used for rate deviation when present. */
   targetAmount?: string;
+  channelId?: string;
+  nonce?: string;
+  cumulativeAmount?: string;
+  recipient?: string;
+  millSignerAddress?: string;
 } {
   if (data === undefined || data === null || data === '') {
     throw new StreamSwapError('FULFILL_DECODE_FAILED', 'FULFILL data missing');
@@ -383,6 +460,11 @@ function decodeFulfillMetadata(data: string | undefined): {
     ephemeralPubkey: string;
     claimId?: string;
     targetAmount?: string;
+    channelId?: string;
+    nonce?: string;
+    cumulativeAmount?: string;
+    recipient?: string;
+    millSignerAddress?: string;
   } = {
     claim,
     ephemeralPubkey,
@@ -405,6 +487,88 @@ function decodeFulfillMetadata(data: string | undefined): {
       );
     }
     result.targetAmount = ta;
+  }
+  // Story 12.6 settlement-context fields. All-or-nothing: if ANY of the five
+  // fields is present, ALL must be present and well-formed. Partial presence
+  // is malformed metadata.
+  const settlementKeys = [
+    'channelId',
+    'nonce',
+    'cumulativeAmount',
+    'recipient',
+    'millSignerAddress',
+  ] as const;
+  const presentSettlementKeys = settlementKeys.filter(
+    (k) => obj[k] !== undefined
+  );
+  if (presentSettlementKeys.length > 0) {
+    if (presentSettlementKeys.length !== settlementKeys.length) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        `FULFILL metadata settlement fields are partial — got ${presentSettlementKeys.join(',')}, need all of ${settlementKeys.join(',')}`
+      );
+    }
+    const channelId = obj['channelId'];
+    const nonce = obj['nonce'];
+    const cumulativeAmount = obj['cumulativeAmount'];
+    const recipient = obj['recipient'];
+    const millSignerAddress = obj['millSignerAddress'];
+    if (typeof channelId !== 'string') {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.channelId must be a string'
+      );
+    }
+    if (chain && !validateChainAddress(channelId, chain, 'channelId')) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        `FULFILL metadata.channelId malformed for chain ${chain}`
+      );
+    }
+    if (typeof nonce !== 'string' || !DECIMAL_UINT_REGEX.test(nonce)) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.nonce must be a non-negative integer decimal string'
+      );
+    }
+    if (
+      typeof cumulativeAmount !== 'string' ||
+      !DECIMAL_UINT_REGEX.test(cumulativeAmount)
+    ) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.cumulativeAmount must be a non-negative integer decimal string'
+      );
+    }
+    if (typeof recipient !== 'string') {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.recipient must be a string'
+      );
+    }
+    if (chain && !validateChainAddress(recipient, chain, 'address')) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        `FULFILL metadata.recipient malformed for chain ${chain}`
+      );
+    }
+    if (typeof millSignerAddress !== 'string') {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.millSignerAddress must be a string'
+      );
+    }
+    if (chain && !validateChainAddress(millSignerAddress, chain, 'address')) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        `FULFILL metadata.millSignerAddress malformed for chain ${chain}`
+      );
+    }
+    result.channelId = channelId;
+    result.nonce = nonce;
+    result.cumulativeAmount = cumulativeAmount;
+    result.recipient = recipient;
+    result.millSignerAddress = millSignerAddress;
   }
   return result;
 }
@@ -863,9 +1027,14 @@ async function runLoop(
       ephemeralPubkey: string;
       claimId?: string;
       targetAmount?: string;
+      channelId?: string;
+      nonce?: string;
+      cumulativeAmount?: string;
+      recipient?: string;
+      millSignerAddress?: string;
     };
     try {
-      metadata = decodeFulfillMetadata(sendResult.data);
+      metadata = decodeFulfillMetadata(sendResult.data, pair.to.chain);
     } catch (err) {
       logger.error({
         event: 'stream_swap.fulfill_decode_failed',
@@ -969,6 +1138,16 @@ async function runLoop(
       receivedAt: Date.now(),
     };
     if (metadata.claimId !== undefined) accumulated.claimId = metadata.claimId;
+    // Story 12.6: thread settlement-context fields through when present.
+    if (metadata.channelId !== undefined)
+      accumulated.channelId = metadata.channelId;
+    if (metadata.nonce !== undefined) accumulated.nonce = metadata.nonce;
+    if (metadata.cumulativeAmount !== undefined)
+      accumulated.cumulativeAmount = metadata.cumulativeAmount;
+    if (metadata.recipient !== undefined)
+      accumulated.recipient = metadata.recipient;
+    if (metadata.millSignerAddress !== undefined)
+      accumulated.millSignerAddress = metadata.millSignerAddress;
     claims.push(accumulated);
 
     logger.debug({

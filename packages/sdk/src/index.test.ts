@@ -145,6 +145,16 @@ describe('@toon-protocol/sdk public API exports', () => {
       'StreamSwapError',
       'streamSwap',
       'streamSwapControlled',
+      // Settlement (Story 12.6)
+      'SettlementTxError',
+      'buildSettlementTx',
+      'verifyAccumulatedClaim',
+      'fillEvmSettlementTxGas',
+      'balanceProofHashEvm',
+      'balanceProofHashSolana',
+      'bigintToBytes32BE',
+      'concatBytes',
+      'hexToBytes',
     ]);
 
     // Act

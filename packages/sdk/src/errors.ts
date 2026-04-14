@@ -123,3 +123,52 @@ export class StreamSwapError extends Error {
     }
   }
 }
+
+/**
+ * Error thrown by the sender-side `buildSettlementTx()` helper (Story 12.6).
+ *
+ * Settlement is a post-swap one-shot computation, so this error class is
+ * THROWN synchronously (unlike `streamSwap` which routes per-packet failures
+ * through `StreamSwapResult`). Callers are expected to wrap the call in
+ * `try/catch`.
+ *
+ * Narrow `code` union lets callers branch on cause — see
+ * `_bmad-output/implementation-artifacts/12-6-build-settlement-tx.md` AC-11
+ * for the per-code semantics.
+ *
+ * @since 12.6
+ * @stable — Epic 13 Chain Bridge DVM depends on this error shape.
+ */
+export class SettlementTxError extends Error {
+  readonly code:
+    | 'INVALID_INPUT'
+    | 'MISSING_SETTLEMENT_METADATA'
+    | 'UNSUPPORTED_CHAIN'
+    | 'MISSING_RECIPIENT'
+    | 'RECIPIENT_MISMATCH'
+    | 'MILL_SIGNER_MISMATCH'
+    | 'DUPLICATE_NONCE'
+    | 'NON_MONOTONIC_CUMULATIVE'
+    | 'INVALID_SIGNATURE_LENGTH'
+    | 'INVALID_SIGNATURE_V'
+    | 'ENCODING_FAILED';
+  declare readonly cause?: unknown;
+
+  constructor(
+    code: SettlementTxError['code'],
+    message: string,
+    options?: { cause?: unknown }
+  ) {
+    super(message);
+    this.name = 'SettlementTxError';
+    this.code = code;
+    if (options && 'cause' in options) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        enumerable: false,
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
+}

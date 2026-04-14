@@ -33,6 +33,7 @@ export {
   GiftWrapError,
   SwapHandlerError,
   StreamSwapError,
+  SettlementTxError,
 } from './errors.js';
 
 // Handler context
@@ -169,6 +170,25 @@ export type {
   RateMonitorCallback,
   StreamSwapController,
 } from './stream-swap.js';
+
+// Settlement (Story 12.6)
+export {
+  buildSettlementTx,
+  verifyAccumulatedClaim,
+  fillEvmSettlementTxGas,
+  balanceProofHashEvm,
+  balanceProofHashSolana,
+  bigintToBytes32BE,
+  concatBytes,
+  hexToBytes,
+} from './settlement/index.js';
+
+export type {
+  SettlementBundle,
+  BuildSettlementTxParams,
+  BuildSettlementTxResult,
+  MillSignerConfig,
+} from './settlement/index.js';
 
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';

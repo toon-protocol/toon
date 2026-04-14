@@ -32,7 +32,7 @@
  * that do not yet exist. They will pass once Story 12.3 is implemented.
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, vi, type Mock } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { UnsignedEvent } from 'nostr-tools/pure';
 import type { SwapPair } from '@toon-protocol/core';
@@ -53,7 +53,25 @@ import type {
 import { createHandlerContext } from './handler-context.js';
 import type { HandlerContext } from './handler-context.js';
 import { encodeEventToToon } from '@toon-protocol/core/toon';
+import type { ToonRoutingMeta } from '@toon-protocol/core/toon';
 import type { NostrEvent } from 'nostr-tools/pure';
+
+/**
+ * Factory for a mock ToonRoutingMeta. Provides sensible defaults for all
+ * required fields (id, sig, rawBytes) so tests can override only what matters.
+ */
+function makeMockMeta(
+  overrides: Partial<ToonRoutingMeta> = {}
+): ToonRoutingMeta {
+  return {
+    kind: 1059,
+    pubkey: '0'.repeat(64),
+    id: 'a'.repeat(64),
+    sig: 'c'.repeat(128),
+    rawBytes: new Uint8Array(0),
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -122,7 +140,10 @@ function makeGiftWrappedCtx(params: {
 
   return createHandlerContext({
     toon: toonBase64,
-    meta: { kind: 1059, pubkey: '0'.repeat(64) /* outer ephemeral */ },
+    meta: makeMockMeta({
+      kind: 1059,
+      pubkey: '0'.repeat(64) /* outer ephemeral */,
+    }),
     amount,
     destination,
     toonDecoder: () => {
@@ -134,7 +155,7 @@ function makeGiftWrappedCtx(params: {
 function makeMockIssuer(): {
   issuer: ClaimIssuer;
   calls: IssueClaimParams[];
-  issueClaim: ReturnType<typeof vi.fn>;
+  issueClaim: Mock<[IssueClaimParams], Promise<IssueClaimResult>>;
 } {
   const calls: IssueClaimParams[] = [];
   let i = 0;
@@ -235,7 +256,7 @@ describe('T-017 Handler unwraps valid gift-wrapped packet and accepts (AC-4, AC-
 
     const ctx = createHandlerContext({
       toon: Buffer.from(new Uint8Array([0])).toString('base64'),
-      meta: { kind: 1, pubkey: '0'.repeat(64) },
+      meta: makeMockMeta({ kind: 1, pubkey: '0'.repeat(64) }),
       amount: 1_000_000n,
       destination: 'g.mill.test',
       toonDecoder: () => {
@@ -338,7 +359,7 @@ describe('T-021 Handler rejects non-gift-wrapped packet (AC-6)', () => {
 
     const ctx = createHandlerContext({
       toon: toonBase64,
-      meta: { kind: 1059, pubkey: '0'.repeat(64) },
+      meta: makeMockMeta({ kind: 1059, pubkey: '0'.repeat(64) }),
       amount: 1_000_000n,
       destination: 'g.mill.test',
       toonDecoder: () => fakeEvent,
@@ -367,7 +388,7 @@ describe('T-022 Handler rejects malformed gift wrap (AC-5)', () => {
     const garbage = new Uint8Array([0xff, 0x00, 0xff, 0x00, 0x13, 0x37]);
     const ctx = createHandlerContext({
       toon: Buffer.from(garbage).toString('base64'),
-      meta: { kind: 1059, pubkey: '0'.repeat(64) },
+      meta: makeMockMeta({ kind: 1059, pubkey: '0'.repeat(64) }),
       amount: 1n,
       destination: 'g.mill.test',
       toonDecoder: () => {
@@ -902,5 +923,153 @@ describe('SwapHandlerError (AC-2)', () => {
     const cause = new Error('root');
     const err = new SwapHandlerError('wrapped', cause);
     expect((err as { cause?: Error }).cause).toBe(cause);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 12.6 AC-3 — FULFILL metadata extension regression
+//
+// The Mill's swap handler MUST emit the five settlement-context fields
+// (channelId, nonce, cumulativeAmount, recipient, millSignerAddress) in the
+// FULFILL metadata WHEN the ClaimIssuer returns them. When the issuer omits
+// those fields (legacy pre-12.6 path), the metadata MUST remain in the
+// pre-12.6 shape (all-or-nothing contract).
+//
+// This fills the Task 1 regression gap: "Update swap-handler.test.ts to also
+// assert the 5 new metadata fields are emitted with correct types/formats."
+// ---------------------------------------------------------------------------
+
+describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
+  const EVM_CHANNEL_ID = '0x' + 'a'.repeat(64);
+  const EVM_RECIPIENT = '0x' + 'b'.repeat(40);
+  const EVM_MILL_SIGNER = '0x' + 'c'.repeat(40);
+
+  it('[P0] emits channelId/nonce/cumulativeAmount/recipient/millSignerAddress when issuer supplies them', async () => {
+    const issueClaim = vi.fn(
+      async (_p: IssueClaimParams): Promise<IssueClaimResult> => ({
+        claim: new Uint8Array([1, 2, 3]),
+        claimId: 'test-claim-settlement',
+        channelId: EVM_CHANNEL_ID,
+        nonce: 7n,
+        cumulativeAmount: 123_456_789n,
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      })
+    );
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim: issueClaim as ClaimIssuer['issueClaim'] },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+
+    // All four existing fields still present.
+    expect(typeof res.metadata!['claim']).toBe('string');
+    expect(typeof res.metadata!['ephemeralPubkey']).toBe('string');
+    expect(typeof res.metadata!['targetAmount']).toBe('string');
+    expect(res.metadata!['claimId']).toBe('test-claim-settlement');
+
+    // All five new AC-3 fields present with correct types/formats.
+    expect(res.metadata!['channelId']).toBe(EVM_CHANNEL_ID);
+    expect(typeof res.metadata!['channelId']).toBe('string');
+    expect(res.metadata!['channelId']).toMatch(/^0x[0-9a-f]{64}$/);
+
+    // nonce + cumulativeAmount MUST be emitted as decimal strings
+    // (BigInt -> string conversion per AC-3).
+    expect(res.metadata!['nonce']).toBe('7');
+    expect(typeof res.metadata!['nonce']).toBe('string');
+    expect(res.metadata!['nonce']).toMatch(/^(0|[1-9]\d*)$/);
+
+    expect(res.metadata!['cumulativeAmount']).toBe('123456789');
+    expect(typeof res.metadata!['cumulativeAmount']).toBe('string');
+    expect(res.metadata!['cumulativeAmount']).toMatch(/^(0|[1-9]\d*)$/);
+
+    expect(res.metadata!['recipient']).toBe(EVM_RECIPIENT);
+    expect(res.metadata!['recipient']).toMatch(/^0x[0-9a-f]{40}$/);
+
+    expect(res.metadata!['millSignerAddress']).toBe(EVM_MILL_SIGNER);
+    expect(res.metadata!['millSignerAddress']).toMatch(/^0x[0-9a-f]{40}$/);
+  });
+
+  it('[P0] omits all five settlement fields when issuer returns legacy shape', async () => {
+    // Legacy issuer — no settlement-context fields.
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+
+    // None of the five new fields present on legacy path (AC-3:
+    // "additive, backward-compatible extension").
+    expect(res.metadata!['channelId']).toBeUndefined();
+    expect(res.metadata!['nonce']).toBeUndefined();
+    expect(res.metadata!['cumulativeAmount']).toBeUndefined();
+    expect(res.metadata!['recipient']).toBeUndefined();
+    expect(res.metadata!['millSignerAddress']).toBeUndefined();
+
+    // Existing fields unaffected.
+    expect(typeof res.metadata!['claim']).toBe('string');
+    expect(typeof res.metadata!['ephemeralPubkey']).toBe('string');
+    expect(typeof res.metadata!['targetAmount']).toBe('string');
+  });
+
+  it('[P1] handles nonce=0n correctly (first balance proof on a fresh channel)', async () => {
+    const issueClaim = vi.fn(
+      async (_p: IssueClaimParams): Promise<IssueClaimResult> => ({
+        claim: new Uint8Array([1]),
+        claimId: 'c0',
+        channelId: EVM_CHANNEL_ID,
+        nonce: 0n,
+        cumulativeAmount: 0n,
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      })
+    );
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim: issueClaim as ClaimIssuer['issueClaim'] },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+    // BigInt 0n -> '0' (zero-safe decimal encoding, NOT '').
+    expect(res.metadata!['nonce']).toBe('0');
+    expect(res.metadata!['cumulativeAmount']).toBe('0');
+  });
+
+  it('[P1] handles very large bigints without Number coercion loss (MAX_SAFE_INTEGER guard)', async () => {
+    const HUGE = 2n ** 200n; // way past MAX_SAFE_INTEGER (2^53 - 1)
+    const issueClaim = vi.fn(
+      async (_p: IssueClaimParams): Promise<IssueClaimResult> => ({
+        claim: new Uint8Array([1]),
+        claimId: 'c-huge',
+        channelId: EVM_CHANNEL_ID,
+        nonce: HUGE,
+        cumulativeAmount: HUGE,
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      })
+    );
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim: issueClaim as ClaimIssuer['issueClaim'] },
+    });
+    const res = await handler(makeGiftWrappedCtx({}));
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+    // Exact decimal roundtrip — no precision loss, no scientific notation.
+    expect(res.metadata!['nonce']).toBe(HUGE.toString());
+    expect(res.metadata!['cumulativeAmount']).toBe(HUGE.toString());
   });
 });

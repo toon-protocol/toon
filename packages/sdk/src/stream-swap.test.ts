@@ -1503,3 +1503,354 @@ describe('Pass #3: base64 strictness in decodeFulfillMetadata', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 12.6 AC-3 — decodeFulfillMetadata settlement-field validation
+//
+// Fills the Task 2 gap: "Add tests covering (a) valid EVM metadata roundtrips,
+// (b) valid Solana metadata roundtrips, (c) missing channelId ->
+// FULFILL_DECODE_FAILED, (d) malformed EVM channelId (too short / wrong
+// prefix / uppercase) -> FULFILL_DECODE_FAILED."
+//
+// The stream-swap.ts decoder enforces all-or-nothing: if ANY one of the five
+// settlement fields is present, ALL five MUST be present and well-formed
+// per-chain.
+// ---------------------------------------------------------------------------
+
+describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
+  const EVM_CHANNEL_ID = '0x' + 'a'.repeat(64);
+  const EVM_RECIPIENT = '0x' + 'b'.repeat(40);
+  const EVM_MILL_SIGNER = '0x' + 'c'.repeat(40);
+
+  const EVM_PAIR: SwapPair = {
+    from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+    to: { assetCode: 'ETH', assetScale: 18, chain: 'evm:base:8453' },
+    rate: '0.0005',
+  };
+
+  const SOLANA_PAIR: SwapPair = {
+    from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
+    to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
+    rate: '0.0001',
+  };
+
+  // Realistic Solana base58 pubkey (32 bytes base58 encoded, alphabet-safe).
+  const SOLANA_CHANNEL_ID = '11111111111111111111111111111111';
+  const SOLANA_RECIPIENT = 'So11111111111111111111111111111111111111112';
+  const SOLANA_MILL_SIGNER = 'So11111111111111111111111111111111111111113';
+
+  /**
+   * Build a base64-encoded JSON FULFILL payload with VALID NIP-44 ciphertext
+   * for `claim` and arbitrary other-field overrides. The ciphertext decrypts
+   * successfully under `senderSecretKey`, so the payload drives the streamSwap
+   * success path all the way through AccumulatedClaim assembly — exercising
+   * decodeFulfillMetadata's settlement-field threading for AC-3.
+   */
+  function makeValidFulfillData(
+    senderPubkey: string,
+    overrides: Record<string, unknown> = {}
+  ): string {
+    const { ciphertext, ephemeralPubkey } = encryptFulfillClaim({
+      claimData: new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]),
+      senderPubkey,
+    });
+    const base = {
+      claim: Buffer.from(ciphertext).toString('base64'),
+      ephemeralPubkey,
+      targetAmount: '100',
+      ...overrides,
+    };
+    return Buffer.from(JSON.stringify(base)).toString('base64');
+  }
+
+  /**
+   * Build a base64-encoded JSON FULFILL payload with placeholder (non-valid)
+   * ciphertext. Used for error-path tests where decodeFulfillMetadata is the
+   * gatekeeper — decrypt is unreachable because decode throws first.
+   */
+  function makeFulfillData(overrides: Record<string, unknown>): string {
+    const base = {
+      claim: Buffer.from('aaaa').toString('base64'),
+      ephemeralPubkey: 'a'.repeat(64),
+      targetAmount: '100',
+      ...overrides,
+    };
+    return Buffer.from(JSON.stringify(base)).toString('base64');
+  }
+
+  /** Spin up a streamSwap with a single-packet mill returning the given data. */
+  async function runWithData(data: string, pair: SwapPair = EVM_PAIR) {
+    const senderSecretKey = generateSecretKey();
+    const millSecretKey = generateSecretKey();
+    const badMill = vi.fn(async () => ({ accepted: true, data }));
+    return streamSwap({
+      client: {
+        sendSwapPacket:
+          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+        getPublicKey: () => getPublicKey(senderSecretKey),
+      },
+      millPubkey: getPublicKey(millSecretKey),
+      millIlpAddress: 'g.toon.mill1',
+      pair,
+      senderSecretKey,
+      totalAmount: 100n,
+      packetCount: 1,
+    });
+  }
+
+  /**
+   * Success-path variant: uses the sender's real pubkey to build valid NIP-44
+   * ciphertext so the claim decrypts end-to-end and settlement fields land on
+   * the AccumulatedClaim.
+   */
+  async function runWithValidData(
+    overrides: Record<string, unknown>,
+    pair: SwapPair = EVM_PAIR
+  ) {
+    const senderSecretKey = generateSecretKey();
+    const senderPubkey = getPublicKey(senderSecretKey);
+    const millSecretKey = generateSecretKey();
+    const data = makeValidFulfillData(senderPubkey, overrides);
+    const mill = vi.fn(async () => ({ accepted: true, data }));
+    return streamSwap({
+      client: {
+        sendSwapPacket:
+          mill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+        getPublicKey: () => senderPubkey,
+      },
+      millPubkey: getPublicKey(millSecretKey),
+      millIlpAddress: 'g.toon.mill1',
+      pair,
+      senderSecretKey,
+      totalAmount: 100n,
+      packetCount: 1,
+    });
+  }
+
+  it('[P0] accepts valid EVM settlement metadata and threads fields into AccumulatedClaim', async () => {
+    const result = await runWithValidData(
+      {
+        channelId: EVM_CHANNEL_ID,
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      },
+      EVM_PAIR
+    );
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.claims).toHaveLength(1);
+    const claim = result.claims[0]!;
+    expect(claim.channelId).toBe(EVM_CHANNEL_ID);
+    expect(claim.nonce).toBe('1');
+    expect(claim.cumulativeAmount).toBe('100');
+    expect(claim.recipient).toBe(EVM_RECIPIENT);
+    expect(claim.millSignerAddress).toBe(EVM_MILL_SIGNER);
+  });
+
+  it('[P0] accepts valid Solana settlement metadata and threads fields into AccumulatedClaim', async () => {
+    const result = await runWithValidData(
+      {
+        channelId: SOLANA_CHANNEL_ID,
+        nonce: '42',
+        cumulativeAmount: '250',
+        recipient: SOLANA_RECIPIENT,
+        millSignerAddress: SOLANA_MILL_SIGNER,
+      },
+      SOLANA_PAIR
+    );
+
+    expect(result.errors).toHaveLength(0);
+    expect(result.claims).toHaveLength(1);
+    const claim = result.claims[0]!;
+    expect(claim.channelId).toBe(SOLANA_CHANNEL_ID);
+    expect(claim.nonce).toBe('42');
+    expect(claim.cumulativeAmount).toBe('250');
+    expect(claim.recipient).toBe(SOLANA_RECIPIENT);
+    expect(claim.millSignerAddress).toBe(SOLANA_MILL_SIGNER);
+  });
+
+  it('[P0] preserves legacy pre-12.6 shape when all five settlement fields absent (backward-compat)', async () => {
+    const result = await runWithValidData({}, EVM_PAIR);
+    expect(result.errors).toHaveLength(0);
+    expect(result.claims).toHaveLength(1);
+    const claim = result.claims[0]!;
+    // All five fields are undefined on the legacy path.
+    expect(claim.channelId).toBeUndefined();
+    expect(claim.nonce).toBeUndefined();
+    expect(claim.cumulativeAmount).toBeUndefined();
+    expect(claim.recipient).toBeUndefined();
+    expect(claim.millSignerAddress).toBeUndefined();
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when channelId is missing but other settlement fields present (partial)', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        // channelId intentionally omitted
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err).toBeInstanceOf(StreamSwapError);
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/partial|channelid/);
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when millSignerAddress is missing (partial presence)', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        // millSignerAddress intentionally omitted
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when EVM channelId is too short', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: '0x' + 'a'.repeat(63), // 63 hex chars, not 64
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/channelid/);
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when EVM channelId lacks 0x prefix', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: 'a'.repeat(64), // no 0x prefix
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
+      'FULFILL_DECODE_FAILED'
+    );
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when EVM channelId contains uppercase hex', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: '0x' + 'A'.repeat(64), // uppercase, spec requires lowercase
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
+      'FULFILL_DECODE_FAILED'
+    );
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when EVM recipient has wrong length', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: '0x' + 'b'.repeat(41), // off-by-one
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/recipient/);
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when EVM millSignerAddress is malformed', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: '1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: '0xZZZ' + 'c'.repeat(37), // non-hex chars
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/millsigneraddress/);
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when nonce is negative', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: '-1',
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/nonce/);
+  });
+
+  it('[P0] FULFILL_DECODE_FAILED when cumulativeAmount is fractional', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: '1',
+        cumulativeAmount: '100.5',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    const err = result.errors[0]!.cause as StreamSwapError;
+    expect(err.code).toBe('FULFILL_DECODE_FAILED');
+    expect(err.message.toLowerCase()).toMatch(/cumulativeamount/);
+  });
+
+  it('[P1] FULFILL_DECODE_FAILED when a settlement field has wrong type (number instead of string)', async () => {
+    const result = await runWithData(
+      makeFulfillData({
+        channelId: EVM_CHANNEL_ID,
+        nonce: 1 as unknown as string, // number, not string
+        cumulativeAmount: '100',
+        recipient: EVM_RECIPIENT,
+        millSignerAddress: EVM_MILL_SIGNER,
+      }),
+      EVM_PAIR
+    );
+    expect(result.errors).toHaveLength(1);
+    expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
+      'FULFILL_DECODE_FAILED'
+    );
+  });
+});
