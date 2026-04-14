@@ -1073,3 +1073,48 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
     expect(res.metadata!['cumulativeAmount']).toBe(HUGE.toString());
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 12.8 — AC-10 + AC-14 — DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction
+// ---------------------------------------------------------------------------
+//
+// RED PHASE: describe.skip — dev lifts the skip in Task 1.4 / Task 5.1
+// after exporting `DEFAULT_SEEN_PACKET_IDS_CAP = 10_000` and defaulting
+// `seenPacketIds` to a bounded access-order (NOT insertion-order) LRU.
+//
+// CRITICAL GOTCHA (Story 12.8 Dev Notes, R-8N3): insertion-order
+// eviction re-opens the replay window after 10k fresh packets. A
+// replay attacker retries the same packet forever — under
+// insertion-order eviction their packet id ages out and is accepted
+// again. Use access-order eviction (Map's `.delete(k); .set(k, v)` on
+// each hit is the cheapest correct path).
+describe.skip('[Story 12.8] DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction (AC-10, AC-14, R-8N3)', () => {
+  it('AC-14 — swap-handler exports DEFAULT_SEEN_PACKET_IDS_CAP === 10_000', async () => {
+    // const mod = await import('./swap-handler.js');
+    // expect((mod as { DEFAULT_SEEN_PACKET_IDS_CAP?: number }).DEFAULT_SEEN_PACKET_IDS_CAP).toBe(10_000);
+    expect.fail('AC-14 — DEFAULT_SEEN_PACKET_IDS_CAP export not yet present');
+  });
+
+  it('AC-10 — default handler caps internal seenPacketIds at 10_000 after 10_001 inserts', async () => {
+    // Requires either a @internal `getInternalState()` handler helper
+    // OR the ability to inject a custom Set via config and observe
+    // eviction on the injected instance.
+    expect.fail('AC-10 — default cap assertion not yet wired');
+  });
+
+  it('AC-10 — eviction is access-order (oldest-ACCESSED wins), not insertion-order', async () => {
+    // After inserting ids 0..10_000, re-access id 0 BEFORE inserting
+    // id 10_001. Under access-order eviction, id 1 should be evicted
+    // (the least-recently-accessed), NOT id 0. This is the R-8N3
+    // replay-window-after-10k-packets guard.
+    expect.fail('AC-10 — access-order LRU eviction assertion not yet wired');
+  });
+
+  it('AC-10 — operator-supplied seenPacketIds is used verbatim (no default cap applied)', async () => {
+    // When `config.seenPacketIds` is provided, the handler must use it
+    // as-is. Construct a plain `new Set<string>()` without any cap,
+    // insert 10_001 ids via handler invocation, assert size === 10_001.
+    // Operator chose it — don't second-guess.
+    expect.fail('AC-10 — operator-supplied Set pass-through not yet wired');
+  });
+});
