@@ -113,6 +113,18 @@ export interface SwapHandlerLogger {
   error: (...args: unknown[]) => void;
 }
 
+/**
+ * Minimal `Set`-like contract the handler requires from
+ * `seenPacketIds`. Both the native `Set<string>` and
+ * {@link BoundedSeenPacketIds} satisfy this; operators can swap in a
+ * persistent/remote-backed replacement too.
+ */
+export interface SeenPacketIdsLike {
+  has(value: string): boolean;
+  add(value: string): unknown;
+  delete(value: string): boolean;
+}
+
 /** Configuration for {@link createSwapHandler}. */
 export interface CreateSwapHandlerConfig {
   /** Mill's secp256k1 secret key for unwrapping gift-wrapped packets (32 bytes). */
@@ -128,14 +140,134 @@ export interface CreateSwapHandlerConfig {
    */
   rateProvider?: (pair: SwapPair) => string | Promise<string>;
   /**
-   * Optional replay-protection set. When provided, the handler computes a
-   * deterministic packet ID = sha256(senderPubkey || sourceAmount || rumor.id)
-   * and rejects duplicates with ILP F04. Operator is responsible for bounding
-   * this set (e.g., LRU) — this module does not pull in an LRU dep.
+   * Optional replay-protection set. When provided, the handler uses it
+   * VERBATIM (operator-owned — bounding/persistence is the operator's
+   * responsibility). When OMITTED (Story 12.8 AC-14), the handler
+   * defaults to a {@link BoundedSeenPacketIds} with cap
+   * {@link DEFAULT_SEEN_PACKET_IDS_CAP}. Any `Set`-shaped object with
+   * `has`/`add`/`delete` (and a `size` getter for test introspection)
+   * satisfies the contract.
    */
-  seenPacketIds?: Set<string>;
+  seenPacketIds?: SeenPacketIdsLike;
   /** Optional pino-compatible logger. Defaults to a no-op logger. */
   logger?: SwapHandlerLogger;
+}
+
+// ---------------------------------------------------------------------------
+// Story 12.8 AC-14 — bounded seenPacketIds default
+// ---------------------------------------------------------------------------
+
+/**
+ * Default ceiling for the `seenPacketIds` replay-protection set when the
+ * operator does not supply a custom `Set`. Rationale: 10_000 packet-ids at
+ * ~64 bytes each yields a ~640KB memory ceiling — high enough to absorb
+ * legitimate bursts, low enough to bound DoS via distinct-id flooding.
+ *
+ * When the default bounded set is in use, eviction is LAST-ACCESS order
+ * (LRU), NOT insertion order: a replay attacker who retries the same
+ * packet-id forever would, under insertion-order LRU, have their entry
+ * evicted after 10_000 new ids pass through — re-opening the replay
+ * window. Access-order keeps frequently-replayed ids pinned, so the
+ * window stays closed.
+ *
+ * Operators may override by supplying a custom `Set<string>` (e.g. a
+ * persistent backing store). `createSwapHandler` uses the supplied set
+ * verbatim without size-capping.
+ */
+export const DEFAULT_SEEN_PACKET_IDS_CAP = 10_000;
+
+/**
+ * LRU-ish `Set<string>`: re-adding an existing element promotes it to
+ * "most recently accessed"; `has()` also promotes. Eviction occurs on
+ * `add()` when size exceeds the cap — the least-recently-accessed entry
+ * (Map insertion-order head) is removed.
+ *
+ * Exported as `@internal` for Story 12.8 AC-10 test introspection.
+ *
+ * @internal
+ */
+export class BoundedSeenPacketIds {
+  readonly #map = new Map<string, true>();
+  readonly #cap: number;
+  readonly [Symbol.toStringTag] = 'Set';
+
+  constructor(cap: number = DEFAULT_SEEN_PACKET_IDS_CAP) {
+    if (!Number.isInteger(cap) || cap <= 0) {
+      throw new Error(
+        `BoundedSeenPacketIds cap must be a positive integer, got ${cap}`
+      );
+    }
+    this.#cap = cap;
+  }
+
+  get size(): number {
+    return this.#map.size;
+  }
+
+  /** Exposed for AC-10 test introspection. */
+  get cap(): number {
+    return this.#cap;
+  }
+
+  has(value: string): boolean {
+    if (!this.#map.has(value)) return false;
+    // Access-order promotion: re-insert so iteration order puts this at tail.
+    this.#map.delete(value);
+    this.#map.set(value, true);
+    return true;
+  }
+
+  add(value: string): this {
+    if (this.#map.has(value)) {
+      // Promote to most-recently-accessed.
+      this.#map.delete(value);
+      this.#map.set(value, true);
+      return this;
+    }
+    this.#map.set(value, true);
+    while (this.#map.size > this.#cap) {
+      // Evict least-recently-accessed (Map iteration is insertion order;
+      // first key is the oldest that hasn't been re-added).
+      const first = this.#map.keys().next();
+      if (first.done) break;
+      this.#map.delete(first.value);
+    }
+    return this;
+  }
+
+  delete(value: string): boolean {
+    return this.#map.delete(value);
+  }
+
+  clear(): void {
+    this.#map.clear();
+  }
+
+  forEach(
+    callback: (value: string, value2: string, set: Set<string>) => void,
+    thisArg?: unknown
+  ): void {
+    for (const k of this.#map.keys()) {
+      callback.call(thisArg, k, k, this);
+    }
+  }
+
+  *[Symbol.iterator](): IterableIterator<string> {
+    yield* this.#map.keys();
+  }
+
+  *keys(): IterableIterator<string> {
+    yield* this.#map.keys();
+  }
+
+  *values(): IterableIterator<string> {
+    yield* this.#map.keys();
+  }
+
+  *entries(): IterableIterator<[string, string]> {
+    for (const k of this.#map.keys()) yield [k, k];
+  }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +434,13 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
 
   const logger = config.logger ?? NOOP_LOGGER;
 
+  // Story 12.8 AC-14: when the operator does not supply a custom set,
+  // default to a bounded access-order-LRU set. Operator-supplied sets are
+  // used verbatim (we do not second-guess the operator's choice of
+  // persistence / bounding).
+  const seenPacketIds: SeenPacketIdsLike =
+    config.seenPacketIds ?? new BoundedSeenPacketIds();
+
   return async (ctx) => {
     // AC-4: defensive kind guard. HandlerRegistry.dispatch already routes by
     // kind, but a mis-registered handler should fail loudly rather than
@@ -382,25 +521,22 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     // to other microtasks as long as it straddles no `await`. If issuance or
     // encryption later fails, we release the reservation so the sender can
     // legitimately retry (AC-11 requires retries of rejected packets).
-    let packetId: string | null = null;
-    if (config.seenPacketIds) {
-      packetId = computePacketId(senderPubkey, ctx.amount, rumor);
-      if (config.seenPacketIds.has(packetId)) {
-        logger.debug({
-          event: 'swap_handler.duplicate_packet',
-          packetId,
-        });
-        return ctx.reject('F04', 'Duplicate packet');
-      }
-      // Reserve eagerly to close the concurrent check-then-add race.
-      config.seenPacketIds.add(packetId);
+    // Story 12.8 AC-14: replay check always runs (against the bounded default
+    // when the operator did not supply a custom set).
+    const packetId: string = computePacketId(senderPubkey, ctx.amount, rumor);
+    if (seenPacketIds.has(packetId)) {
+      logger.debug({
+        event: 'swap_handler.duplicate_packet',
+        packetId,
+      });
+      return ctx.reject('F04', 'Duplicate packet');
     }
+    // Reserve eagerly to close the concurrent check-then-add race.
+    seenPacketIds.add(packetId);
 
     // Helper: release the replay reservation on failure so the sender can retry.
     const releaseReservation = (): void => {
-      if (config.seenPacketIds && packetId) {
-        config.seenPacketIds.delete(packetId);
-      }
+      seenPacketIds.delete(packetId);
     };
 
     // AC-9 rate resolution (optional live hook per D12-006).
