@@ -194,6 +194,49 @@ export interface CreateSwapHandlerConfig {
 export const DEFAULT_SEEN_PACKET_IDS_CAP = 10_000;
 
 /**
+ * ILP REJECT codes emitted by `createSwapHandler()`.
+ *
+ * Exported as named constants so tests (Story 12.8 AC-3 forbids hardcoded
+ * error-code strings) and downstream integrators can assert against the
+ * same symbolic source the handler uses. Values follow RFC 27 / ILPv4
+ * reject-code conventions (F01 = malformed, F02 = unreachable, F04 =
+ * duplicate, F06 = unsupported pair, T00 = transient internal, T04 =
+ * insufficient liquidity).
+ */
+export const SWAP_HANDLER_REJECT_CODES = {
+  /** Malformed / invalid PREPARE content — gift-wrap shape or amount invalid. */
+  INVALID_GIFT_WRAP: 'F01',
+  /** No route — the handler did not match a registered destination. */
+  UNREACHABLE: 'F02',
+  /** Duplicate packet — `seenPacketIds` replay hit. */
+  DUPLICATE_PACKET: 'F04',
+  /** Requested swap pair is not advertised by this Mill. */
+  UNSUPPORTED_PAIR: 'F06',
+  /** Transient internal failure — signing, rate provider, or unexpected. */
+  INTERNAL: 'T00',
+  /** Insufficient Mill inventory for the requested amount. */
+  INSUFFICIENT_LIQUIDITY: 'T04',
+} as const;
+
+/**
+ * Human-readable reject messages emitted by `createSwapHandler()`.
+ *
+ * Tests may assert against these verbatim rather than matching regexes
+ * (Story 12.8 AC-3 guidance).
+ */
+export const SWAP_HANDLER_REJECT_MESSAGES = {
+  INVALID_GIFT_WRAP: 'Invalid gift wrap',
+  INVALID_AMOUNT: 'Invalid amount',
+  UNREACHABLE: 'Unreachable',
+  DUPLICATE_PACKET: 'Duplicate packet',
+  UNSUPPORTED_PAIR: 'Unsupported swap pair',
+  INTERNAL: 'Internal error',
+  INSUFFICIENT_LIQUIDITY: 'Insufficient liquidity',
+  RATE_PROVIDER: 'Rate provider error',
+  RATE_CONVERSION: 'Rate conversion error',
+} as const;
+
+/**
  * LRU-ish `Set<string>`: re-adding an existing element promotes it to
  * "most recently accessed"; `has()` also promotes. Eviction occurs on
  * `add()` when size exceeds the cap — the least-recently-accessed entry

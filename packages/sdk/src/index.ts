@@ -148,7 +148,13 @@ export type {
 } from './gift-wrap.js';
 
 // Swap handler (Story 12.3)
-export { createSwapHandler, findSwapPair, applyRate } from './swap-handler.js';
+export {
+  createSwapHandler,
+  findSwapPair,
+  applyRate,
+  SWAP_HANDLER_REJECT_CODES,
+  SWAP_HANDLER_REJECT_MESSAGES,
+} from './swap-handler.js';
 
 export type {
   CreateSwapHandlerConfig,

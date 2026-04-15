@@ -136,11 +136,13 @@ describe('@toon-protocol/sdk public API exports', () => {
       'unwrapSwapPacketFromToon',
       'encryptFulfillClaim',
       'decryptFulfillClaim',
-      // Swap handler (Story 12.3)
+      // Swap handler (Story 12.3; Story 12.8 added reject-code constants)
       'SwapHandlerError',
       'createSwapHandler',
       'findSwapPair',
       'applyRate',
+      'SWAP_HANDLER_REJECT_CODES',
+      'SWAP_HANDLER_REJECT_MESSAGES',
       // Stream swap sender API (Story 12.5)
       'StreamSwapError',
       'streamSwap',
