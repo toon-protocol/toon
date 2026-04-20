@@ -828,39 +828,44 @@ export function createNode(config: NodeConfig): ServiceNode {
       const hasSettlementAddresses =
         chainConfig.registryAddress && chainConfig.tokenNetworkAddress;
 
-      // Build connector config: chainProviders takes priority over settlementInfra
+      // Build connector config: chainProviders for settlement (v2.3.0+)
       const hasChainProviders =
         config.chainProviders !== undefined && config.chainProviders.length > 0;
 
-      autoCreatedConnector = new ConnectorNodeClass(
-        {
-          nodeId,
-          btpServerPort,
-          environment: 'development' as const,
-          deploymentMode: 'embedded' as const,
-          peers: [],
-          routes: [],
-          localDelivery: { enabled: false },
-          // Multi-chain: use chainProviders when provided
-          ...(hasChainProviders && {
-            chainProviders: config.chainProviders,
-          }),
-          // Legacy: fall back to settlementInfra when chainProviders absent
-          ...(!hasChainProviders &&
-            hasSettlementAddresses && {
-              settlementInfra: {
-                enabled: true,
+      // When chainProviders not explicitly provided, build from legacy config
+      const effectiveChainProviders = hasChainProviders
+        ? config.chainProviders
+        : hasSettlementAddresses
+          ? [
+              {
+                chainType: 'evm' as const,
+                chainId: `evm:${chainConfig.chainId ?? '31337'}`,
                 rpcUrl: chainConfig.rpcUrl,
                 registryAddress: chainConfig.registryAddress,
                 tokenAddress: chainConfig.usdcAddress,
                 privateKey: settlementPrivateKey,
               },
-            }),
-          // NIP-59 transport privacy
-          ...(config.nip59 && { nip59: config.nip59 }),
-        },
-        connectorLogger
-      );
+            ]
+          : undefined;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const connectorConfig: any = {
+        nodeId,
+        btpServerPort,
+        environment: 'development',
+        deploymentMode: 'embedded',
+        peers: [],
+        routes: [],
+        localDelivery: { enabled: false },
+      };
+      if (effectiveChainProviders) {
+        connectorConfig.chainProviders = effectiveChainProviders;
+      }
+      if (config.nip59) {
+        connectorConfig.nip59 = config.nip59;
+      }
+
+      autoCreatedConnector = new ConnectorNodeClass(connectorConfig, connectorLogger);
 
       await autoCreatedConnector.start();
 

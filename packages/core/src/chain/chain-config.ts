@@ -109,6 +109,8 @@ export interface EVMProviderConfigEntry {
   rpcUrl: string;
   registryAddress: string;
   keyId: string;
+  tokenAddress: string;
+  privateKey?: string;
 }
 
 /**
@@ -399,6 +401,7 @@ export function buildEvmProviderEntry(
     chainId: `evm:${config.chainId}`,
     rpcUrl: config.rpcUrl,
     registryAddress: config.registryAddress,
+    tokenAddress: config.usdcAddress,
     keyId,
   };
 }
