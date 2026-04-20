@@ -6,28 +6,25 @@ import type { NostrEvent } from 'nostr-tools/pure';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { InvalidEventError } from '../errors.js';
 import { isValidIlpAddressStructure } from '../address/ilp-address-validation.js';
-import type { IlpPeerInfo } from '../types.js';
+import { validateChainId } from '../chain/chain-id.js';
+import { assertSwapPairForParse } from './swap-pair-validation.js';
+import type { IlpPeerInfo, SwapPair } from '../types.js';
+
+// Re-export `validateChainId` for backward compatibility with consumers that
+// imported it from this module prior to Story 12.1 (e.g., `index.ts`).
+export { validateChainId };
 
 /**
- * Validates a chain identifier string.
- * Valid format: {blockchain}:{network} or {blockchain}:{network}:{chainId}
- * Minimum 2 segments, maximum 3, separated by `:`. All segments must be non-empty.
+ * Type guard: non-null plain object (arrays explicitly excluded).
  *
- * @param chainId - The chain identifier to validate
- * @returns true if the chain identifier is valid
- */
-export function validateChainId(chainId: string): boolean {
-  if (!chainId) return false;
-  const segments = chainId.split(':');
-  if (segments.length < 2 || segments.length > 3) return false;
-  return segments.every((s) => s.length > 0);
-}
-
-/**
- * Type guard to check if a value is a non-null object.
+ * Rejecting arrays matters for fields like `settlementAddresses`,
+ * `preferredTokens`, `tokenNetworks`, and `prefixPricing` — a malicious or
+ * malformed event that set any of these to `[]` would otherwise slip through
+ * because `typeof [] === 'object'` and `Object.entries([])` is empty. Mirrors
+ * the same-named helper in `swap-pair-validation.ts`.
  */
 function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -35,7 +32,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
  *
  * @param event - The Nostr event to parse
  * @returns The parsed IlpPeerInfo object
- * @throws InvalidEventError if the event is malformed or missing required fields
+ * @throws {InvalidEventError} if the event is malformed or missing required fields.
+ *   This includes: malformed JSON, invalid required fields, invalid `feePerByte`,
+ *   invalid `prefixPricing`, invalid `ilpAddresses`, `swapPairs` not being an array,
+ *   or any `SwapPair` element failing structural validation (Story 12.1 AC-5).
  */
 export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   if (event.kind !== ILP_PEER_INFO_KIND) {
@@ -199,6 +199,19 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     prefixPricing = { basePrice };
   }
 
+  // swapPairs validation (Story 12.1)
+  const { swapPairs: rawSwapPairs } = parsed;
+  let swapPairs: SwapPair[] | undefined;
+  if (rawSwapPairs !== undefined) {
+    if (!Array.isArray(rawSwapPairs)) {
+      throw new InvalidEventError('swapPairs must be an array');
+    }
+    rawSwapPairs.forEach((pair, index) => {
+      assertSwapPairForParse(pair, index);
+    });
+    swapPairs = rawSwapPairs as SwapPair[];
+  }
+
   // ilpAddresses validation (Story 7.3)
   let ilpAddresses: string[];
   if (rawIlpAddresses !== undefined) {
@@ -246,5 +259,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     ilpAddresses,
     feePerByte,
     ...(prefixPricing !== undefined && { prefixPricing }),
+    ...(swapPairs !== undefined && { swapPairs }),
   };
 }

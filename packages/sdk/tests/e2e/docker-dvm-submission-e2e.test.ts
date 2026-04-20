@@ -28,7 +28,11 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
+import {
+  generateSecretKey,
+  getPublicKey,
+  finalizeEvent,
+} from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import {
   createNode,
@@ -164,7 +168,14 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
         healthCheckPort: 19903,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [
@@ -173,6 +184,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: DVM_SUBMISSION_PRIVATE_KEY,
           },
         ],
@@ -202,6 +214,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }],
@@ -312,9 +325,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     if (skipIfNotReady(servicesReady)) return;
 
     // Probe 1: Corrupt TOON data → send via connector directly → peer rejects
-    const corruptData = new Uint8Array(
-      Buffer.from('not-valid-dvm-toon-data')
-    );
+    const corruptData = new Uint8Array(Buffer.from('not-valid-dvm-toon-data'));
     const probe1Result = await connector.sendPacket({
       destination: 'g.toon.peer1',
       amount: 99999n,
@@ -346,16 +357,17 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     expect(probe2Result.type).toBe('reject');
 
     // Probe 3: Valid TOON + valid sig but underpaid → peer rejects
-    const { event: underpaidEvent, toonBytes: goodBytes } = createSignedDvmEvent(
-      eventSecretKey,
-      TEXT_GENERATION_KIND,
-      [
-        ['i', 'Underpaid DVM test', 'text'],
-        ['bid', '1000', 'usdc'],
-        ['output', 'text/plain'],
-      ],
-      'Underpaid ordering test'
-    );
+    const { event: underpaidEvent, toonBytes: goodBytes } =
+      createSignedDvmEvent(
+        eventSecretKey,
+        TEXT_GENERATION_KIND,
+        [
+          ['i', 'Underpaid DVM test', 'text'],
+          ['bid', '1000', 'usdc'],
+          ['output', 'text/plain'],
+        ],
+        'Underpaid ordering test'
+      );
     const requiredAmount = BigInt(goodBytes.length) * 10n;
 
     const probe3Result = await connector.sendPacket({
@@ -605,15 +617,11 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
 
     // Kind 5300 — peer1 has a default handler (accepts all), so it will
     // be accepted. Verify it appears on relay.
-    const tts5300 = createSignedDvmEvent(
-      eventSecretKey,
-      TEXT_TO_SPEECH_KIND,
-      [
-        ['i', 'TTS request', 'text'],
-        ['bid', '3000', 'usdc'],
-        ['output', 'audio/mp3'],
-      ]
-    );
+    const tts5300 = createSignedDvmEvent(eventSecretKey, TEXT_TO_SPEECH_KIND, [
+      ['i', 'TTS request', 'text'],
+      ['bid', '3000', 'usdc'],
+      ['output', 'audio/mp3'],
+    ]);
     const ttsResult = await node.publishEvent(tts5300.event, {
       destination: 'g.toon.peer1',
     });
@@ -691,7 +699,9 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       15000
     );
     expect(storedEvent).not.toBeNull();
-    expect((storedEvent as Record<string, unknown>)['kind']).toBe(TEXT_GENERATION_KIND);
+    expect((storedEvent as Record<string, unknown>)['kind']).toBe(
+      TEXT_GENERATION_KIND
+    );
   });
 
   // =========================================================================

@@ -51,6 +51,7 @@ export type {
 // TypeScript interfaces
 export type {
   IlpPeerInfo,
+  SwapPair,
   TeeAttestation,
   Subscription,
   OpenChannelParams,

@@ -49,6 +49,14 @@ export class HandlerRegistry {
   }
 
   /**
+   * Returns the handler registered for `kind`, or `undefined` if none.
+   * Added for Story 12.7 AC-10 (handler-registration verification).
+   */
+  get(kind: number): Handler | undefined {
+    return this.handlers.get(kind);
+  }
+
+  /**
    * Returns registered kinds in the DVM request range (5000-5999), sorted ascending.
    * Uses JOB_REQUEST_KIND_BASE (5000) as the range start.
    */

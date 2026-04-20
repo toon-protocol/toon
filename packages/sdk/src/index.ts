@@ -30,6 +30,10 @@ export {
   HandlerError,
   VerificationError,
   PricingError,
+  GiftWrapError,
+  SwapHandlerError,
+  StreamSwapError,
+  SettlementTxError,
 } from './errors.js';
 
 // Handler context
@@ -120,8 +124,83 @@ export type {
   UploadBlobChunkedOptions,
 } from './arweave/index.js';
 
+// Gift wrap (Story 12.2)
+export {
+  wrapSwapPacket,
+  unwrapSwapPacket,
+  wrapSwapPacketToToon,
+  unwrapSwapPacketFromToon,
+  encryptFulfillClaim,
+  decryptFulfillClaim,
+} from './gift-wrap.js';
+
+export type {
+  WrapSwapPacketParams,
+  WrapSwapPacketResult,
+  UnwrapSwapPacketParams,
+  UnwrapSwapPacketResult,
+  WrapSwapPacketToToonParams,
+  WrapSwapPacketToToonResult,
+  UnwrapSwapPacketFromToonParams,
+  EncryptFulfillClaimParams,
+  EncryptFulfillClaimResult,
+  DecryptFulfillClaimParams,
+} from './gift-wrap.js';
+
+// Swap handler (Story 12.3)
+export {
+  createSwapHandler,
+  findSwapPair,
+  applyRate,
+  SWAP_HANDLER_REJECT_CODES,
+  SWAP_HANDLER_REJECT_MESSAGES,
+} from './swap-handler.js';
+
+export type {
+  CreateSwapHandlerConfig,
+  ClaimIssuer,
+  IssueClaimParams,
+  IssueClaimResult,
+  ApplyRateParams,
+  SwapHandlerLogger,
+} from './swap-handler.js';
+
+// Stream swap sender API (Story 12.5)
+export { streamSwap, streamSwapControlled } from './stream-swap.js';
+
+export type {
+  StreamSwapParams,
+  StreamSwapResult,
+  AccumulatedClaim,
+  PacketProgress,
+  RateMonitorCallback,
+  StreamSwapController,
+} from './stream-swap.js';
+
+// Settlement (Story 12.6)
+export {
+  buildSettlementTx,
+  verifyAccumulatedClaim,
+  fillEvmSettlementTxGas,
+  balanceProofHashEvm,
+  balanceProofHashSolana,
+  bigintToBytes32BE,
+  concatBytes,
+  hexToBytes,
+} from './settlement/index.js';
+
+export type {
+  SettlementBundle,
+  BuildSettlementTxParams,
+  BuildSettlementTxResult,
+  MillSignerConfig,
+} from './settlement/index.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
+
+// Re-export transport config from connector for convenience
+export type { TransportConfig } from '@toon-protocol/connector';
 
 // Re-export bootstrap types for lifecycle event listeners
 export type {

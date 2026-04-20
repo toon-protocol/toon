@@ -8,12 +8,7 @@
  * Prerequisites: SDK E2E infrastructure running via `./scripts/sdk-e2e-infra.sh up`
  */
 
-import {
-  createPublicClient,
-  http,
-  defineChain,
-  type Hex,
-} from 'viem';
+import { createPublicClient, http, defineChain, type Hex } from 'viem';
 import WebSocket from 'ws';
 import { decodeEventFromToon } from '@toon-protocol/relay';
 
@@ -249,8 +244,14 @@ export async function getChannelState(channelId: Hex) {
     args: [channelId],
   });
 
-  const [settlementTimeout, state, closedAt, openedAt, participant1, participant2] =
-    result;
+  const [
+    settlementTimeout,
+    state,
+    closedAt,
+    openedAt,
+    participant1,
+    participant2,
+  ] = result;
 
   return {
     channelId,
@@ -402,7 +403,9 @@ export async function waitForRelayReady(
  * Wait for peer2's bootstrap to complete by polling its health endpoint
  * until bootstrapPhase is 'ready'.
  */
-export async function waitForPeer2Bootstrap(timeoutMs = 45000): Promise<boolean> {
+export async function waitForPeer2Bootstrap(
+  timeoutMs = 45000
+): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -502,7 +505,10 @@ export async function waitForMinaHealth(timeoutMs = 180000): Promise<boolean> {
   return false;
 }
 
-export async function acquireMinaAccount(): Promise<{ pk: string; sk: string } | null> {
+export async function acquireMinaAccount(): Promise<{
+  pk: string;
+  sk: string;
+} | null> {
   try {
     const res = await fetch(`${MINA_ACCOUNTS_MANAGER}/acquire-account`, {
       method: 'POST',
@@ -531,9 +537,7 @@ export async function releaseMinaAccount(pk: string): Promise<void> {
 export function skipIfNotReady(servicesReady: boolean): boolean {
   if (!servicesReady) {
     if (process.env['CI']) {
-      throw new Error(
-        'Docker SDK E2E services not ready — cannot run in CI.'
-      );
+      throw new Error('Docker SDK E2E services not ready — cannot run in CI.');
     }
     console.log('Skipping: Docker SDK E2E infra not ready');
     return true;

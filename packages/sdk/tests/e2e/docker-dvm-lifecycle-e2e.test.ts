@@ -103,7 +103,14 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
         healthCheckPort: 19905,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [
@@ -112,6 +119,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: DVM_LIFECYCLE_PRIVATE_KEY,
           },
         ],
@@ -141,12 +149,10 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     // Register peer1 with routes for both peer1 and peer2
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
-      routes: [
-        { prefix: 'g.toon.peer1' },
-        { prefix: 'g.toon.peer2' },
-      ],
+      routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],
     });
 
     // Wait for BTP connection
@@ -403,10 +409,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
 
     // settleCompute() sends an empty-data ILP packet. Docker peers expect
     // TOON data and will reject, but the method should not throw.
-    const result = await node.settleCompute(
-      resultEvent,
-      'g.toon.peer1'
-    );
+    const result = await node.settleCompute(resultEvent, 'g.toon.peer1');
 
     expect(result).toBeDefined();
     // Docker peer rejects empty-data packets, so accepted may be false —
@@ -429,10 +432,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       providerSecretKey
     );
 
-    const settleResult = await node.settleCompute(
-      resultEvent,
-      'g.toon.peer1'
-    );
+    const settleResult = await node.settleCompute(resultEvent, 'g.toon.peer1');
     expect(settleResult).toBeDefined();
 
     // Publish a regular event to show both use same infrastructure
@@ -574,7 +574,9 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       15000
     );
     expect(feedbackOnRelay).not.toBeNull();
-    const feedbackTags = (feedbackOnRelay as Record<string, unknown>)['tags'] as string[][];
+    const feedbackTags = (feedbackOnRelay as Record<string, unknown>)[
+      'tags'
+    ] as string[][];
     const feedbackETag = feedbackTags.find((t) => t[0] === 'e');
     expect(feedbackETag?.[1]).toBe(requestId);
 
@@ -585,7 +587,9 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       15000
     );
     expect(resultOnRelay).not.toBeNull();
-    const resultTags = (resultOnRelay as Record<string, unknown>)['tags'] as string[][];
+    const resultTags = (resultOnRelay as Record<string, unknown>)[
+      'tags'
+    ] as string[][];
     const resultETag = resultTags.find((t) => t[0] === 'e');
     expect(resultETag?.[1]).toBe(requestId);
 
@@ -627,7 +631,9 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
       15000
     );
     expect(resultOnRelay).not.toBeNull();
-    const resultTags = (resultOnRelay as Record<string, unknown>)['tags'] as string[][];
+    const resultTags = (resultOnRelay as Record<string, unknown>)[
+      'tags'
+    ] as string[][];
     const eTag = resultTags.find((t) => t[0] === 'e');
     expect(eTag?.[1]).toBe(requestEvent.id);
   });
@@ -704,10 +710,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     );
 
     // Settle to peer2 — routed through peer1
-    const result = await node.settleCompute(
-      resultEvent,
-      'g.toon.peer2'
-    );
+    const result = await node.settleCompute(resultEvent, 'g.toon.peer2');
 
     // Method executes and returns valid IlpSendResult
     expect(result).toBeDefined();

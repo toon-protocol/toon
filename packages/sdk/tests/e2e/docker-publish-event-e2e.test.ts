@@ -130,7 +130,14 @@ describe('Docker SDK Publish Event E2E', () => {
         healthCheckPort: 19951,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [
@@ -139,6 +146,7 @@ describe('Docker SDK Publish Event E2E', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: TEST_PRIVATE_KEY,
           },
         ],
@@ -172,12 +180,10 @@ describe('Docker SDK Publish Event E2E', () => {
     // -------------------------------------------------------------------
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
-      routes: [
-        { prefix: 'g.toon.peer1' },
-        { prefix: 'g.toon.peer2' },
-      ],
+      routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],
     });
 
     // Wait for BTP connection to establish
@@ -260,10 +266,7 @@ describe('Docker SDK Publish Event E2E', () => {
     expect(isPeer1Participant).toBe(true);
 
     // Verify deposit amount on-chain via participants view
-    const info = await getParticipantInfo(
-      channelId as Hex,
-      TEST_EVM_ADDRESS
-    );
+    const info = await getParticipantInfo(channelId as Hex, TEST_EVM_ADDRESS);
     expect(info.deposit).toBeGreaterThanOrEqual(1000000n);
   });
 
@@ -676,9 +679,7 @@ describe('Docker SDK Publish Event E2E', () => {
     const balanceAfterA = await getTokenBalance(accountA.address as Hex);
     const balanceAfterB = await getTokenBalance(accountB.address as Hex);
 
-    expect(balanceAfterA).toBe(
-      balanceBeforeA + depositAmount - transferAmount
-    );
+    expect(balanceAfterA).toBe(balanceBeforeA + depositAmount - transferAmount);
     expect(balanceAfterB).toBe(balanceBeforeB + transferAmount);
   });
 });

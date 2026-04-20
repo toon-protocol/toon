@@ -89,7 +89,14 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
         healthCheckPort: 19907,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [
@@ -98,6 +105,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: WORKFLOW_PRIVATE_KEY,
           },
         ],
@@ -127,6 +135,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],

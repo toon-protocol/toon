@@ -74,8 +74,16 @@ function waitForPetEvent(
     const subId = `pet-${Date.now()}`;
     const cleanup = () => {
       clearTimeout(timer);
-      try { ws.send(JSON.stringify(['CLOSE', subId])); } catch { /* ignore */ }
-      try { ws.close(); } catch { /* ignore */ }
+      try {
+        ws.send(JSON.stringify(['CLOSE', subId]));
+      } catch {
+        /* ignore */
+      }
+      try {
+        ws.close();
+      } catch {
+        /* ignore */
+      }
     };
 
     const timer = setTimeout(() => {
@@ -84,13 +92,20 @@ function waitForPetEvent(
     }, timeoutMs);
 
     ws.on('open', () => {
-      ws.send(JSON.stringify(['REQ', subId, { kinds: [14919], '#d': [blobbiId] }]));
+      ws.send(
+        JSON.stringify(['REQ', subId, { kinds: [14919], '#d': [blobbiId] }])
+      );
     });
 
     ws.on('message', (data: Buffer) => {
       try {
         const msg = JSON.parse(data.toString());
-        if (Array.isArray(msg) && msg[0] === 'EVENT' && msg[1] === subId && msg[2]) {
+        if (
+          Array.isArray(msg) &&
+          msg[0] === 'EVENT' &&
+          msg[1] === subId &&
+          msg[2]
+        ) {
           cleanup();
           resolve(msg[2] as Record<string, unknown>);
         }
@@ -115,7 +130,7 @@ function buildPetInteractionEvent(
   actionType: number,
   itemId: number,
   cost: number,
-  isSleeping = false,
+  isSleeping = false
 ): Record<string, unknown> {
   const template: EventTemplate = {
     kind: PET_INTERACTION_REQUEST_KIND,
@@ -129,13 +144,19 @@ function buildPetInteractionEvent(
     ],
     content: '',
   };
-  return finalizeEvent(template, secretKey) as unknown as Record<string, unknown>;
+  return finalizeEvent(template, secretKey) as unknown as Record<
+    string,
+    unknown
+  >;
 }
 
 /**
  * Extract a tag value from a Nostr event.
  */
-function getTagValue(event: Record<string, unknown>, tagName: string): string | undefined {
+function getTagValue(
+  event: Record<string, unknown>,
+  tagName: string
+): string | undefined {
   const tags = event['tags'] as string[][] | undefined;
   if (!tags) return undefined;
   for (const tag of tags) {
@@ -230,12 +251,17 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E (Story 11.7)', () => {
     // New pets start at stage EGG (0). Feed/Play are NOT allowed for eggs.
     // Use Clean action (2) with soap shop item (itemId 15, cost 15) -- allowed for eggs.
     const petEvent = buildPetInteractionEvent(
-      nostrSecretKey, blobbiId, 2, 15, 15, false,
+      nostrSecretKey,
+      blobbiId,
+      2,
+      15,
+      15,
+      false
     );
 
     const result = await node.publishEvent(
       petEvent as Parameters<typeof node.publishEvent>[0],
-      { destination: 'g.toon.peer1' },
+      { destination: 'g.toon.peer1' }
     );
 
     // ILP FULFILL returned
@@ -244,7 +270,7 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E (Story 11.7)', () => {
 
     // Decode base64 JSON response payload
     const payload = JSON.parse(
-      Buffer.from(result.data!, 'base64').toString(),
+      Buffer.from(result.data!, 'base64').toString()
     ) as Record<string, unknown>;
 
     // First interaction -> cycle 1
@@ -304,9 +330,9 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E (Story 11.7)', () => {
     // Use egg-allowed actions with base (free) variants, plus one shop item
     // to exercise the token-cost validation path in the game engine.
     const interactions = [
-      { action: 4, item: 0, cost: 0 },  // warm (base action)
-      { action: 5, item: 0, cost: 0 },  // check (base action)
-      { action: 7, item: 0, cost: 0 },  // talk (base action)
+      { action: 4, item: 0, cost: 0 }, // warm (base action)
+      { action: 5, item: 0, cost: 0 }, // check (base action)
+      { action: 7, item: 0, cost: 0 }, // talk (base action)
       { action: 8, item: 9, cost: 40 }, // medicine vitamins (shop item, exercises cost path)
     ];
 
@@ -323,19 +349,19 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E (Story 11.7)', () => {
         interaction.action,
         interaction.item,
         interaction.cost,
-        false,
+        false
       );
 
       const result = await node.publishEvent(
         petEvent as Parameters<typeof node.publishEvent>[0],
-        { destination: 'g.toon.peer1' },
+        { destination: 'g.toon.peer1' }
       );
 
       expect(result.success).toBe(true);
       expect(result.data).toBeDefined();
 
       const payload = JSON.parse(
-        Buffer.from(result.data!, 'base64').toString(),
+        Buffer.from(result.data!, 'base64').toString()
       ) as Record<string, unknown>;
 
       const cycle = payload['cycle'] as number;
@@ -376,11 +402,14 @@ describe.skipIf(SKIP_E2E)('Pet DVM E2E (Story 11.7)', () => {
       ],
       content: '',
     };
-    const malformedEvent = finalizeEvent(template, nostrSecretKey) as unknown as Record<string, unknown>;
+    const malformedEvent = finalizeEvent(
+      template,
+      nostrSecretKey
+    ) as unknown as Record<string, unknown>;
 
     const result = await node.publishEvent(
       malformedEvent as Parameters<typeof node.publishEvent>[0],
-      { destination: 'g.toon.peer1' },
+      { destination: 'g.toon.peer1' }
     );
 
     // Should be rejected (F00 -- malformed request)
