@@ -24,6 +24,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { createNode, type ServiceNode } from '@toon-protocol/sdk';
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
+import type { EmbeddableConnectorLike } from '@toon-protocol/core';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import { createConnection } from 'node:net';
 
@@ -32,7 +33,6 @@ import {
   PEER1_BTP_URL,
   PEER1_EVM_ADDRESS,
   TOKEN_ADDRESS,
-  TOKEN_NETWORK_ADDRESS,
   REGISTRY_ADDRESS,
   TEST_PRIVATE_KEY,
   CHAIN_ID,
@@ -156,7 +156,7 @@ describe('Docker SDK Ator Transport E2E', () => {
 
     node = createNode({
       secretKey: nostrSecretKey,
-      connector: connector as unknown as import('@toon-protocol/core').EmbeddableConnectorLike,
+      connector: connector as unknown as EmbeddableConnectorLike,
       ilpAddress: `g.toon.ator.test`,
       btpEndpoint: 'ws://127.0.0.1:19960',
       toonEncoder: encodeEventToToon,
