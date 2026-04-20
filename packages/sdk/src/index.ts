@@ -199,6 +199,9 @@ export type {
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 
+// Re-export transport config from connector for convenience
+export type { TransportConfig } from '@toon-protocol/connector';
+
 // Re-export bootstrap types for lifecycle event listeners
 export type {
   BootstrapEvent,

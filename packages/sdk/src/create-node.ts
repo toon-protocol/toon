@@ -24,6 +24,7 @@ import type {
   HandlePacketResponse,
   ConnectorChannelClient,
 } from '@toon-protocol/core';
+import type { TransportConfig } from '@toon-protocol/connector';
 import type {
   KnownPeer,
   BootstrapResult,
@@ -193,6 +194,14 @@ export interface NodeConfig {
    * Only used when auto-creating an embedded connector.
    */
   chainProviders?: ChainProviderConfigEntry[];
+
+  /**
+   * Transport configuration for the embedded connector (ator/SOCKS5 privacy overlay).
+   * When provided, passed directly to ConnectorNode as `transport`.
+   * Only used when auto-creating an embedded connector.
+   */
+  transport?: TransportConfig;
+
   /**
    * NIP-59 transport privacy configuration for the embedded connector.
    * When enabled, per-packet claims are wrapped in three-layer encryption.
@@ -860,6 +869,9 @@ export function createNode(config: NodeConfig): ServiceNode {
       };
       if (effectiveChainProviders) {
         connectorConfig.chainProviders = effectiveChainProviders;
+      }
+      if (config.transport) {
+        connectorConfig.transport = config.transport;
       }
       if (config.nip59) {
         connectorConfig.nip59 = config.nip59;
