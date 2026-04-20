@@ -865,7 +865,10 @@ export function createNode(config: NodeConfig): ServiceNode {
         connectorConfig.nip59 = config.nip59;
       }
 
-      autoCreatedConnector = new ConnectorNodeClass(connectorConfig, connectorLogger);
+      autoCreatedConnector = new ConnectorNodeClass(
+        connectorConfig,
+        connectorLogger
+      );
 
       await autoCreatedConnector.start();
 
