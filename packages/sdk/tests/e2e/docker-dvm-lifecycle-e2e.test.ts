@@ -142,6 +142,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     // Register peer1 with routes for both peer1 and peer2
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],

@@ -128,6 +128,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],

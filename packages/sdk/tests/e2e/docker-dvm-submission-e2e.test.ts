@@ -207,6 +207,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
+      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }],
