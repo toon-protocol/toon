@@ -168,7 +168,14 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
         healthCheckPort: 19903,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [

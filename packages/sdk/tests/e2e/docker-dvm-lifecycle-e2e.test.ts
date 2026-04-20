@@ -103,7 +103,14 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
         healthCheckPort: 19905,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [

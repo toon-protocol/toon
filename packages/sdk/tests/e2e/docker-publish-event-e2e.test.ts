@@ -130,7 +130,14 @@ describe('Docker SDK Publish Event E2E', () => {
         healthCheckPort: 19951,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [

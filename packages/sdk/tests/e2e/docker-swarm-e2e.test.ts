@@ -93,7 +93,14 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
         healthCheckPort: 19909,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [

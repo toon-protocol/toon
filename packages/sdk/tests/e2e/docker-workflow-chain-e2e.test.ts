@@ -89,7 +89,14 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
         healthCheckPort: 19907,
         environment: 'development' as const,
         deploymentMode: 'embedded' as const,
-        peers: [],
+        peers: [
+          {
+            id: 'peer1',
+            url: PEER1_BTP_URL,
+            authToken: '',
+            evmAddress: PEER1_EVM_ADDRESS,
+          },
+        ],
         routes: [],
         localDelivery: { enabled: false },
         chainProviders: [
