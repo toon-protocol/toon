@@ -177,6 +177,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: DVM_SUBMISSION_PRIVATE_KEY,
           },
         ],

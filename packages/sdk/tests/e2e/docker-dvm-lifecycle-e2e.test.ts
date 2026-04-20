@@ -112,6 +112,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: DVM_LIFECYCLE_PRIVATE_KEY,
           },
         ],

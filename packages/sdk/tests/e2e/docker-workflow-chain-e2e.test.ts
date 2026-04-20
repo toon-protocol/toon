@@ -98,6 +98,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: WORKFLOW_PRIVATE_KEY,
           },
         ],

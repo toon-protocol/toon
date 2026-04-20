@@ -102,6 +102,7 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: SWARM_PRIVATE_KEY,
           },
         ],

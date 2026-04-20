@@ -139,6 +139,7 @@ describe('Docker SDK Publish Event E2E', () => {
             chainId: `evm:${CHAIN_ID}`,
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
+            tokenAddress: TOKEN_ADDRESS,
             keyId: TEST_PRIVATE_KEY,
           },
         ],
