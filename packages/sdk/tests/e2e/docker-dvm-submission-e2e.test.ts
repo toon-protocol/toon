@@ -174,6 +174,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
+            chain: 'evm:31337',
           },
         ],
         routes: [],

@@ -73,7 +73,6 @@ import {
   anvilChain,
   TOKEN_NETWORK_ABI,
   ERC20_ABI,
-  BALANCE_PROOF_TYPES,
   createViemClient,
   getChannelState,
   getParticipantInfo,
@@ -136,6 +135,7 @@ describe('Docker SDK Publish Event E2E', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
+            chain: 'evm:31337',
           },
         ],
         routes: [],
@@ -569,36 +569,9 @@ describe('Docker SDK Publish Event E2E', () => {
     });
     expect(depositReceipt.status).toBe('success');
 
-    // 5. Account #4 (A) signs EIP-712 balance proof showing A transferred 10000 to B.
-    // closeChannel stores the non-closing participant's transferredAmount, so B
-    // must close with A's proof to correctly record A's outgoing transfer.
-    const transferAmount = 10000n;
-    const balanceProofDomain = {
-      name: 'TokenNetwork' as const,
-      version: '1' as const,
-      chainId: CHAIN_ID,
-      verifyingContract: TOKEN_NETWORK_ADDRESS,
-    };
-
-    const balanceProofMessage = {
-      channelId: settlementChannelId,
-      nonce: 1n,
-      transferredAmount: transferAmount,
-      lockedAmount: 0n,
-      locksRoot:
-        '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex,
-    };
-
-    const signature = await accountA.signTypedData({
-      domain: balanceProofDomain,
-      types: BALANCE_PROOF_TYPES,
-      primaryType: 'BalanceProof',
-      message: balanceProofMessage,
-    });
-
-    // 6. Account #5 (B) calls closeChannel with Account #4's (A) signed balance proof.
-    // The contract records A (non-closing participant) as having transferred 10000.
-    // Settlement: A gets deposit - transferred = 40000, B gets 0 + transferred = 10000.
+    // 5. Account #5 (B) calls closeChannel to start the settlement timeout.
+    // closeChannel now only takes channelId; claims are submitted separately
+    // via claimFromChannel during the challenge period.
     const walletB = createWalletClient({
       account: accountB,
       chain: anvilChain,
@@ -608,18 +581,7 @@ describe('Docker SDK Publish Event E2E', () => {
       address: TOKEN_NETWORK_ADDRESS,
       abi: TOKEN_NETWORK_ABI,
       functionName: 'closeChannel',
-      args: [
-        settlementChannelId,
-        {
-          channelId: settlementChannelId,
-          nonce: 1n,
-          transferredAmount: transferAmount,
-          lockedAmount: 0n,
-          locksRoot:
-            '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex,
-        },
-        signature,
-      ],
+      args: [settlementChannelId],
     });
     const closeReceipt = await client.waitForTransactionReceipt({
       hash: closeTx,
@@ -630,7 +592,7 @@ describe('Docker SDK Publish Event E2E', () => {
     channelState = await getChannelState(settlementChannelId);
     expect(channelState.state).toBe('closed');
 
-    // 7. Advance time past settlement timeout using Anvil's evm_increaseTime
+    // 6. Advance time past settlement timeout using Anvil's evm_increaseTime
     await fetch(ANVIL_RPC, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -654,7 +616,7 @@ describe('Docker SDK Publish Event E2E', () => {
       }),
     });
 
-    // 8. Record pre-settlement balances, then settle
+    // 7. Record pre-settlement balances, then settle
     const balanceBeforeA = await getTokenBalance(accountA.address as Hex);
     const balanceBeforeB = await getTokenBalance(accountB.address as Hex);
 
@@ -669,17 +631,17 @@ describe('Docker SDK Publish Event E2E', () => {
     });
     expect(settleReceipt.status).toBe('success');
 
-    // 9. Verify channel state = settled
+    // 8. Verify channel state = settled
     channelState = await getChannelState(settlementChannelId);
     expect(channelState.state).toBe('settled');
 
-    // 10. Verify balance redistribution:
-    //     A deposited depositAmount, transferred transferAmount to B
-    //     A gets back (depositAmount - transferAmount), B gets transferAmount
+    // 9. Verify balance redistribution:
+    //     No claims were submitted, so each participant gets back their deposit.
+    //     A deposited depositAmount, B deposited 0.
     const balanceAfterA = await getTokenBalance(accountA.address as Hex);
     const balanceAfterB = await getTokenBalance(accountB.address as Hex);
 
-    expect(balanceAfterA).toBe(balanceBeforeA + depositAmount - transferAmount);
-    expect(balanceAfterB).toBe(balanceBeforeB + transferAmount);
+    expect(balanceAfterA).toBe(balanceBeforeA + depositAmount);
+    expect(balanceAfterB).toBe(balanceBeforeB);
   });
 });

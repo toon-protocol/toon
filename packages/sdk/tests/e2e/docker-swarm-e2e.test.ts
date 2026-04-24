@@ -99,6 +99,7 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
+            chain: 'evm:31337',
           },
         ],
         routes: [],

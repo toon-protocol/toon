@@ -117,8 +117,6 @@ export const TOKEN_NETWORK_ABI = [
     inputs: [{ type: 'bytes32' }, { type: 'address' }],
     outputs: [
       { name: 'deposit', type: 'uint256' },
-      { name: 'withdrawnAmount', type: 'uint256' },
-      { name: 'isCloser', type: 'bool' },
       { name: 'nonce', type: 'uint256' },
       { name: 'transferredAmount', type: 'uint256' },
     ],
@@ -155,21 +153,7 @@ export const TOKEN_NETWORK_ABI = [
     name: 'closeChannel',
     type: 'function',
     stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'channelId', type: 'bytes32' },
-      {
-        name: 'balanceProof',
-        type: 'tuple',
-        components: [
-          { name: 'channelId', type: 'bytes32' },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'transferredAmount', type: 'uint256' },
-          { name: 'lockedAmount', type: 'uint256' },
-          { name: 'locksRoot', type: 'bytes32' },
-        ],
-      },
-      { name: 'signature', type: 'bytes' },
-    ],
+    inputs: [{ name: 'channelId', type: 'bytes32' }],
     outputs: [],
   },
   {
@@ -274,8 +258,8 @@ export async function getParticipantInfo(channelId: Hex, participant: Hex) {
     args: [channelId, participant],
   });
 
-  const [deposit, withdrawnAmount, isCloser, nonce, transferredAmount] = result;
-  return { deposit, withdrawnAmount, isCloser, nonce, transferredAmount };
+  const [deposit, nonce, transferredAmount] = result;
+  return { deposit, nonce, transferredAmount };
 }
 
 export async function getTokenBalance(address: Hex): Promise<bigint> {

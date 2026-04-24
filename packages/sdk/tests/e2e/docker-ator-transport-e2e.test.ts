@@ -120,6 +120,7 @@ describe('Docker SDK Ator Transport E2E', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
+            chain: 'evm:31337',
           },
         ],
         routes: [],
