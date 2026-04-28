@@ -8,9 +8,16 @@
  * Prerequisites: SDK E2E infrastructure running via `./scripts/sdk-e2e-infra.sh up`
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createPublicClient, http, defineChain, type Hex } from 'viem';
 import WebSocket from 'ws';
 import { decodeEventFromToon } from '@toon-protocol/relay';
+
+// Repo root resolved from this file's location, independent of process.cwd().
+// File path: <repo>/packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts → walk up 5 levels.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
 // ---------------------------------------------------------------------------
 // Constants (Docker SDK E2E ports — see docker-compose-sdk-e2e.yml)
@@ -75,9 +82,60 @@ export const CHAIN_ID = 31337;
 // Multi-chain constants
 export const SOLANA_RPC = 'http://localhost:19899';
 export const SOLANA_WS = 'ws://localhost:19900';
-export const SOLANA_PROGRAM_ID = process.env['SOLANA_PROGRAM_ID'] || '';
 export const MINA_GRAPHQL = 'http://localhost:19085/graphql';
 export const MINA_ACCOUNTS_MANAGER = 'http://localhost:19181';
+
+// Load .env.sdk-e2e if present (written by ./scripts/sdk-e2e-infra.sh up).
+// Resolved from REPO_ROOT, not process.cwd(), so it works regardless of where
+// vitest is invoked.
+function loadSdkE2eEnv(): void {
+  try {
+    const envPath = resolve(REPO_ROOT, '.env.sdk-e2e');
+    if (!existsSync(envPath)) return;
+    const content = readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const match = line.match(/^([A-Za-z0-9_]+)=(.*)$/);
+      if (match) {
+        const [, key, value] = match;
+        if (process.env[key] === undefined || process.env[key] === '') {
+          process.env[key] = value;
+        }
+      }
+    }
+  } catch {
+    // non-fatal — env var may already be set
+  }
+}
+loadSdkE2eEnv();
+
+function deriveSolanaProgramIdFromKeypair(): string | null {
+  try {
+    const kpPath = resolve(REPO_ROOT, 'contracts/solana/payment_channel-keypair.json');
+    const raw = readFileSync(kpPath, 'utf8');
+    const kp = JSON.parse(raw) as number[];
+    if (kp.length < 64) return null;
+    const pubkey = Uint8Array.from(kp.slice(32, 64));
+    // Base58 encode (same alphabet as SDK identity module)
+    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    let val = 0n;
+    for (const b of pubkey) val = val * 256n + BigInt(b);
+    let result = '';
+    while (val > 0n) {
+      result = alphabet[Number(val % 58n)] + result;
+      val = val / 58n;
+    }
+    for (const b of pubkey) {
+      if (b === 0) result = '1' + result;
+      else break;
+    }
+    return result || '1';
+  } catch {
+    return null;
+  }
+}
+
+export const SOLANA_PROGRAM_ID =
+  process.env['SOLANA_PROGRAM_ID'] || deriveSolanaProgramIdFromKeypair() || '';
 export const MINA_ZKAPP_ADDRESS = process.env['MINA_ZKAPP_ADDRESS'] || '';
 
 // ---------------------------------------------------------------------------

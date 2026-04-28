@@ -216,8 +216,12 @@ export function buildWorkflowDefinitionEvent(
 
   // Unique `d` tag for NIP-33 parameterized replaceable semantics.
   // Use explicit workflowId if provided (deterministic), otherwise
-  // fall back to timestamp-based identifier.
-  const dTag = params.workflowId ?? `wf-${Date.now()}-${params.steps.length}`;
+  // fall back to timestamp-based identifier with random suffix to
+  // guarantee uniqueness across concurrent or rapid-fire creations.
+  const randomSuffix = Math.random().toString(36).slice(2, 8);
+  const dTag =
+    params.workflowId ??
+    `wf-${Date.now()}-${params.steps.length}-${randomSuffix}`;
   tags.push(['d', dTag]);
 
   // Total bid tag for easy extraction without full JSON parse

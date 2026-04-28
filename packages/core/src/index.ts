@@ -231,6 +231,12 @@ export {
   type HandlePacketResponse,
 } from './compose.js';
 
+// Connector reject-code translation (ILP wire code → semantic reason)
+export {
+  ILP_TO_SEMANTIC,
+  ilpCodeToSemantic,
+} from './utils/reject-code.js';
+
 // TOON codec
 export {
   encodeEventToToon,

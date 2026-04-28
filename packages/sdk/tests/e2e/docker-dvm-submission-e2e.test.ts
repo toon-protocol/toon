@@ -65,6 +65,17 @@ import {
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+// PacketType discriminator values — fixed by the ILP OER wire spec (RFC-0027).
+// Mirrors the literal used in tests/integration/connector-contract.test.ts;
+// re-defined here to keep this E2E test dependency-light (no @toon-protocol/shared
+// import). Connector v3.3.2 returns numeric PacketType (14 = REJECT) instead of
+// the legacy string discriminator 'reject'.
+const REJECT = 14 as const;
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -331,9 +342,10 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       destination: 'g.toon.peer1',
       amount: 99999n,
       data: corruptData,
+      expiresAt: new Date(Date.now() + 30000),
     });
-    // Peer rejects corrupt data
-    expect(probe1Result.type).toBe('reject');
+    // Peer rejects corrupt data (PacketType.REJECT = 14 per ILP OER wire spec)
+    expect(probe1Result.type).toBe(REJECT);
 
     // Probe 2: Valid TOON but tampered signature → peer rejects
     const { toonBytes: validBytes } = createSignedDvmEvent(
@@ -354,8 +366,9 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       destination: 'g.toon.peer1',
       amount: BigInt(validBytes.length) * 10n,
       data: tampered,
+      expiresAt: new Date(Date.now() + 30000),
     });
-    expect(probe2Result.type).toBe('reject');
+    expect(probe2Result.type).toBe(REJECT);
 
     // Probe 3: Valid TOON + valid sig but underpaid → peer rejects
     const { event: underpaidEvent, toonBytes: goodBytes } =
@@ -375,8 +388,9 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
       destination: 'g.toon.peer1',
       amount: requiredAmount / 2n,
       data: goodBytes,
+      expiresAt: new Date(Date.now() + 30000),
     });
-    expect(probe3Result.type).toBe('reject');
+    expect(probe3Result.type).toBe(REJECT);
 
     // Verify underpaid event NOT on relay
     const underpaidOnRelay = await waitForEventOnRelay(

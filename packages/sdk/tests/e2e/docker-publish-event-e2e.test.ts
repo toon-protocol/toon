@@ -46,6 +46,7 @@ import {
   type HandlerContext,
 } from '@toon-protocol/sdk';
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
+import type { ConnectorConfig } from '@toon-protocol/connector';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
 import {
   createWalletClient,
@@ -140,6 +141,9 @@ describe('Docker SDK Publish Event E2E', () => {
         ],
         routes: [],
         localDelivery: { enabled: false },
+        settlement: { connectorFeePercentage: 0 } as unknown as NonNullable<
+          ConnectorConfig['settlement']
+        >,
         chainProviders: [
           {
             chainType: 'evm' as const,

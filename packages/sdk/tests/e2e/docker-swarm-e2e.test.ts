@@ -375,6 +375,7 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
         {
           swarmRequestEventId: swarmRequest.id,
           winnerResultEventId: submission.id,
+          customerPubkey: swarmRequest.pubkey,
         },
         nodeSecretKey
       );
