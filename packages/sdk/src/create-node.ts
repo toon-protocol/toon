@@ -51,6 +51,7 @@ import {
   resolveRouteFees,
   buildPrefixClaimEvent,
   validatePrefix,
+  ilpCodeToSemantic,
 } from '@toon-protocol/core';
 import type { ChainProviderConfigEntry } from '@toon-protocol/core';
 import type { DvmJobStatus, IlpSendResult } from '@toon-protocol/core';
@@ -641,6 +642,55 @@ export function createNode(config: NodeConfig): ServiceNode {
         if (decoded) {
           trackerRef.current.processEvent(decoded);
         }
+      }
+
+      // Connector v3.3.2 breaking change: the embedded ConnectorNode's
+      // PaymentHandlerAdapter consumes `response.data` (base64) and ignores
+      // `response.metadata`. The SDK's `ctx.accept(metadata)` historically
+      // returned `{ accept: true, metadata }`. To preserve handler ergonomics
+      // (handlers still pass an object), serialize `metadata` → base64 JSON
+      // into `data` here when the handler did not already populate `data`.
+      // The streamSwap FULFILL decoder expects this exact base64-JSON shape.
+      if (result.accept && result.metadata && !result.data) {
+        try {
+          const metadataJson = JSON.stringify(result.metadata);
+          (result as { data?: string }).data = Buffer.from(
+            metadataJson,
+            'utf8'
+          ).toString('base64');
+        } catch (err) {
+          console.error(
+            'Failed to serialize handler metadata to FULFILL data:',
+            err instanceof Error ? err.message : err
+          );
+        }
+      }
+
+      // Connector v3.3.2 breaking change: the adapter's reject path reads
+      // `response.rejectReason.{code,message}` and feeds `rejectReason.code`
+      // through `mapRejectCode()` — a SEMANTIC-reason → ILP-code lookup
+      // (e.g. `'internal_error'` → `'T00'`). The SDK's `ctx.reject(ilpCode,
+      // message)` returns the ILP code directly, so without translation
+      // every reject collapses to F99 (the `mapRejectCode()` fallback).
+      //
+      // Reverse-map the handler's ILP code back to the connector's expected
+      // semantic reason. Canonical mapping lives in
+      // `@toon-protocol/core` (utils/reject-code.ts).
+      if (
+        !result.accept &&
+        !(result as { rejectReason?: unknown }).rejectReason &&
+        (result as { code?: string }).code
+      ) {
+        const ilpCode = (result as { code: string }).code;
+        (
+          result as {
+            rejectReason?: { code: string; message: string };
+          }
+        ).rejectReason = {
+          code: ilpCodeToSemantic(ilpCode),
+          message:
+            (result as { message?: string }).message ?? 'Payment rejected',
+        };
       }
 
       return result;

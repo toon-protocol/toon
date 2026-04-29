@@ -29,6 +29,7 @@ import type { DiscoveryTracker } from './bootstrap/discovery-tracker.js';
 import { createDirectIlpClient } from './bootstrap/direct-ilp-client.js';
 import { createDirectConnectorAdmin } from './bootstrap/direct-connector-admin.js';
 import { createDirectChannelClient } from './bootstrap/direct-channel-client.js';
+import { ilpCodeToSemantic } from './utils/reject-code.js';
 
 /**
  * Structural type for incoming ILP packet handler request.
@@ -358,6 +359,16 @@ export function createToonNode(config: ToonNodeConfig): ToonNode {
         // HTTP mode uses local delivery instead of callback.
         // Adapter translates HandlePacketResponse (flat code/message) to
         // connector PaymentResponse (rejectReason: { code, message }).
+        //
+        // Connector v3.3.2 contract: the connector's payment-handler adapter
+        // feeds `rejectReason.code` through `mapRejectCode()` — a
+        // SEMANTIC-reason → wire-code lookup (e.g. `'internal_error'` →
+        // `'T00'`). Handlers in this codebase reject with raw ILP wire
+        // codes (`'T00'`, `'F00'`, ...), which are NOT keys in the
+        // connector's `REJECT_CODE_MAP`. Without translation, every reject
+        // collapses to `'F99'` (the connector's fallback). Translate the
+        // wire code back to the semantic reason here. See
+        // `utils/reject-code.ts` for the mapping rationale.
         if (config.connector.setPacketHandler) {
           const adaptedHandler = async (
             request: HandlePacketRequest
@@ -372,7 +383,7 @@ export function createToonNode(config: ToonNodeConfig): ToonNode {
               rejectReason?: { code: string; message: string };
             };
             adapted.rejectReason = {
-              code: result.code,
+              code: ilpCodeToSemantic(result.code),
               message: result.message,
             };
             return adapted;

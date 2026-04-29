@@ -37,7 +37,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as crypto from 'node:crypto';
 import { ed25519 } from '@noble/curves/ed25519.js';
-import { skipIfNotReady } from './helpers/docker-e2e-setup.js';
+import { skipIfNotReady, SOLANA_PROGRAM_ID } from './helpers/docker-e2e-setup.js';
 import {
   generateSolanaKeypair,
   base58Encode,
@@ -321,7 +321,7 @@ async function getAccountInfo(pubkey: string): Promise<{
 } | null> {
   const result = (await solanaRpc('getAccountInfo', [
     pubkey,
-    { encoding: 'base64' },
+    { encoding: 'base64', commitment: 'confirmed' },
   ])) as {
     value: {
       data: [string, string];
@@ -359,13 +359,21 @@ async function waitForConfirmation(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const result = (await solanaRpc('getSignatureStatuses', [[signature]])) as {
-      value: ({ confirmationStatus: string } | null)[];
+      value: ({
+        confirmationStatus: string;
+        err?: { InstructionError?: [number, unknown] } | unknown;
+      } | null)[];
     };
     const status = result.value[0];
     if (
       status?.confirmationStatus === 'confirmed' ||
       status?.confirmationStatus === 'finalized'
     ) {
+      if (status.err) {
+        throw new Error(
+          `Transaction ${signature} failed: ${JSON.stringify(status.err)}`
+        );
+      }
       return;
     }
     await new Promise((r) => setTimeout(r, 500));
@@ -490,20 +498,30 @@ async function buildAndSendTransaction(
   // Format: header (3 bytes) + account keys (32 * n) + recent blockhash (32) + instructions
   const blockhashBytes = base58Decode(blockhash);
 
-  // Calculate total instruction data size
-  let instructionSize = 0;
-  instructionSize += 1; // compact-u16 instruction count
+  // Calculate total instruction data size.
+  // Solana compact-u16 maxes out at 0xFFFF; reject larger values rather than
+  // silently producing a malformed wire-format encoding.
+  const compactU16Size = (value: number): number => {
+    if (value > 0xffff) {
+      throw new RangeError(`compact-u16 value ${value} exceeds u16 max (0xFFFF)`);
+    }
+    return value < 0x80 ? 1 : value < 0x4000 ? 2 : 3;
+  };
+
+  let instructionSize = compactU16Size(compiledInstructions.length);
   for (const ix of compiledInstructions) {
     instructionSize += 1; // program id index
-    instructionSize += 1 + ix.accountIndices.length; // compact-u16 account count + indices
-    instructionSize += 1 + ix.data.length; // compact-u16 data length + data
-    // Handle compact-u16 for longer lengths
-    if (ix.accountIndices.length >= 128) instructionSize += 1;
-    if (ix.data.length >= 128) instructionSize += 1;
-    if (ix.data.length >= 16384) instructionSize += 1;
+    instructionSize +=
+      compactU16Size(ix.accountIndices.length) + ix.accountIndices.length;
+    instructionSize += compactU16Size(ix.data.length) + ix.data.length;
   }
 
-  const messageSize = 3 + 32 * accounts.length + 32 + instructionSize;
+  const messageSize =
+    3 + // header
+    compactU16Size(accounts.length) +
+    32 * accounts.length +
+    32 + // recent blockhash
+    instructionSize;
   const message = new Uint8Array(messageSize);
   let offset = 0;
 
@@ -512,7 +530,8 @@ async function buildAndSendTransaction(
   message[offset++] = numReadonlySigners;
   message[offset++] = numReadonlyNonSigners;
 
-  // Account keys
+  // Account keys (compact-u16 encoded count)
+  offset = writeCompactU16(message, offset, accounts.length);
   for (const acct of accounts) {
     const key = base58Decode(acct.pubkey);
     // Pad or trim to 32 bytes
@@ -567,7 +586,7 @@ async function buildAndSendTransaction(
   }
 
   // Serialize the full transaction: compact-u16 sig count + signatures + message
-  const txSize = 1 + signatures.length * 64 + finalMessage.length;
+  const txSize = compactU16Size(signatures.length) + signatures.length * 64 + finalMessage.length;
   const tx = new Uint8Array(txSize);
   let txOffset = 0;
   txOffset = writeCompactU16(tx, txOffset, signatures.length);
@@ -1032,7 +1051,8 @@ async function claimFromChannel(
   programId: string,
   nonce: bigint,
   transferredAmount: bigint,
-  signature: Uint8Array
+  signature: Uint8Array,
+  signerPubkey: Uint8Array
 ): Promise<string> {
   const balanceProofMsg = buildBalanceProofMessage(
     channelPDA,
@@ -1043,7 +1063,7 @@ async function claimFromChannel(
   // Instruction 0: Ed25519 precompile
   const ed25519Ix = buildEd25519PrecompileIx(
     signature,
-    claimer.publicKey,
+    signerPubkey,
     balanceProofMsg
   );
 
@@ -1188,19 +1208,24 @@ describe('Docker Solana Settlement E2E', () => {
     }
 
     // -------------------------------------------------------------------
-    // Phase 2: Discover the deployed payment channel program ID
+    // Phase 2: Resolve the deployed payment channel program ID
     // -------------------------------------------------------------------
-    const discovered = await discoverProgramId();
-    if (!discovered) {
-      console.warn(
-        'No payment channel program found on Solana test-validator. ' +
-          'Ensure payment_channel.so is built in the connector repo at ' +
-          'packages/solana-program/target/deploy/'
-      );
-      return;
+    if (SOLANA_PROGRAM_ID) {
+      programId = SOLANA_PROGRAM_ID;
+      console.log(`Using SOLANA_PROGRAM_ID from env: ${programId}`);
+    } else {
+      const discovered = await discoverProgramId();
+      if (!discovered) {
+        console.warn(
+          'No payment channel program found on Solana test-validator. ' +
+            'Ensure payment_channel.so is built in the connector repo at ' +
+            'packages/solana-program/target/deploy/'
+        );
+        return;
+      }
+      programId = discovered;
+      console.log(`Discovered Solana program ID: ${programId}`);
     }
-    programId = discovered;
-    console.log(`Discovered Solana program ID: ${programId}`);
 
     // -------------------------------------------------------------------
     // Phase 3: Generate keypairs and fund with SOL
@@ -1369,7 +1394,7 @@ describe('Docker Solana Settlement E2E', () => {
     // Sign a balance proof: A says it has transferred TRANSFER_AMOUNT to B
     const signature = signBalanceProof(
       channelPDA,
-      1n, // nonce
+      1n, // nonce — must be > stored nonce (0)
       TRANSFER_AMOUNT,
       participantA
     );
@@ -1384,15 +1409,16 @@ describe('Docker Solana Settlement E2E', () => {
     const isValid = ed25519.verify(signature, message, participantA.publicKey);
     expect(isValid).toBe(true);
 
-    // Submit the claim on-chain (participant B claims using A's signature)
-    // This verifies the Ed25519 signature via the precompile program
+    // Submit the claim on-chain (participant A claims using their own signature)
+    // The program requires the signer to match the claimer.
     const txSig = await claimFromChannel(
-      participantB,
+      participantA,
       channelPDA,
       programId,
       1n,
       TRANSFER_AMOUNT,
-      signature
+      signature,
+      participantA.publicKey
     );
     expect(txSig).toBeTruthy();
 
@@ -1415,8 +1441,11 @@ describe('Docker Solana Settlement E2E', () => {
     expect(closeTxSig).toBeTruthy();
 
     // Verify channel is now closed
-    let state = await fetchChannelState(channelPDA);
+    const state = await fetchChannelState(channelPDA);
     expect(state.state).toBe('closed');
+
+    // Determine which on-chain slot A occupies (channel sorts participants)
+    const aIsSlotA = state.participantA === participantA.pubkeyBase58;
 
     // 2. Wait for challenge period to expire.
     //    Solana test-validator auto-advances slots/time, so waiting
@@ -1439,20 +1468,32 @@ describe('Docker Solana Settlement E2E', () => {
     );
     expect(settleTxSig).toBeTruthy();
 
-    // 5. Verify channel state = settled
-    state = await fetchChannelState(channelPDA);
-    expect(state.state).toBe('settled');
+    // 5. Settlement deletes the channel account (funds redistributed, account closed)
+    const channelAfterSettle = await getAccountInfo(channelPDA);
+    expect(channelAfterSettle).toBeNull();
 
     // 6. Verify balance redistribution:
     //    A deposited DEPOSIT_AMOUNT, transferred TRANSFER_AMOUNT to B
     //    A gets back (DEPOSIT_AMOUNT - TRANSFER_AMOUNT) = 40000
     //    B gets TRANSFER_AMOUNT = 10000
+    //    Note: channel state sorts participants, so A may map to slot A or B.
+    //    settleChannel always passes ataA as participant_a_token (slot A)
+    //    and ataB as participant_b_token (slot B).
     const balanceAfterA = await getSplTokenBalance(ataA);
     const balanceAfterB = await getSplTokenBalance(ataB);
 
-    expect(balanceAfterA).toBe(
-      balanceBeforeA + DEPOSIT_AMOUNT - TRANSFER_AMOUNT
-    );
-    expect(balanceAfterB).toBe(balanceBeforeB + TRANSFER_AMOUNT);
+    if (aIsSlotA) {
+      // A is slot A → ataA receives slot A balance
+      expect(balanceAfterA).toBe(
+        balanceBeforeA + DEPOSIT_AMOUNT - TRANSFER_AMOUNT
+      );
+      expect(balanceAfterB).toBe(balanceBeforeB + TRANSFER_AMOUNT);
+    } else {
+      // A is slot B → ataA receives slot A balance (B's claim), ataB receives slot B balance (A's deposit)
+      expect(balanceAfterA).toBe(balanceBeforeA + TRANSFER_AMOUNT);
+      expect(balanceAfterB).toBe(
+        balanceBeforeB + DEPOSIT_AMOUNT - TRANSFER_AMOUNT
+      );
+    }
   });
 });

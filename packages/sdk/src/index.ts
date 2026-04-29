@@ -177,6 +177,14 @@ export type {
   StreamSwapController,
 } from './stream-swap.js';
 
+// Internal testing surface (NOT a stable public API). Exposed so cross-package
+// tests in `packages/mill` can drive helpers (e.g. `buildSwapRumor`) without
+// reaching across package boundaries via relative `../../sdk/src/*.js` paths
+// (which vitest cannot resolve cross-package). Underscore-prefixed name and
+// the `__streamSwapTesting` alias are intentional — do not import in product
+// code.
+export { __testing as __streamSwapTesting } from './stream-swap.js';
+
 // Settlement (Story 12.6)
 export {
   buildSettlementTx,

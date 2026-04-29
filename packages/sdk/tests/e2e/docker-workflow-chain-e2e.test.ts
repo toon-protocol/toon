@@ -95,6 +95,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
+            chain: 'evm:31337',
           },
         ],
         routes: [],

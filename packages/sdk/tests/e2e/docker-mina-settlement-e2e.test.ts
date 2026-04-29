@@ -118,7 +118,7 @@ function computeSharedSecret(
 }
 
 /**
- * Lazily import @noble/ciphers/chacha for ChaCha20-Poly1305.
+  * Lazily import @noble/ciphers/chacha.js for ChaCha20-Poly1305.
  * This may not be directly available; we use dynamic import.
  */
 let chachaModule: {
@@ -137,7 +137,7 @@ async function getChacha(): Promise<typeof chachaModule> {
     try {
       // @ts-expect-error -- @noble/ciphers may not be installed; dynamic import with try/catch handles this
       chachaModule =
-        (await import('@noble/ciphers/chacha')) as typeof chachaModule;
+        (await import('@noble/ciphers/chacha.js')) as typeof chachaModule;
     } catch {
       return null;
     }
