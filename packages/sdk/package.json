@@ -57,7 +57,7 @@
     "nostr-tools": "^2.20.0"
   },
   "peerDependencies": {
-    "@toon-protocol/connector": ">=3.3.2",
+    "@toon-protocol/connector": ">=3.3.3",
     "mina-signer": ">=3.0.0"
   },
   "peerDependenciesMeta": {
@@ -69,7 +69,7 @@
     }
   },
   "devDependencies": {
-    "@toon-protocol/connector": "^3.3.2",
+    "@toon-protocol/connector": "^3.3.3",
     "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
