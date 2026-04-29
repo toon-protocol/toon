@@ -27,7 +27,7 @@ import {
 } from 'fs';
 import { resolve, join } from 'path';
 import { parse as parseYaml } from 'yaml';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 
 // Resolve project root (vitest runs from repo root)
 const PROJECT_ROOT = resolve(import.meta.dirname, '..', '..', '..', '..');
@@ -1203,13 +1203,20 @@ describe('[9.3-FW-005] run-batch.sh Script Execution', () => {
     expect(content).toContain('set -euo pipefail');
   });
 
-  it('[P0] run-batch.sh produces valid JSON on stdout when run against project skills', () => {
-    // Run batch and capture stdout (JSON) separately from stderr (summary)
-    const result = execSync(
-      `bash "${RUN_BATCH}" "${join(PROJECT_ROOT, '.claude', 'skills')}" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 60000 }
+  // run-batch.sh exits 1 when any skill fails — these tests check JSON shape
+  // and discovery independently of skill correctness, so capture stdout via
+  // spawnSync (which does not throw on non-zero exit) instead of execSync.
+  const runBatchStdout = (): string => {
+    const r = spawnSync(
+      'bash',
+      [RUN_BATCH, join(PROJECT_ROOT, '.claude', 'skills')],
+      { encoding: 'utf-8', timeout: 60000, stdio: ['ignore', 'pipe', 'ignore'] }
     );
-    const report = JSON.parse(result);
+    return r.stdout;
+  };
+
+  it('[P0] run-batch.sh produces valid JSON on stdout when run against project skills', () => {
+    const report = JSON.parse(runBatchStdout());
     expect(report).toHaveProperty('timestamp');
     expect(report).toHaveProperty('skills_discovered');
     expect(report).toHaveProperty('results');
@@ -1218,11 +1225,7 @@ describe('[9.3-FW-005] run-batch.sh Script Execution', () => {
   });
 
   it('[P0] run-batch.sh discovers nostr-protocol-core and nostr-social-intelligence', () => {
-    const result = execSync(
-      `bash "${RUN_BATCH}" "${join(PROJECT_ROOT, '.claude', 'skills')}" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 60000 }
-    );
-    const report = JSON.parse(result);
+    const report = JSON.parse(runBatchStdout());
     const skillNames = report.results.map(
       (r: { skill_name: string }) => r.skill_name
     );
@@ -1231,11 +1234,7 @@ describe('[9.3-FW-005] run-batch.sh Script Execution', () => {
   });
 
   it('[P0] run-batch.sh skips skill-creator and skill-eval-framework', () => {
-    const result = execSync(
-      `bash "${RUN_BATCH}" "${join(PROJECT_ROOT, '.claude', 'skills')}" 2>/dev/null`,
-      { encoding: 'utf-8', timeout: 60000 }
-    );
-    const report = JSON.parse(result);
+    const report = JSON.parse(runBatchStdout());
     const skillNames = report.results.map(
       (r: { skill_name: string }) => r.skill_name
     );

@@ -159,8 +159,11 @@ describe('@toon-protocol/sdk public API exports', () => {
       'hexToBytes',
     ]);
 
-    // Act
-    const actualExports = new Set(Object.keys(sdk));
+    // Act -- exclude `__`-prefixed names: documented internal-testing surface,
+    // not part of the stable public API (see index.ts `__streamSwapTesting`).
+    const actualExports = new Set(
+      Object.keys(sdk).filter((name) => !name.startsWith('__'))
+    );
 
     // Assert -- no missing exports
     for (const expected of expectedRuntimeExports) {
