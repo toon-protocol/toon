@@ -654,8 +654,10 @@ export function createNode(config: NodeConfig): ServiceNode {
       if (result.accept && result.metadata && !result.data) {
         try {
           const metadataJson = JSON.stringify(result.metadata);
-          (result as { data?: string }).data =
-            Buffer.from(metadataJson, 'utf8').toString('base64');
+          (result as { data?: string }).data = Buffer.from(
+            metadataJson,
+            'utf8'
+          ).toString('base64');
         } catch (err) {
           console.error(
             'Failed to serialize handler metadata to FULFILL data:',
@@ -680,9 +682,11 @@ export function createNode(config: NodeConfig): ServiceNode {
         (result as { code?: string }).code
       ) {
         const ilpCode = (result as { code: string }).code;
-        (result as {
-          rejectReason?: { code: string; message: string };
-        }).rejectReason = {
+        (
+          result as {
+            rejectReason?: { code: string; message: string };
+          }
+        ).rejectReason = {
           code: ilpCodeToSemantic(ilpCode),
           message:
             (result as { message?: string }).message ?? 'Payment rejected',
