@@ -128,11 +128,14 @@ The connector image runs **two distinct HTTP servers**:
 
 Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 
-| Method         | Path                                     | Shape                                                                                                                                                                                                                |
-| -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getHealth()`  | `GET {healthCheckPort}/health`           | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                      |
-| `getPeers()`   | `GET {adminApi.port}/admin/peers`        | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                            |
-| `getMetrics()` | `GET {adminApi.port}/admin/metrics.json` | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }` |
+| Method              | Path                                     | Shape                                                                                                                                                                                                                |
+| ------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getHealth()`       | `GET {healthCheckPort}/health`           | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                      |
+| `getPeers()`        | `GET {adminApi.port}/admin/peers`        | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                            |
+| `getMetrics()`      | `GET {adminApi.port}/admin/metrics.json` | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }` |
+| `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. |
+
+> **Status of `getPacketLog` (added story 21.10):** The connector image at `DEFAULT_CONNECTOR_IMAGE` (ghcr.io/toon-protocol/connector:3.3.3) does **not** yet expose `GET /packets`. Until the connector exposes this endpoint, `GET /api/nodes/:type/packets/timeseries` returns 503 with `error: 'connector_endpoint_not_found'`. The contract canary asserts the path and shape so any future connector bump that adds it will also be validated. To unblock: add `GET /packets` to the connector's admin HTTP server and update this table.
 
 ### Seam 2 — Container config contract
 
