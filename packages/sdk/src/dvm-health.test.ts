@@ -73,7 +73,11 @@ describe('DvmHealthResponse shape', () => {
 
   it('all status enum values are accepted', () => {
     const statuses: DvmHealthResponse['status'][] = [
-      'starting', 'ok', 'stopping', 'stopped', 'error',
+      'starting',
+      'ok',
+      'stopping',
+      'stopped',
+      'error',
     ];
     for (const s of statuses) {
       const r: DvmHealthResponse = { ...mockResponse, status: s };
