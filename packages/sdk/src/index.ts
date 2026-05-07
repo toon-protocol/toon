@@ -204,6 +204,14 @@ export type {
   MillSignerConfig,
 } from './settlement/index.js';
 
+// DVM health response type (canonical shape for the DVM BLS /health endpoint)
+export type {
+  DvmHealthResponse,
+  DvmJobsRecent,
+  DvmJobsByKindEntry,
+  DvmJobsByStatus,
+} from './dvm-health.js';
+
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';
 
