@@ -1,5 +1,7 @@
 # `@toon-protocol/connector` Migration Guide
 
+> **See also:** [`CONNECTOR_RELEASE_CONTRACT.md`](./CONNECTOR_RELEASE_CONTRACT.md) — the upstream `@toon-protocol/connector` release contract describing semver discipline for the `/admin/*` API surface, supply-chain signing, and digest-pinning strategy. This file (CONNECTOR_MIGRATION.md) is the runtime canary contract the SDK enforces; the contract file is the producer-side promise. Read both when bumping `@toon-protocol/connector` minor or major versions.
+
 This document records the **API contract** that `@toon-protocol/sdk` depends on
 from `@toon-protocol/connector`, and the breaking changes between versions.
 
