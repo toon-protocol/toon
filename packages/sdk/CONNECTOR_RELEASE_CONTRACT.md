@@ -67,6 +67,12 @@ require a townhouse bump unless the patch fixes a behavior townhouse
 actively relied on being broken. Major bumps require a deliberate
 townhouse migration cycle and a CONNECTOR_MIGRATION.md row.
 
+Implementation (Story 45.2): `packages/townhouse/src/constants.ts:21` —
+`DEFAULT_CONNECTOR_IMAGE` is digest form (`ghcr.io/toon-protocol/connector@sha256:<hex>`).
+Bumping to a new connector minor requires updating this constant + running
+`pnpm --filter @toon-protocol/townhouse test:canary` to confirm the
+Townhouse-side contract canary passes at the new digest.
+
 ## Supply-chain signing
 
 Starting from `v3.6.0` (cut after PR [#66](https://github.com/toon-protocol/connector/pull/66) merged), every connector and ATOR sidecar image is cosign-signed via **keyless OIDC** — no static keys, no secrets beyond the default `GITHUB_TOKEN`.
