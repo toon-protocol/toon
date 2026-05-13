@@ -132,10 +132,13 @@ Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 
 | Method              | Path                                     | Shape                                                                                                                                                                                                                |
 | ------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getEarnings()`     | `GET {adminApi.port}/admin/earnings.json` | `EarningsResponse` — `{ uptimeSeconds: number, peers: [{ peerId, byAsset: [{ assetCode, assetScale, claimsReceivedTotal, claimsSentTotal, netBalance, lastClaimAt }] }], connectorFees: [{ assetCode, assetScale, total }], recentClaims: [{ peerId, assetCode, assetScale, amount, direction: 'inbound'\|'outbound', at }], timestamp: { iso } }`. Throws on shape drift. Connector source-of-truth: `@toon-protocol/connector packages/connector/src/http/admin-api.ts:261-304`. Added connector v3.2.0. |
 | `getHealth()`       | `GET {healthCheckPort}/health`           | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                      |
 | `getPeers()`        | `GET {adminApi.port}/admin/peers`        | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                            |
 | `getMetrics()`      | `GET {adminApi.port}/admin/metrics.json` | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }` |
 | `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. **Note:** `PacketLogEntry` does not carry an event `kind` field. Townhouse's `GET /api/nodes/:nodeId/jobs/recent` feature-detects `entry.kind`; if absent, packets are grouped under bucket `kind: 0` ("unattributed") and the canonical `byKind` is sourced from the DVM container's in-memory health counter instead. To enable per-kind attribution from the connector side, add `kind?: number` to `PacketLogEntry` (populated from the ILP packet's TOON-decoded event kind). |
+
+> **`getEarnings()` (added story 47.1):** When the connector is started without `accountManager` / `claimReceiver` (i.e., without full EVM settlement config), this endpoint returns 503 with `{ error: 'Service Unavailable', message: 'Earnings subsystem not enabled (accountManager or claimReceiver missing)' }` — see connector source `admin-api.ts:1888-1896`. Townhouse's apex always wires both subsystems; 503 in production indicates connector misconfiguration. The wire-level `timestamp: string` is wrapped on the Townhouse side into `EarningsTimestamp { iso: string }` — the adapter lives in `ConnectorAdminClient.getEarnings()`.
 
 > **Status of `getPacketLog` (added story 21.10):** The connector image at `DEFAULT_CONNECTOR_IMAGE` (ghcr.io/toon-protocol/connector:3.3.3) does **not** yet expose `GET /packets`. Until the connector exposes this endpoint, `GET /api/nodes/:type/packets/timeseries` returns 503 with `error: 'connector_endpoint_not_found'`. The contract canary asserts the path and shape so any future connector bump that adds it will also be validated. To unblock: add `GET /packets` to the connector's admin HTTP server and update this table.
 
@@ -189,6 +192,20 @@ When bumping the connector image tag:
    for the new shapes, update `packages/townhouse/src/connector/types.ts` and
    `admin-client.ts` to match, and back-fill a row in the "Breaking Changes"
    table above.
+
+### Townhouse client (story 47.1) — `getEarnings()` wraps `/admin/earnings.json`
+
+The `/admin/earnings.json` endpoint was added in **connector v3.2.0**; story 47.1 adds the
+Townhouse-side wrap (`ConnectorAdminClient.getEarnings(): Promise<EarningsResponse>`) targeting
+the **v3.3.3+** floor in `DEFAULT_CONNECTOR_IMAGE`. If you are bumping to a connector version
+older than v3.2.0, the canary will fail on this endpoint.
+Verify:
+- `packages/townhouse/src/connector/types.ts` — 6 earnings interfaces (`AssetEarnings`,
+  `PeerEarnings`, `ConnectorFeeEntry`, `RecentClaim`, `EarningsTimestamp`, `EarningsResponse`)
+- `packages/townhouse/src/connector/admin-client.ts` — `getEarnings()` method
+- `packages/townhouse/src/connector/index.ts` — all 6 types re-exported
+- `packages/townhouse/src/connector/contract-canary.test.ts` — `getEarnings()` shape contract block
+- `packages/townhouse/src/__integration__/connector-image-contract.test.ts` — image canary assertion
 
 ---
 
