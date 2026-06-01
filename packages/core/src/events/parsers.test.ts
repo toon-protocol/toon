@@ -116,10 +116,55 @@ describe('parseIlpPeerInfo', () => {
     );
   });
 
-  it('throws for missing btpEndpoint', () => {
+  it('defaults btpEndpoint to "" when missing (optional — Story 50.3)', () => {
+    // Arrange: an ILP-addressed peer reached via a connector advertises no
+    // standalone BTP endpoint (e.g. an embedded/HS-mode Mill).
+    const content = JSON.stringify({
+      ilpAddress: 'g.example.connector',
+      assetCode: 'USD',
+      assetScale: 6,
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert: parses successfully, btpEndpoint defaults to ''
+    const result = parseIlpPeerInfo(event);
+    expect(result.btpEndpoint).toBe('');
+    expect(result.ilpAddress).toBe('g.example.connector');
+  });
+
+  it('accepts an empty-string btpEndpoint and round-trips swapPairs (Story 50.3)', () => {
+    // Arrange: this is exactly the shape an HS-mode Mill advertises — empty
+    // btpEndpoint, with swapPairs. Regression guard for the build/parse
+    // asymmetry that silently dropped Mill's swap pair in the 50.3 gate.
+    const content = JSON.stringify({
+      ilpAddress: 'g.townhouse.mill',
+      btpEndpoint: '',
+      assetCode: 'USDC',
+      assetScale: 6,
+      swapPairs: [
+        {
+          from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:31337' },
+          to: { assetCode: 'USDC', assetScale: 6, chain: 'solana:devnet' },
+          rate: '1.0',
+          minAmount: '1000',
+          maxAmount: '1000000000',
+        },
+      ],
+    });
+    const event = createMockEvent(ILP_PEER_INFO_KIND, content);
+
+    // Act & Assert
+    const result = parseIlpPeerInfo(event);
+    expect(result.btpEndpoint).toBe('');
+    expect(result.swapPairs).toHaveLength(1);
+    expect(result.swapPairs?.[0]?.to.chain).toBe('solana:devnet');
+  });
+
+  it('throws when btpEndpoint is present but not a string', () => {
     // Arrange
     const content = JSON.stringify({
       ilpAddress: 'g.example.connector',
+      btpEndpoint: 42,
       assetCode: 'USD',
       assetScale: 6,
     });
@@ -128,7 +173,7 @@ describe('parseIlpPeerInfo', () => {
     // Act & Assert
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
     expect(() => parseIlpPeerInfo(event)).toThrow(
-      'Missing or invalid required field: btpEndpoint'
+      'Invalid field: btpEndpoint must be a string'
     );
   });
 

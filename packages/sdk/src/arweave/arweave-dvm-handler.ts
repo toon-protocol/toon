@@ -113,6 +113,10 @@ export function createArweaveDvmHandler(
         };
       } catch (error) {
         // Log full error internally but return generic message to client (CWE-209)
+        console.error(
+          '[ArweaveDvmHandler] Chunked upload failed:',
+          error instanceof Error ? (error.stack ?? error.message) : error
+        );
         const internalMsg =
           error instanceof Error ? error.message : 'Unknown chunk error';
         // Only surface safe, expected error categories to callers
@@ -139,8 +143,15 @@ export function createArweaveDvmHandler(
         accept: true,
         data: Buffer.from(txId).toString('base64'),
       };
-    } catch {
-      // Generic message to avoid leaking Arweave SDK internals (CWE-209)
+    } catch (error) {
+      // Log the full underlying error server-side for operator/gate diagnostics
+      // (e.g. Turbo upload-service rejection, network timeout to upload.ardrive.io).
+      // The client still only receives a generic message (CWE-209): we never
+      // forward SDK internals over the wire.
+      console.error(
+        `[ArweaveDvmHandler] Arweave upload failed (${parsed.blobData.length} bytes):`,
+        error instanceof Error ? (error.stack ?? error.message) : error
+      );
       return {
         accept: false,
         code: 'T00',

@@ -21,12 +21,16 @@ export interface ArweaveUploadAdapter {
 /**
  * Turbo SDK upload adapter using @ardrive/turbo-sdk.
  *
- * - Dev/free tier (<=100KB): pass no turboClient, uses TurboFactory.unauthenticated()
- * - Prod (paid, uncapped): pass a TurboAuthenticatedClient from TurboFactory.authenticated()
+ * - Dev/free tier (<=100KB): pass no turboClient. getClient() lazily generates an
+ *   ephemeral RSA JWK and builds a TurboFactory.authenticated() client. The upload
+ *   service grants free small-data-item uploads to any valid signer regardless of
+ *   balance, so no deposit is required. NOTE: TurboFactory.unauthenticated() is NOT
+ *   usable here — in @ardrive/turbo-sdk >=1.40 uploadFile() exists only on the
+ *   authenticated client; the unauthenticated client exposes only uploadSignedDataItem().
+ * - Prod (paid, uncapped): pass a TurboAuthenticatedClient from a funded wallet.
  *
  * The turboClient is typed as `unknown` to avoid importing @ardrive/turbo-sdk types
- * in this interface. The actual TurboAuthenticatedClient or TurboUnauthenticatedClient
- * is duck-typed at runtime.
+ * in this interface. The actual TurboAuthenticatedClient is duck-typed at runtime.
  */
 export class TurboUploadAdapter implements ArweaveUploadAdapter {
   private turboClient: unknown;

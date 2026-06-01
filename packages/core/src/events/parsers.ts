@@ -74,10 +74,13 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     );
   }
 
-  if (typeof btpEndpoint !== 'string' || btpEndpoint.length === 0) {
-    throw new InvalidEventError(
-      'Missing or invalid required field: btpEndpoint'
-    );
+  // btpEndpoint is optional (Story 50.3): an ILP-addressed peer reached via its
+  // `ilpAddress` through a connector — e.g. an embedded/HS-mode Mill — has no
+  // standalone BTP endpoint and advertises an empty string. `buildIlpPeerInfoEvent`
+  // already accepts `''`; the parser must too, or the peer's own kind:10032
+  // cannot be read back. Only a present-but-non-string value is invalid.
+  if (btpEndpoint !== undefined && typeof btpEndpoint !== 'string') {
+    throw new InvalidEventError('Invalid field: btpEndpoint must be a string');
   }
 
   if (typeof assetCode !== 'string' || assetCode.length === 0) {
@@ -238,7 +241,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
 
   return {
     ilpAddress,
-    btpEndpoint,
+    btpEndpoint: typeof btpEndpoint === 'string' ? btpEndpoint : '',
     ...(blsHttpEndpoint !== undefined &&
       typeof blsHttpEndpoint === 'string' && { blsHttpEndpoint }),
     assetCode,
