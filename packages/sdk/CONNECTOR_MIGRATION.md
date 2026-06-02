@@ -24,14 +24,14 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.8.0)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.8.1)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.8.0` — the current
-> `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor, bumped in Story 50.4.
+> The contract holds from `>=3.3.2` through `3.8.1` — the current
+> `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
 > Connector `3.7.0+` additionally exposes `packetsLocallyDelivered` in
 > `getMetrics().peers[]` (toon-protocol/connector#73), consumed additively by
 > Townhouse's earnings aggregator (`eventsRelayed`); this is purely additive and
@@ -48,6 +48,15 @@ contract canary.
 > AC#1 kind:1 `F06 "No payment channel claim attached"` on the apex→child hop.
 > Both are internal to the connector image/runtime; the `sendPacket` / admin /
 > earnings shapes documented below are unchanged.
+>
+> **`3.8.1` (Mina settlement fix) — one runtime fix, no consumed-surface
+> change:** the on-chain Mina payment-channel claim path now passes the real
+> counterparty balance, salt, and both party signatures to `claimFromChannel`
+> instead of the single-sig/zeroed placeholders that left Mina settlement
+> un-claimable (toon-protocol/connector#84). EVM and Solana settlement are
+> unchanged. Patch over `3.8.0`; internal to the connector's settlement
+> executor — the `sendPacket` / admin / earnings shapes documented below are
+> unchanged, so the contract canary passes unmodified at the new digest.
 
 ### `sendPacket(params: SendPacketParams): Promise<ILPFulfillPacket | ILPRejectPacket>`
 

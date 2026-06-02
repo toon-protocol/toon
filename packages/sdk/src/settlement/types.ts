@@ -40,8 +40,9 @@ export interface SettlementBundle {
    * Solana: serialized Message (not Transaction — Transaction requires signatures).
    * Mina: the verified balance-proof signature bytes (envelope). The final
    * on-chain `claimFromChannel` zkApp tx requires o1js proof generation and is
-   * produced by a Mina-capable settler — see
-   * `packages/sdk/src/settlement/mina.ts` (`TODO(mina-onchain)`).
+   * produced by a Mina-capable settler — see the on-chain settlement note in
+   * `packages/sdk/src/settlement/mina.ts` (connector 3.8.1 wires the dual-party
+   * claim path — connector#84).
    */
   unsignedTxBytes: Uint8Array;
   /**

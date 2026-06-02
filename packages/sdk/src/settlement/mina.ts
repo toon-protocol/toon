@@ -29,7 +29,8 @@
  * WASM dependency into every SDK consumer. Instead, the bundle carries the
  * verified balance proof so a Mina-capable settler (the connector's
  * `MinaPaymentChannelProvider`, or a future o1js-backed Chain Bridge DVM) can
- * generate the proof + broadcast. See the `TODO(mina-onchain)` below.
+ * generate the proof + broadcast. See the on-chain settlement note below
+ * (connector 3.8.1 wires the dual-party claim path — connector#84).
  *
  * Note also: the Mill↔sender wire proof here (a Schnorr signature over four
  * field elements) is a DIFFERENT object than the connector's on-chain
@@ -170,13 +171,16 @@ export function verifyMinaSignature(
 /**
  * Discriminator for the Mina on-chain `claimFromChannel` zkApp method.
  *
- * TODO(mina-onchain): the actual on-chain settlement transaction is a Mina
- * zkApp method call requiring o1js circuit compilation + zk-SNARK proof
- * generation (see `MinaPaymentChannelSDK.claimFromChannel()` in
- * `@toon-protocol/connector`). That is intentionally out of scope for this
- * SDK helper — see the module docblock. The bundle below therefore carries the
- * verified balance-proof bytes + channel metadata, and a Mina-capable settler
- * is responsible for proof generation + broadcast.
+ * On-chain settlement: the actual transaction is a Mina zkApp method call
+ * requiring o1js circuit compilation + zk-SNARK proof generation. As of
+ * `@toon-protocol/connector` 3.8.1 the connector's settlement executor wires
+ * the dual-party `MinaPaymentChannelSDK.claimFromChannel()` path with the real
+ * counterparty balance, salt, and both party signatures (connector#84 — earlier
+ * builds passed single-sig/zeroed placeholders that left Mina claims
+ * un-settleable). Proof generation + broadcast remain the connector-side
+ * settler's responsibility and are intentionally out of scope for this SDK
+ * helper — see the module docblock. The bundle below therefore carries the
+ * verified balance-proof bytes + channel metadata for that settler to consume.
  */
 
 /**
@@ -187,7 +191,7 @@ export function verifyMinaSignature(
  * claim's settlement context and re-emits the Mill's verified balance-proof
  * signature bytes in `unsignedTxBytes`. The actual on-chain `claimFromChannel`
  * zkApp transaction (o1js proof generation) is the responsibility of a
- * Mina-capable settler — see the module docblock + `TODO(mina-onchain)`.
+ * Mina-capable settler — see the module docblock + the on-chain settlement note.
  *
  * The signature carried here is the SAME `claimBytes` the sender already
  * verified via {@link verifyMinaSignature}, so a downstream settler does not
@@ -229,7 +233,7 @@ export function buildMinaSettlementTx(
 
   // Envelope: the verified balance-proof signature bytes. A Mina-capable
   // settler generates the o1js claimFromChannel proof from (channelId,
-  // cumulativeAmount, nonce, recipient, signature) — see TODO(mina-onchain).
+  // cumulativeAmount, nonce, recipient, signature) — connector 3.8.1, #84.
   const unsignedTxBytes = winner.claimBytes;
 
   return {
