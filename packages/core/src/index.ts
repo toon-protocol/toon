@@ -281,6 +281,16 @@ export {
   type MinaProviderConfigEntry,
 } from './chain/chain-config.js';
 
+// Network-mode resolution (mainnet/testnet/devnet/custom → apex + node config)
+export {
+  resolveNetworkProfile,
+  RELAY_ONLY_CHAIN,
+  type NetworkMode,
+  type NetworkProfile,
+  type NetworkNodeEnv,
+  type NetworkFamilyStatus,
+} from './chain/network-profile.js';
+
 // x402 protocol support (shared ILP PREPARE construction)
 export {
   buildIlpPrepare,

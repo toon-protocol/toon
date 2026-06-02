@@ -352,11 +352,13 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   // Additional: CHAIN_PRESETS map completeness
   // --------------------------------------------------------------------------
   describe('CHAIN_PRESETS completeness', () => {
-    it('contains exactly 3 presets: anvil, arbitrum-sepolia, arbitrum-one', () => {
-      expect(Object.keys(CHAIN_PRESETS)).toHaveLength(3);
+    it('contains the EVM presets: anvil, arbitrum + base (sepolia/mainnet)', () => {
+      expect(Object.keys(CHAIN_PRESETS)).toHaveLength(5);
       expect(CHAIN_PRESETS).toHaveProperty('anvil');
       expect(CHAIN_PRESETS).toHaveProperty('arbitrum-sepolia');
       expect(CHAIN_PRESETS).toHaveProperty('arbitrum-one');
+      expect(CHAIN_PRESETS).toHaveProperty('base-sepolia');
+      expect(CHAIN_PRESETS).toHaveProperty('base-mainnet');
     });
 
     it('anvil preset uses MOCK_USDC_ADDRESS from usdc.ts (no hardcoded duplication)', () => {

@@ -26,8 +26,18 @@ export type ChainType = 'evm' | 'solana' | 'mina';
 
 /**
  * Supported EVM chain preset names (backward-compatible).
+ *
+ * `anvil` is the local-dev chain. `arbitrum-*` and `base-*` are the public
+ * Arbitrum and Base networks used by the network-mode resolver
+ * (see network-profile.ts). Base is the primary EVM chain for single-EVM
+ * nodes; the apex connector and Mill can hold providers for both families.
  */
-export type ChainName = 'anvil' | 'arbitrum-sepolia' | 'arbitrum-one';
+export type ChainName =
+  | 'anvil'
+  | 'arbitrum-sepolia'
+  | 'arbitrum-one'
+  | 'base-sepolia'
+  | 'base-mainnet';
 
 /**
  * Supported Solana chain preset names.
@@ -180,6 +190,26 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     chainId: 42161,
     rpcUrl: 'https://arb1.arbitrum.io/rpc',
     usdcAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+    tokenNetworkAddress: '',
+    registryAddress: '',
+  },
+  // Base Sepolia (public testnet). USDC is Circle's native testnet USDC.
+  // TOON TokenNetwork/registry not deployed yet → settlement relay-only.
+  'base-sepolia': {
+    name: 'base-sepolia',
+    chainId: 84532,
+    rpcUrl: 'https://sepolia.base.org',
+    usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    tokenNetworkAddress: '',
+    registryAddress: '',
+  },
+  // Base mainnet (public). USDC is Circle's native USDC on Base.
+  // TOON TokenNetwork/registry not deployed yet → settlement relay-only.
+  'base-mainnet': {
+    name: 'base-mainnet',
+    chainId: 8453,
+    rpcUrl: 'https://mainnet.base.org',
+    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     tokenNetworkAddress: '',
     registryAddress: '',
   },
