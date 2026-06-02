@@ -157,6 +157,11 @@ describe('@toon-protocol/sdk public API exports', () => {
       'bigintToBytes32BE',
       'concatBytes',
       'hexToBytes',
+      // Mina settlement (Story 12.8)
+      'verifyMinaSignature',
+      'loadMinaSignerClient',
+      'balanceProofFieldsMina',
+      'minaHashToField',
     ]);
 
     // Act -- exclude `__`-prefixed names: documented internal-testing surface,

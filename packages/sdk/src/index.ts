@@ -189,9 +189,13 @@ export { __testing as __streamSwapTesting } from './stream-swap.js';
 export {
   buildSettlementTx,
   verifyAccumulatedClaim,
+  verifyMinaSignature,
+  loadMinaSignerClient,
   fillEvmSettlementTxGas,
   balanceProofHashEvm,
   balanceProofHashSolana,
+  balanceProofFieldsMina,
+  minaHashToField,
   bigintToBytes32BE,
   concatBytes,
   hexToBytes,
@@ -202,6 +206,7 @@ export type {
   BuildSettlementTxParams,
   BuildSettlementTxResult,
   MillSignerConfig,
+  MinaSignerClientLike,
 } from './settlement/index.js';
 
 // DVM health response type (canonical shape for the DVM BLS /health endpoint)

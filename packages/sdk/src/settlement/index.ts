@@ -20,10 +20,15 @@ export { fillEvmSettlementTxGas } from './evm.js';
 export {
   balanceProofHashEvm,
   balanceProofHashSolana,
+  balanceProofFieldsMina,
+  minaHashToField,
   bigintToBytes32BE,
   concatBytes,
   hexToBytes,
 } from './hashes.js';
+
+export { verifyMinaSignature, loadMinaSignerClient } from './mina.js';
+export type { MinaSignerClientLike } from './mina.js';
 
 export type {
   SettlementBundle,

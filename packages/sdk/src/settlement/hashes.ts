@@ -14,7 +14,10 @@
 
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import { sha256 } from '@noble/hashes/sha2.js';
-import { hexToBytes as nobleHexToBytes } from '@noble/hashes/utils.js';
+import {
+  bytesToHex,
+  hexToBytes as nobleHexToBytes,
+} from '@noble/hashes/utils.js';
 
 /**
  * Convert a hex string (with or without `0x` prefix) to bytes. Rejects
@@ -121,4 +124,58 @@ export function balanceProofHashSolana(
       new TextEncoder().encode(recipient)
     )
   );
+}
+
+/**
+ * Hash an arbitrary string to a Pallas-field-safe bigint.
+ *
+ * The Pallas base field order is slightly below 2^254, so we take the first
+ * 240 bits (60 hex chars / 30 bytes) of `sha256(utf8(s))` as a conservative,
+ * guaranteed-in-field representation. Used to fold the variable-length
+ * `channelId` / `recipient` strings into the fixed field-element array a Mina
+ * Schnorr signature is computed over.
+ *
+ * @stable — Mill signer and SDK verifier depend on the exact derivation.
+ * @since 12.8
+ */
+export function minaHashToField(s: string): bigint {
+  const digestHex = bytesToHex(sha256(new TextEncoder().encode(s)));
+  return BigInt('0x' + digestHex.slice(0, 60));
+}
+
+/**
+ * Compute the Mina balance-proof field-element message:
+ *   [ minaHashToField(channelId),
+ *     cumulativeAmount,
+ *     nonce,
+ *     minaHashToField(recipient) ]
+ *
+ * This is the EXACT `fields` array that the Mill's `MinaPaymentChannelSigner`
+ * passes to `mina-signer`'s `signFields(...)`, and that the sender-side
+ * `verifyMinaSignature` re-derives and passes to `verifyFields(...)`. Keeping
+ * the derivation here (shared between `@toon-protocol/mill` and the SDK
+ * verifier) prevents signer/verifier drift — mirroring the EVM/Solana hash
+ * helpers above.
+ *
+ * NOTE: this is the Mill↔sender wire contract (a Schnorr signature over four
+ * field elements), NOT the connector's on-chain `MinaPaymentChannelSDK`
+ * Poseidon-commitment proof shape. The two are distinct; see
+ * `packages/sdk/src/settlement/mina.ts` for the relationship + the
+ * remaining on-chain-settlement gap.
+ *
+ * @stable — Mill signer and SDK verifier depend on the exact byte layout.
+ * @since 12.8
+ */
+export function balanceProofFieldsMina(
+  channelId: string,
+  cumulativeAmount: bigint,
+  nonce: bigint,
+  recipient: string
+): bigint[] {
+  return [
+    minaHashToField(channelId),
+    cumulativeAmount,
+    nonce,
+    minaHashToField(recipient),
+  ];
 }

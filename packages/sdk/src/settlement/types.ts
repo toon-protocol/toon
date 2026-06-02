@@ -7,6 +7,7 @@
  */
 
 import type { AccumulatedClaim } from '../stream-swap.js';
+import type { MinaSignerClientLike } from './mina.js';
 
 /**
  * Chain-specific raw settlement transaction bundle, produced by
@@ -37,7 +38,10 @@ export interface SettlementBundle {
    * Chain Bridge DVM to gas-sponsor + sign). EVM: RLP-encoded tx with
    * placeholder gas fields (tx nonce / gasPrice / gasLimit = 0) per EIP-155.
    * Solana: serialized Message (not Transaction — Transaction requires signatures).
-   * Mina: stub.
+   * Mina: the verified balance-proof signature bytes (envelope). The final
+   * on-chain `claimFromChannel` zkApp tx requires o1js proof generation and is
+   * produced by a Mina-capable settler — see
+   * `packages/sdk/src/settlement/mina.ts` (`TODO(mina-onchain)`).
    */
   unsignedTxBytes: Uint8Array;
   /**
@@ -99,6 +103,16 @@ export interface BuildSettlementTxParams {
   recipients: Record<string, string>;
   /** When `true` (default), verify every claim's signature against `signers[chain].address`. */
   verifySignatures?: boolean;
+  /**
+   * Pre-loaded `mina-signer` `Client` (optional peer dep). REQUIRED to verify
+   * `mina:*` claims when `verifySignatures` is on: `buildSettlementTx()` is
+   * synchronous and `mina-signer` only loads via async `import()`, so the
+   * caller must load it up front (see `loadMinaSignerClient()`) and inject it
+   * here. When a `mina:*` claim is present and this is absent, that claim is
+   * rejected with `MINA_VERIFICATION_UNSUPPORTED` rather than passed through
+   * unverified. Ignored for EVM/Solana claims.
+   */
+  minaSignerClient?: MinaSignerClientLike;
   /** When `true`, include superseded claims in `result.superseded[]`. Default false. */
   includeSuperseded?: boolean;
   /** Optional pino-compatible logger. */

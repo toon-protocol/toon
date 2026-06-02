@@ -18,7 +18,8 @@ import {
   recoverEvmSignerAddress,
   verifyEvmClaimSignature,
 } from './evm.js';
-import { buildMinaSettlementTx } from './mina.js';
+import { buildMinaSettlementTx, verifyMinaSignature } from './mina.js';
+import type { MinaSignerClientLike } from './mina.js';
 import { buildSolanaSettlementTx, verifyEd25519Signature } from './solana.js';
 import type {
   BuildSettlementTxParams,
@@ -235,11 +236,41 @@ export function buildSettlementTx(
         });
       }
     } else if (kind === 'mina') {
-      rejected.push({
-        claim,
-        reason: 'MINA_VERIFICATION_UNSUPPORTED',
-        details: 'Mina signature verification is not implemented yet',
-      });
+      if (!params.minaSignerClient) {
+        // mina-signer is an optional peer dep loaded via async import; the
+        // sync pipeline cannot load it itself. Reject (rather than pass
+        // through unverified) so an absent client never lets an unverified
+        // Mina claim settle.
+        rejected.push({
+          claim,
+          reason: 'MINA_VERIFICATION_UNSUPPORTED',
+          details:
+            'minaSignerClient not provided — load mina-signer via loadMinaSignerClient() and pass it in params.minaSignerClient to verify mina:* claims',
+        });
+        continue;
+      }
+      try {
+        const ok = verifyMinaSignature(
+          claim,
+          signer.address,
+          params.minaSignerClient
+        );
+        if (!ok) {
+          rejected.push({
+            claim,
+            reason: 'SIGNER_MISMATCH',
+            details: `mina-signer verifyFields returned false against ${signer.address}`,
+          });
+          continue;
+        }
+        survivors.push(claim);
+      } catch (err) {
+        rejected.push({
+          claim,
+          reason: 'SIGNATURE_INVALID',
+          details: err instanceof Error ? err.message : String(err),
+        });
+      }
     } else {
       throw new SettlementTxError(
         'UNSUPPORTED_CHAIN',
@@ -413,6 +444,13 @@ export function buildSettlementTx(
         g.claims.length
       );
     } else if (kind === 'mina') {
+      // Mina addresses are case-sensitive base58 (no lowercasing, like Solana).
+      if (recipient !== firstRecipient) {
+        throw new SettlementTxError(
+          'RECIPIENT_MISMATCH',
+          `recipients[${g.chain}] (${recipient}) does not match Mill-reported recipient (${firstRecipient})`
+        );
+      }
       bundle = buildMinaSettlementTx(
         winner,
         signer,
@@ -446,12 +484,18 @@ export function buildSettlementTx(
  * Useful inside a `streamSwap()` `onPacket` callback for mid-stream claim
  * validation.
  *
+ * For `mina:*` claims, pass a pre-loaded `mina-signer` `Client` as
+ * `minaSignerClient` (see `loadMinaSignerClient()`); without it, Mina claims
+ * return `MINA_VERIFICATION_UNSUPPORTED` (same contract as
+ * `buildSettlementTx`).
+ *
  * @stable
  * @since 12.6
  */
 export function verifyAccumulatedClaim(
   claim: AccumulatedClaim,
-  signer: MillSignerConfig
+  signer: MillSignerConfig,
+  minaSignerClient?: MinaSignerClientLike
 ): { valid: true } | { valid: false; reason: string } {
   const kind = chainKindOf(claim.pair.to.chain);
   if (kind === 'evm') {
@@ -489,10 +533,27 @@ export function verifyAccumulatedClaim(
     }
   }
   if (kind === 'mina') {
-    return {
-      valid: false,
-      reason: 'MINA_VERIFICATION_UNSUPPORTED',
-    };
+    if (!minaSignerClient) {
+      return {
+        valid: false,
+        reason:
+          'MINA_VERIFICATION_UNSUPPORTED: pass a mina-signer Client (loadMinaSignerClient()) as minaSignerClient to verify mina:* claims',
+      };
+    }
+    try {
+      const ok = verifyMinaSignature(claim, signer.address, minaSignerClient);
+      return ok
+        ? { valid: true }
+        : {
+            valid: false,
+            reason: 'SIGNER_MISMATCH: mina-signer verifyFields returned false',
+          };
+    } catch (err) {
+      return {
+        valid: false,
+        reason: `SIGNATURE_INVALID: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
   }
   return {
     valid: false,
