@@ -352,20 +352,18 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   // Additional: CHAIN_PRESETS map completeness
   // --------------------------------------------------------------------------
   describe('CHAIN_PRESETS completeness', () => {
-    it('contains the EVM presets: anvil, arbitrum, base, akash-anvil', () => {
-      expect(Object.keys(CHAIN_PRESETS)).toHaveLength(6);
+    it('contains the EVM presets: anvil, arbitrum, base', () => {
+      expect(Object.keys(CHAIN_PRESETS)).toHaveLength(5);
       expect(CHAIN_PRESETS).toHaveProperty('anvil');
       expect(CHAIN_PRESETS).toHaveProperty('arbitrum-sepolia');
       expect(CHAIN_PRESETS).toHaveProperty('arbitrum-one');
       expect(CHAIN_PRESETS).toHaveProperty('base-sepolia');
       expect(CHAIN_PRESETS).toHaveProperty('base-mainnet');
-      expect(CHAIN_PRESETS).toHaveProperty('akash-anvil');
     });
 
-    it('akash-anvil is chain-id 31338 with deterministic settlement addresses', () => {
-      const a = CHAIN_PRESETS['akash-anvil'];
-      expect(a.chainId).toBe(31338);
-      expect(a.rpcUrl).toBe(''); // operator-supplied (rotating ingress)
+    it('anvil is chain-id 31337 with deterministic settlement addresses (matches the Akash deploy)', () => {
+      const a = CHAIN_PRESETS['anvil'];
+      expect(a.chainId).toBe(31337);
       expect(a.registryAddress).toBe(
         '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512'
       );

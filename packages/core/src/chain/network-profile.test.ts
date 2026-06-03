@@ -83,13 +83,13 @@ describe('resolveNetworkProfile', () => {
   });
 
   describe('custom with endpoints (--evm-url / --sol-url → project dev chains)', () => {
-    it('points EVM at akash-anvil (31338) with operator URL → settlement-complete', () => {
+    it('points EVM at anvil (31337) with operator URL → settlement-complete', () => {
       const p = resolveNetworkProfile('custom', {
         endpoints: { evmUrl: 'https://anvil.ingress.akash.example' },
         keyId: '0xkey',
       });
-      expect(p.nodeEnv.EVM_CHAIN).toBe('akash-anvil');
-      expect(p.nodeEnv.EVM_CHAIN_ID).toBe('31338');
+      expect(p.nodeEnv.EVM_CHAIN).toBe('anvil');
+      expect(p.nodeEnv.EVM_CHAIN_ID).toBe('31337');
       expect(p.nodeEnv.EVM_RPC_URL).toBe('https://anvil.ingress.akash.example');
       expect(p.status.evm).toBe('configured');
       // Apex gets a real EVM provider (registry/tokenNetwork are baked).

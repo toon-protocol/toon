@@ -70,11 +70,15 @@ export interface CustomEndpoints {
 
 /**
  * Dev-chain templates for the URL-only custom path. The EVM chain is the
- * chain-id 31338 `akash-anvil` Anvil whose TOON contracts are deployed
- * deterministically (settlement-complete). The Solana node bootstraps a known
- * Mock-USDC mint but the payment-channel program is not deployed → relay-only.
+ * `anvil` preset — chain-id **31337** with the deterministic Foundry TOON
+ * contracts (settlement-complete). This matches what scripts/akash-deploy.sh
+ * actually deploys: the SDL pins `CHAIN_ID=31337` so the Akash anvil lines up
+ * with the `anvil` preset (verified live: eth_chainId → 0x7a69, registry +
+ * tokenNetwork have code). The operator's `--evm-url` overrides the preset's
+ * localhost rpcUrl. The Solana node bootstraps a known Mock-USDC mint but the
+ * payment-channel program is not deployed → Solana relay-only.
  */
-const DEV_EVM_PRESET = 'akash-anvil' as const;
+const DEV_EVM_PRESET = 'anvil' as const;
 const DEV_SOLANA = {
   usdcMint: '6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q',
   programId: '', // TOON payment-channel program not deployed on the dev Solana node
