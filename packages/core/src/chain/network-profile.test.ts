@@ -82,6 +82,56 @@ describe('resolveNetworkProfile', () => {
     });
   });
 
+  describe('custom with endpoints (--evm-url / --sol-url → project dev chains)', () => {
+    it('points EVM at akash-anvil (31338) with operator URL → settlement-complete', () => {
+      const p = resolveNetworkProfile('custom', {
+        endpoints: { evmUrl: 'https://anvil.ingress.akash.example' },
+        keyId: '0xkey',
+      });
+      expect(p.nodeEnv.EVM_CHAIN).toBe('akash-anvil');
+      expect(p.nodeEnv.EVM_CHAIN_ID).toBe('31338');
+      expect(p.nodeEnv.EVM_RPC_URL).toBe('https://anvil.ingress.akash.example');
+      expect(p.status.evm).toBe('configured');
+      // Apex gets a real EVM provider (registry/tokenNetwork are baked).
+      expect(p.chainProviders).toHaveLength(1);
+      expect(p.chainProviders[0].chainType).toBe('evm');
+    });
+
+    it('Solana URL → RPC + mock USDC mint, but relay-only (program not deployed)', () => {
+      const p = resolveNetworkProfile('custom', {
+        endpoints: {
+          evmUrl: 'https://anvil.example',
+          solUrl: 'https://sol.ingress.akash.example',
+        },
+        keyId: '0xkey',
+      });
+      expect(p.nodeEnv.SOLANA_RPC_URL).toBe(
+        'https://sol.ingress.akash.example'
+      );
+      expect(p.nodeEnv.SOLANA_USDC_MINT).toBe(
+        '6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q'
+      );
+      expect(p.status.solana).toBe('unconfigured'); // no program
+    });
+
+    it('explicit providers take precedence over endpoints', () => {
+      const p = resolveNetworkProfile('custom', {
+        customProviders: [
+          {
+            chainType: 'evm',
+            chainId: 'evm:8453',
+            rpcUrl: 'https://explicit',
+            registryAddress: '0xReg',
+            tokenAddress: '0xUSDC',
+            keyId: '0xkey',
+          },
+        ],
+        endpoints: { evmUrl: 'https://ignored' },
+      });
+      expect(p.nodeEnv.EVM_RPC_URL).toBe('https://explicit');
+    });
+  });
+
   describe('custom', () => {
     const customProviders: ChainProviderConfigEntry[] = [
       {

@@ -3,6 +3,8 @@
  *
  * A single operator-facing selector — `mainnet | testnet | devnet | custom` —
  * resolves a coherent multi-chain configuration that is consumed by BOTH:
+ * (`custom` additionally accepts operator RPC URLs via `--evm-url`/`--sol-url`
+ * to point at the project's dev chains — e.g. the Akash-hosted anvil + solana.)
  *
  * - the **apex** standalone connector (its `chainProviders` settlement array), and
  * - the **children** node containers (town/mill), via a small set of env vars the
@@ -45,8 +47,38 @@ import {
 /** Operator-facing network selector. */
 export type NetworkMode = 'mainnet' | 'testnet' | 'devnet' | 'custom';
 
-/** The three derivable tiers (everything except `custom`). */
+/** The three preset-derivable public tiers (everything except custom). */
 type DerivableTier = Exclude<NetworkMode, 'custom'>;
+
+/**
+ * Operator-supplied RPC URLs for `network: 'custom'`
+ * (`--evm-url` / `--sol-url`). Use this to point the apex + nodes at the
+ * project's dev chains hosted anywhere — e.g. the anvil + solana that
+ * scripts/akash-deploy.sh deploys to Akash (whose ingress hostnames rotate per
+ * redeploy, so the operator passes the current URLs). The EVM chain is assumed
+ * to be the chain-id 31338 `akash-anvil` deploy (deterministic TOON settlement
+ * contracts → settlement-complete); Solana is RPC + Mock-USDC (relay-only, no
+ * program). For arbitrary real chains with their own contracts, use the full
+ * `customProviders` (chains editor) path instead.
+ */
+export interface CustomEndpoints {
+  /** EVM JSON-RPC URL (the project's anvil deploy). */
+  evmUrl?: string;
+  /** Solana JSON-RPC URL. */
+  solUrl?: string;
+}
+
+/**
+ * Dev-chain templates for the URL-only custom path. The EVM chain is the
+ * chain-id 31338 `akash-anvil` Anvil whose TOON contracts are deployed
+ * deterministically (settlement-complete). The Solana node bootstraps a known
+ * Mock-USDC mint but the payment-channel program is not deployed → relay-only.
+ */
+const DEV_EVM_PRESET = 'akash-anvil' as const;
+const DEV_SOLANA = {
+  usdcMint: '6GbdrVghwNKTz9raga7y3Y4qqX5Zgg3AC4d48Kt7C59Q',
+  programId: '', // TOON payment-channel program not deployed on the dev Solana node
+};
 
 /** Per-family settlement readiness, for honest UX. */
 export interface NetworkFamilyStatus {
@@ -167,13 +199,24 @@ function evmSettlementComplete(p: ChainPreset): boolean {
  *   relay-only case (no providers are built without it).
  * @param opts.customProviders - For `network: 'custom'`, the operator-supplied
  *   `chainProviders` to pass through verbatim (and to derive node env from).
+ * @param opts.endpoints - For `network: 'custom'`, operator-supplied RPC URLs
+ *   (`--evm-url` / `--sol-url`) pointing at the project's dev chains. Used when
+ *   `customProviders` is empty (the lightweight URL-only path).
  */
 export function resolveNetworkProfile(
   network: NetworkMode,
-  opts: { keyId?: string; customProviders?: ChainProviderConfigEntry[] } = {}
+  opts: {
+    keyId?: string;
+    customProviders?: ChainProviderConfigEntry[];
+    endpoints?: CustomEndpoints;
+  } = {}
 ): NetworkProfile {
   if (network === 'custom') {
-    return resolveCustom(opts.customProviders ?? []);
+    return resolveCustom(
+      opts.customProviders ?? [],
+      opts.endpoints ?? {},
+      opts.keyId
+    );
   }
 
   const tier = network as DerivableTier;
@@ -245,8 +288,24 @@ export function resolveNetworkProfile(
   return { network, chainProviders, nodeEnv, status };
 }
 
-/** Resolve the `custom` mode from operator-supplied providers. */
-function resolveCustom(providers: ChainProviderConfigEntry[]): NetworkProfile {
+/**
+ * Resolve the `custom` mode. Two operator paths:
+ *   1. explicit `providers` (the chains editor / `chains add`) → used verbatim;
+ *      the apex settles on them, the town node runs relay-only with their RPC.
+ *   2. URL-only (`endpoints` from `--evm-url`/`--sol-url`) → point the apex +
+ *      nodes at the project's dev chains (chain-id 31338 `akash-anvil`, which is
+ *      settlement-complete; Solana RPC + Mock-USDC, relay-only).
+ * `providers` takes precedence; with neither, the node runs relay-only.
+ */
+function resolveCustom(
+  providers: ChainProviderConfigEntry[],
+  endpoints: CustomEndpoints,
+  keyId?: string
+): NetworkProfile {
+  if (providers.length === 0 && (endpoints.evmUrl || endpoints.solUrl)) {
+    return resolveCustomEndpoints(endpoints, keyId);
+  }
+
   const status: NetworkFamilyStatus = {
     evm: 'unconfigured',
     solana: 'unconfigured',
@@ -282,4 +341,54 @@ function resolveCustom(providers: ChainProviderConfigEntry[]): NetworkProfile {
   }
 
   return { network: 'custom', chainProviders: providers, nodeEnv, status };
+}
+
+/**
+ * URL-only custom path (`--evm-url` / `--sol-url`): point the apex + nodes at the
+ * project's dev chains. EVM is the chain-id 31338 `akash-anvil` deploy
+ * (settlement-complete via baked deterministic addresses); Solana is RPC +
+ * Mock-USDC (relay-only). A family with no URL degrades to relay-only.
+ */
+function resolveCustomEndpoints(
+  endpoints: CustomEndpoints,
+  keyId?: string
+): NetworkProfile {
+  const evm = CHAIN_PRESETS[DEV_EVM_PRESET];
+  const status: NetworkFamilyStatus = {
+    evm: 'unconfigured',
+    solana: 'unconfigured',
+    mina: 'unconfigured',
+  };
+  const chainProviders: ChainProviderConfigEntry[] = [];
+
+  // EVM_CHAIN points the town node at the akash-anvil preset (chain-id 31338 +
+  // deterministic TOON contract addresses); EVM_RPC_URL supplies the operator's
+  // URL, which the town overlays via TOON_RPC_URL.
+  const nodeEnv: NetworkNodeEnv = {
+    EVM_CHAIN: DEV_EVM_PRESET,
+    EVM_CHAIN_ID: String(evm.chainId),
+    EVM_USDC_ADDRESS: evm.usdcAddress,
+  };
+
+  if (endpoints.evmUrl) {
+    nodeEnv.EVM_RPC_URL = endpoints.evmUrl;
+    // akash-anvil carries registry + tokenNetwork → settlement-complete with a URL.
+    status.evm = 'configured';
+    if (keyId) {
+      chainProviders.push(
+        buildEvmProviderEntry({ ...evm, rpcUrl: endpoints.evmUrl }, keyId)
+      );
+    }
+  } else {
+    // No URL → akash-anvil preset rpcUrl is '' → town runs relay-only.
+    nodeEnv.EVM_CHAIN = RELAY_ONLY_CHAIN;
+  }
+
+  if (endpoints.solUrl) {
+    nodeEnv.SOLANA_RPC_URL = endpoints.solUrl;
+    nodeEnv.SOLANA_USDC_MINT = DEV_SOLANA.usdcMint;
+    // programId is empty → Solana settlement relay-only; no connector provider.
+  }
+
+  return { network: 'custom', chainProviders, nodeEnv, status };
 }

@@ -289,6 +289,7 @@ export {
   type NetworkProfile,
   type NetworkNodeEnv,
   type NetworkFamilyStatus,
+  type CustomEndpoints,
 } from './chain/network-profile.js';
 
 // x402 protocol support (shared ILP PREPARE construction)

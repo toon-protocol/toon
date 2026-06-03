@@ -37,7 +37,8 @@ export type ChainName =
   | 'arbitrum-sepolia'
   | 'arbitrum-one'
   | 'base-sepolia'
-  | 'base-mainnet';
+  | 'base-mainnet'
+  | 'akash-anvil';
 
 /**
  * Supported Solana chain preset names.
@@ -212,6 +213,20 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     tokenNetworkAddress: '',
     registryAddress: '',
+  },
+  // Akash-hosted Anvil devnet (chain-id 31338, deployed via akash-deploy.sh).
+  // Contract addresses are the deterministic Foundry deploy from
+  // contracts/evm/script/DeployLocal.s.sol (deployer + nonce, chain-id
+  // independent), so this is settlement-complete. rpcUrl is empty by design —
+  // the Akash ingress URL rotates per redeploy, so the operator supplies it
+  // (TOON_RPC_URL / EVM_RPC_URL via `init --network akash --akash-evm-url`).
+  'akash-anvil': {
+    name: 'akash-anvil',
+    chainId: 31338,
+    rpcUrl: '',
+    usdcAddress: MOCK_USDC_ADDRESS,
+    tokenNetworkAddress: '0xCafac3dD18aC6c6e92c921884f9E4176737C052c',
+    registryAddress: '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512',
   },
 };
 
