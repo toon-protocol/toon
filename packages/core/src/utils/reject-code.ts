@@ -35,6 +35,17 @@ export const ILP_TO_SEMANTIC: Readonly<Record<string, string>> = Object.freeze({
   T00: 'internal_error',
   T04: 'insufficient_funds',
   F00: 'invalid_request',
+  // F01 ("Invalid Packet" in ILP terms — emitted by the swap handler for
+  // "Invalid gift wrap" / "Invalid amount") has NO dedicated entry in the
+  // connector's REJECT_CODE_MAP (accepted semantics are: insufficient_funds,
+  // expired, unreachable, invalid_request, invalid_amount,
+  // insufficient_destination_amount, unexpected_payment, application_error,
+  // internal_error, timeout). The closest faithful reason is `invalid_request`,
+  // which the connector re-encodes to wire code F00. We map F01 EXPLICITLY
+  // (rather than relying on the fallback below) so the F01 -> F00 normalization
+  // is intentional and test-pinned, not a silent collapse that misleads callers
+  // into thinking they hit a different failure class. See issue #86.
+  F01: 'invalid_request',
   F02: 'unreachable',
   F03: 'invalid_amount',
   F04: 'insufficient_destination_amount',
