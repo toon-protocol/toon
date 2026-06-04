@@ -104,6 +104,10 @@ export interface NetworkNodeEnv {
   EVM_USDC_ADDRESS?: string;
   SOLANA_RPC_URL?: string;
   SOLANA_USDC_MINT?: string;
+  /** Solana payment-channel program id (filled per-deploy; empty in presets). */
+  SOLANA_PROGRAM_ID?: string;
+  /** Mina payment-channel zkApp address (filled per-deploy; empty in presets). */
+  MINA_ZKAPP_ADDRESS?: string;
 }
 
 /** Resolved network configuration for apex + children. */
