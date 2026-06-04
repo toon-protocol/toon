@@ -17,6 +17,8 @@ export {
 
 export { fillEvmSettlementTxGas } from './evm.js';
 
+export { verifyEd25519Signature } from './solana.js';
+
 export {
   balanceProofHashEvm,
   balanceProofHashSolana,

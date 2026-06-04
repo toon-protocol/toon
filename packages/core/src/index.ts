@@ -166,6 +166,18 @@ export {
 export {
   negotiateSettlementChain,
   resolveTokenForChain,
+  // Canonical balance-proof hash/field layouts (single source of truth) + the
+  // base58 / Mina-key helpers used to build chain-specific claims.
+  hexToBytes,
+  bigintToBytes32BE,
+  concatBytes,
+  balanceProofHashEvm,
+  balanceProofHashSolana,
+  minaHashToField,
+  balanceProofFieldsMina,
+  base58Encode,
+  base58Decode,
+  hexToMinaBase58PrivateKey,
 } from './settlement/index.js';
 
 // Bootstrap service

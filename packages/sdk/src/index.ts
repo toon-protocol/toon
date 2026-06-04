@@ -189,6 +189,7 @@ export { __testing as __streamSwapTesting } from './stream-swap.js';
 export {
   buildSettlementTx,
   verifyAccumulatedClaim,
+  verifyEd25519Signature,
   verifyMinaSignature,
   loadMinaSignerClient,
   fillEvmSettlementTxGas,

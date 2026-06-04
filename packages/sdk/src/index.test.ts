@@ -151,6 +151,7 @@ describe('@toon-protocol/sdk public API exports', () => {
       'SettlementTxError',
       'buildSettlementTx',
       'verifyAccumulatedClaim',
+      'verifyEd25519Signature',
       'fillEvmSettlementTxGas',
       'balanceProofHashEvm',
       'balanceProofHashSolana',
