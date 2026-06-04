@@ -24,14 +24,21 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.8.1)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.0)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.8.1` — the current
+> The contract holds from `>=3.3.2` through `3.9.0` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.0` — Solana + Mina settlement wired end-to-end (toon-protocol/connector#86),
+> purely additive:** non-EVM key resolution (`chainProviders[].keyId` as a raw
+> base58 private key, or `SOLANA_PRIVATE_KEY`/`MINA_PRIVATE_KEY` env), bootstrap
+> registration of Solana/Mina payment-channel providers, and a non-EVM branch in
+> the settlement executor. The consumed SDK/admin surface is unchanged; EVM
+> settlement is unaffected.
 > Connector `3.7.0+` additionally exposes `packetsLocallyDelivered` in
 > `getMetrics().peers[]` (toon-protocol/connector#73), consumed additively by
 > Townhouse's earnings aggregator (`eventsRelayed`); this is purely additive and

@@ -69,7 +69,7 @@
     }
   },
   "devDependencies": {
-    "@toon-protocol/connector": "^3.8.0",
+    "@toon-protocol/connector": "^3.9.0",
     "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
