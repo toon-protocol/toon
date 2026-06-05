@@ -24,14 +24,26 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.1)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.2)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.1` — the current
+> The contract holds from `>=3.3.2` through `3.9.2` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.2` — Mina settlement-side proof encoding fixed, a bug fix (not a
+> contract change):** the settlement executor decoded the on-chain Mina
+> payment-channel `proof` with `JSON.parse(proof)`, which threw when the proof
+> arrived base64-encoded rather than as a raw JSON string — surfacing as
+> `mina_claim_verification_failed` and blocking the Mina publish→settle loop on
+> the settle side (toon-protocol/connector#90). `3.9.2` normalizes the proof
+> encoding so a Mina claim that passes inbound validation can verify through to
+> on-chain settle. Builds on `3.9.1`'s dynamic-peer settlement-chain resolution
+> (toon-protocol/connector#88), which lets the `SettlementExecutor` resolve the
+> settlement chain for dynamic anonymous HS peers. The consumed SDK/admin surface
+> is unchanged; the contract canary passes unmodified at the new digest.
 >
 > **`3.9.1` — inbound claim validation now dispatches by blockchain type, a
 > bug fix (not a contract change):** `validateClaimMessage` switches on
