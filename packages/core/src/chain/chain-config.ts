@@ -121,6 +121,19 @@ export interface EVMProviderConfigEntry {
   keyId: string;
   tokenAddress: string;
   privateKey?: string;
+  /**
+   * Settlement tuning knobs. The connector reads its GLOBAL settlement
+   * threshold from the first EVM provider carrying `settlementOptions` and
+   * applies that single `threshold` across all chains (EVM/Solana/Mina).
+   * Mirrors the connector's `EVMProviderConfig.settlementOptions` so a custom
+   * provider entry can pass it straight through.
+   */
+  settlementOptions?: {
+    threshold?: string;
+    settlementTimeoutSecs?: number;
+    initialDepositMultiplier?: number;
+    pollingIntervalMs?: number;
+  };
 }
 
 /**
