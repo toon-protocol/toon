@@ -24,14 +24,28 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.2)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.3)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.2` — the current
+> The contract holds from `>=3.3.2` through `3.9.3` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.3` — Solana settle-executor channel-lookup fixed, a bug fix (not a
+> contract change):** with the claim verified + stored and settlement triggered
+> (the `settlementOptions.threshold` fix in townhouse #119), the settle executor
+> looked up the on-chain external channel by an **EVM-derived `tokenId`**, which
+> never matched the **programId-keyed** Solana external channel. It therefore
+> treated the channel as absent and opened a **NEW** channel, and the resulting
+> Solana settle transaction failed with `#5508010` (the fee-payer was not a
+> `TransactionSendingSigner`) — blocking the full Solana on-chain settle
+> (toon-protocol/connector#92). `3.9.3` resolves the external channel by the
+> correct programId-keyed identifier so the existing on-chain Solana channel is
+> found and the full settle (`CLAIM_FROM_CHANNEL` + `SETTLE_CHANNEL`) executes.
+> The consumed SDK/admin surface is unchanged; the contract canary passes
+> unmodified at the new digest.
 >
 > **`3.9.2` — Mina settlement-side proof encoding fixed, a bug fix (not a
 > contract change):** the settlement executor decoded the on-chain Mina
