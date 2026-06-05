@@ -24,14 +24,25 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.0)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.1)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.0` — the current
+> The contract holds from `>=3.3.2` through `3.9.1` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.1` — inbound claim validation now dispatches by blockchain type, a
+> bug fix (not a contract change):** `validateClaimMessage` switches on
+> `claim.blockchain` and routes to `validateEVMClaim` / `validateSolanaClaim` /
+> `validateMinaClaim`. In `3.9.0` the EVM validator ran unconditionally, so a
+> Solana-denominated claim (base58 `channelAccount`) was rejected with
+> `F06 — Invalid channelId format (expected 0x-prefixed 64-char hex)`, blocking
+> the Solana publish→settle loop at the apex. `validateSolanaClaim` accepts
+> `{ blockchain:'solana', programId, channelAccount (base58), nonce,
+> transferredAmount, signature, signerPublicKey (base58), cluster? }`. The EVM
+> claim shape and the consumed SDK/admin surface are unchanged.
 >
 > **`3.9.0` — Solana + Mina settlement wired end-to-end (toon-protocol/connector#86),
 > purely additive:** non-EVM key resolution (`chainProviders[].keyId` as a raw
