@@ -24,14 +24,44 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.3)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.6)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.3` — the current
+> The contract holds from `>=3.3.2` through `3.9.6` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.6` — full non-EVM on-chain settle completed for BOTH Solana and Mina,
+> all bug fixes (no contract change).** `3.9.6` itself is a connector-CI fix only
+> (no runtime change vs `3.9.5`); the substantive settle-side fixes land across
+> `3.9.4`/`3.9.5`:
+>
+> - **`3.9.4` (toon-protocol/connector#94)** — Solana `CLAIM_FROM_CHANNEL`
+>   reconstructed the signed claim message incorrectly for the on-chain Ed25519
+>   precompile verification, so a valid peer-signed Solana claim failed
+>   signature verification on-chain. Fixed to reconstruct the exact signed
+>   message the client produced.
+> - **`3.9.4` (toon-protocol/connector#95)** — Mina `getChannelState` queried the
+>   zkApp without `setActiveInstance(...)`, throwing an `account-not-found` /
+>   instance error before the channel could be read. Fixed by setting the active
+>   o1js instance prior to the on-chain read.
+> - **`3.9.5` (toon-protocol/connector#98)** — the Mina balance-proof commitment
+>   was compared against the **zkApp address** rather than the on-chain channel's
+>   `balanceCommitment` field, so every Mina claim mismatched. Fixed to compare
+>   the claim's Poseidon commitment against the on-chain `balanceCommitment`.
+>   (Consumer note: the on-chain channel the opener initializes must carry a
+>   `balanceCommitment` consistent with what the client signs.)
+> - **`3.9.5` (toon-protocol/connector#99)** — Solana `CLAIM_FROM_CHANNEL`
+>   required the fee-payer to be the claiming participant, so the connector could
+>   not unilaterally redeem a peer-signed **inbound** claim. The fee-payer is now
+>   decoupled from the claiming participant.
+>
+> Together these complete the `CLAIM_FROM_CHANNEL` + `SETTLE_CHANNEL` on-chain
+> settle for both non-EVM chains, atop `3.9.3`/`3.9.2`/`3.9.1` below. The
+> consumed SDK/admin surface is unchanged; the contract canary passes unmodified
+> at the new digest.
 >
 > **`3.9.3` — Solana settle-executor channel-lookup fixed, a bug fix (not a
 > contract change):** with the claim verified + stored and settlement triggered
