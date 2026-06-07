@@ -24,14 +24,33 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.7)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.9)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.7` — the current
+> The contract holds from `>=3.3.2` through `3.9.9` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.9` — connector-driven Mina `claimFromChannel` unblocked (no contract
+> change).** Fixes toon-protocol/connector#118: `verifyBalanceProof` previously
+> required the claim nonce to **equal** the on-chain nonce, but the on-chain
+> `claimFromChannel` needs the claim to **advance** the channel (claim nonce >
+> on-chain nonce). That nonce tension meant a valid advancing claim was rejected
+> before it could be settled on-chain. `3.9.9` makes `verifyBalanceProof` accept
+> **advancing** claims, so the connector can auto-drive `claimFromChannel` on a
+> Mina publish once the settlement threshold is exceeded. The consumed SDK/admin
+> surface is unchanged; the contract canary passes unmodified at the new digest.
+>
+> **`3.9.8` — Mina settlement trigger fixed (no contract change).** Fixes
+> toon-protocol/connector#117: the Mina `CLAIM_RECEIVED` event emitted a
+> hardcoded `transferredAmount` of `BigInt(0)`, so the connector's
+> settlement-threshold check never fired for Mina (the perceived transferred
+> amount was always zero) and `claimFromChannel()` was never triggered. `3.9.8`
+> emits the real `transferredAmount` from the stored claim, so the threshold
+> check fires and settlement is triggered. Together with `3.9.9` this completes
+> the connector-driven on-chain Mina settle. The consumed surface is unchanged.
 >
 > **`3.9.7` — Mina settle leg completed (no contract change).** Fixes
 > toon-protocol/connector#114: the on-chain `claimFromChannel` was disabled for
