@@ -24,14 +24,27 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.6)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.7)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.6` — the current
+> The contract holds from `>=3.3.2` through `3.9.7` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.7` — Mina settle leg completed (no contract change).** Fixes
+> toon-protocol/connector#114: the on-chain `claimFromChannel` was disabled for
+> externally-opened (**inbound**) channels — the connector's `_participantCache`
+> had no entry for a channel it did not itself open, so the on-chain read failed
+> with `ACCOUNT_NOT_FOUND`, and the proof message reconstructed for the on-chain
+> verification did not match the off-chain claim message. `3.9.7` enables
+> on-chain `claimFromChannel` for inbound channels (resolving the participant
+> from on-chain state rather than the local cache, and reconstructing the exact
+> signed message), which also closes connector#98/#84 (dual-party). This
+> completes the Mina settle leg that `3.9.6` could not finish on-chain. The
+> consumed SDK/admin surface is unchanged; the contract canary passes unmodified
+> at the new digest.
 >
 > **`3.9.6` — full non-EVM on-chain settle completed for BOTH Solana and Mina,
 > all bug fixes (no contract change).** `3.9.6` itself is a connector-CI fix only
