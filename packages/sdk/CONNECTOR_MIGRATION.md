@@ -24,14 +24,33 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.11)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.13)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.11` — the current
+> The contract holds from `>=3.3.2` through `3.9.13` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.13` — Mina `openChannel` deploy/initialize split (no contract change).**
+> Fixes toon-protocol/connector#128: the zkApp `openChannel` path combined the
+> contract deploy and the `initialize` call into one transaction; `3.9.13` splits
+> them into separate transactions so the on-chain channel opens cleanly. The
+> consumed SDK/admin surface is unchanged.
+>
+> **`3.9.12` — Mina zkApp settlement tx fee + balance conservation (no contract
+> change).** Fixes toon-protocol/connector#126: on `3.9.11` the apex's on-chain
+> `claimFromChannel` settlement transaction was constructed and broadcast with
+> **no transaction fee**, so the Mina node rejected it at `Insufficient fee` —
+> proof generation fully succeeded and the tx reached broadcast, but never
+> landed. `3.9.12` sets the zkApp transaction fee on the settlement tx AND guards
+> balance conservation (rejects a claim whose `transferredAmount` would violate
+> deposit-total conservation). Together with `3.9.13` this lets the on-chain Mina
+> `claimFromChannel` tx broadcast **and land** (zkApp nonce/`balanceCommitment`
+> advance) — completing the non-EVM on-chain pay-to-write loop for Mina (Solana
+> already done). The consumed SDK/admin surface is unchanged; the contract canary
+> passes unmodified at the new digest.
 >
 > **`3.9.11` — apex co-signs Mina `signatureB` (no contract change).** Fixes
 > toon-protocol/connector#123: the on-chain `claimFromChannel` is a dual-party
