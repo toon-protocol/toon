@@ -24,14 +24,27 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.10)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.11)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.10` — the current
+> The contract holds from `>=3.3.2` through `3.9.11` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.9.11` — apex co-signs Mina `signatureB` (no contract change).** Fixes
+> toon-protocol/connector#123: the on-chain `claimFromChannel` is a dual-party
+> redeem requiring both `signatureA` (client / participant A) and `signatureB`
+> (apex / participant B). On 3.9.10 the connector reused the client's
+> `signatureA` as `signatureB`, so after `signatureA` verified the on-chain tx
+> reverted at `participant B signature verification failed`. `3.9.11` makes the
+> connector co-sign `signatureB` with the apex Mina key, so both signature checks
+> pass and the on-chain Mina `claimFromChannel` tx lands (zkApp
+> nonce/`balanceCommitment` advance). This is the LAST Mina blocker; with it the
+> non-EVM on-chain pay-to-write loop is complete for Mina (Solana already done).
+> The consumed SDK/admin surface is unchanged; the contract canary passes
+> unmodified at the new digest.
 >
 > **`3.9.10` — Mina `claimFromChannel` signatureA wrapper accepted (no contract
 > change).** Fixes toon-protocol/connector#121: the on-chain `claimFromChannel`
