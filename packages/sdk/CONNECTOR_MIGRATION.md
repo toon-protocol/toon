@@ -24,14 +24,30 @@ fails, this is the first place to look.
 
 ---
 
-## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.9.13)
+## Current Contract — `@toon-protocol/connector` >=3.3.2 (verified through 3.10.0)
 
 The SDK consumes these connector APIs. Each entry below is asserted by the
 contract canary.
 
 > **Verified range:** No breaking changes to the consumed surface within 3.x.
-> The contract holds from `>=3.3.2` through `3.9.13` — the current
+> The contract holds from `>=3.3.2` through `3.10.0` — the current
 > `DEFAULT_CONNECTOR_IMAGE` pin and npm dependency floor.
+>
+> **`3.10.0` — Story 34.4 fund-custody zkApp bundle (no contract change).**
+> Bundles the Story 34.4 `PaymentChannel` zkApp (toon-protocol/connector#130 /
+> #131, closes toon-protocol/town#134). The bundled zkApp adds real fund custody
+> and settle-time distribution: `deposit()` escrows the deposited MINA on the
+> zkApp account via a signed `AccountUpdate`, and `settle()` drains the custodied
+> balance to the participants (`balanceB`→participantB / the apex recipient,
+> `balanceA`→participantA / the depositor refund). Its compiled `PaymentChannel`
+> verification key is **byte-identical** to the zkApp the townhouse harness
+> deploys (VK hash
+> `21482326729342759163995140331524541410906862862696135294081643945442581537217`),
+> so connector-driven `claimFromChannel`/`settle` proofs verify against the
+> deployed contract. This is a **minor** bump: the on-chain settle now actually
+> credits the recipient's tokens at close (previously `depositTotal` was a bare
+> Field with nothing escrowed). The consumed SDK/admin surface is unchanged; the
+> contract canary passes unmodified at the new digest.
 >
 > **`3.9.13` — Mina `openChannel` deploy/initialize split (no contract change).**
 > Fixes toon-protocol/connector#128: the zkApp `openChannel` path combined the
