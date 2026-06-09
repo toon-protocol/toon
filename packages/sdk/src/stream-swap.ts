@@ -371,8 +371,14 @@ export function validateChainAddress(
   kind: 'channelId' | 'address'
 ): boolean {
   if (chain.startsWith('evm:')) {
-    if (kind === 'channelId') return EVM_CHANNEL_ID_REGEX.test(value);
-    return EVM_ADDRESS_REGEX.test(value);
+    // #153: viem / EIP-55 emits checksummed (mixed-case) addresses, and
+    // callers commonly pass a checksummed `chainRecipient`. Lowercase-normalize
+    // before the strict-lowercase-hex regex so a valid checksummed address (or
+    // channelId) is accepted instead of being spuriously rejected with
+    // INVALID_CHAIN_RECIPIENT / FULFILL_DECODE_FAILED.
+    const normalized = value.toLowerCase();
+    if (kind === 'channelId') return EVM_CHANNEL_ID_REGEX.test(normalized);
+    return EVM_ADDRESS_REGEX.test(normalized);
   }
   if (chain.startsWith('solana:')) {
     // AC-3: base58 decode MUST succeed AND length MUST be 32 bytes. A pure
@@ -400,8 +406,11 @@ export function validateChainAddress(
  *
  * Story 12.6 extension: also parses the settlement-context fields
  * (`channelId`, `nonce`, `cumulativeAmount`, `recipient`, `millSignerAddress`).
- * If ANY one of these is present, ALL five MUST be present and well-formed
- * — partial presence is treated as malformed metadata.
+ * These are OPTIONAL and best-effort (#153): each is threaded through only
+ * when it is a well-formed string for the target chain; an absent or malformed
+ * settlement field is silently dropped rather than failing the whole decode,
+ * so a fulfilled swap still surfaces its signed `claim` + `ephemeralPubkey`.
+ * Only `claim` and `ephemeralPubkey` are strictly required.
  *
  * @param chain Optional `pair.to.chain` string for per-chain format validation
  *   of channelId / recipient / millSignerAddress. When omitted, format checks
@@ -510,86 +519,63 @@ function decodeFulfillMetadata(
     }
     result.targetAmount = ta;
   }
-  // Story 12.6 settlement-context fields. All-or-nothing: if ANY of the five
-  // fields is present, ALL must be present and well-formed. Partial presence
-  // is malformed metadata.
-  const settlementKeys = [
-    'channelId',
-    'nonce',
-    'cumulativeAmount',
-    'recipient',
-    'millSignerAddress',
-  ] as const;
-  const presentSettlementKeys = settlementKeys.filter(
-    (k) => obj[k] !== undefined
-  );
-  if (presentSettlementKeys.length > 0) {
-    if (presentSettlementKeys.length !== settlementKeys.length) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        `FULFILL metadata settlement fields are partial — got ${presentSettlementKeys.join(',')}, need all of ${settlementKeys.join(',')}`
-      );
-    }
-    const channelId = obj['channelId'];
-    const nonce = obj['nonce'];
-    const cumulativeAmount = obj['cumulativeAmount'];
-    const recipient = obj['recipient'];
-    const millSignerAddress = obj['millSignerAddress'];
-    if (typeof channelId !== 'string') {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        'FULFILL metadata.channelId must be a string'
-      );
-    }
-    if (chain && !validateChainAddress(channelId, chain, 'channelId')) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        `FULFILL metadata.channelId malformed for chain ${chain}`
-      );
-    }
-    if (typeof nonce !== 'string' || !DECIMAL_UINT_REGEX.test(nonce)) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        'FULFILL metadata.nonce must be a non-negative integer decimal string'
-      );
-    }
-    if (
-      typeof cumulativeAmount !== 'string' ||
-      !DECIMAL_UINT_REGEX.test(cumulativeAmount)
-    ) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        'FULFILL metadata.cumulativeAmount must be a non-negative integer decimal string'
-      );
-    }
-    if (typeof recipient !== 'string') {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        'FULFILL metadata.recipient must be a string'
-      );
-    }
-    if (chain && !validateChainAddress(recipient, chain, 'address')) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        `FULFILL metadata.recipient malformed for chain ${chain}`
-      );
-    }
-    if (typeof millSignerAddress !== 'string') {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        'FULFILL metadata.millSignerAddress must be a string'
-      );
-    }
-    if (chain && !validateChainAddress(millSignerAddress, chain, 'address')) {
-      throw new StreamSwapError(
-        'FULFILL_DECODE_FAILED',
-        `FULFILL metadata.millSignerAddress malformed for chain ${chain}`
-      );
-    }
+  // Story 12.6 settlement-context fields — OPTIONAL, best-effort (#153).
+  //
+  // These five fields are only consumed downstream by `buildSettlementTx()`
+  // (Story 12.6), which performs on-chain target redemption — a flow that is
+  // itself #82-bounded (synthetic devnet channels) and independently validates
+  // every field it consumes before signing. They are NOT required to surface
+  // the mill's signed claim to the caller.
+  //
+  // The previous contract was all-or-nothing AND hard-failed the entire FULFILL
+  // decode (`FULFILL_DECODE_FAILED`) on any partial/malformed settlement field.
+  // That rejected otherwise-valid mill FULFILLs whenever the mill's real
+  // envelope carried, e.g., a cross-chain channelId (an EVM-style hex channelId
+  // echoed on a `solana:`/`mina:` target) or a checksummed address — so a
+  // fulfilled swap reported `state: failed` with an empty `claims[]`.
+  //
+  // New contract: thread each settlement field through ONLY when it is a
+  // well-formed string for the target chain; silently drop any field that is
+  // absent or malformed. A swap whose mill omits/garbles settlement metadata
+  // still completes with the signed claim; `buildSettlementTx()` will then
+  // surface `MISSING_SETTLEMENT_METADATA` at settlement time if the caller
+  // actually attempts on-chain redemption with an incomplete bundle.
+  //
+  // `recipient` is special-cased: it is the anti-substitution security check in
+  // `runLoop` (the mill must echo the sender-supplied `chainRecipient`). We thread
+  // it through whenever it is a non-empty string — even if it fails the chain
+  // format check — so the runLoop equality check still fires. The equality
+  // comparison there is the real boundary; a format-only mismatch must not be
+  // silently dropped (which would skip the check entirely).
+  const channelId = obj['channelId'];
+  if (
+    typeof channelId === 'string' &&
+    (!chain || validateChainAddress(channelId, chain, 'channelId'))
+  ) {
     result.channelId = channelId;
+  }
+  const nonce = obj['nonce'];
+  if (typeof nonce === 'string' && DECIMAL_UINT_REGEX.test(nonce)) {
     result.nonce = nonce;
+  }
+  const cumulativeAmount = obj['cumulativeAmount'];
+  if (
+    typeof cumulativeAmount === 'string' &&
+    DECIMAL_UINT_REGEX.test(cumulativeAmount)
+  ) {
     result.cumulativeAmount = cumulativeAmount;
+  }
+  const recipient = obj['recipient'];
+  if (typeof recipient === 'string' && recipient.length > 0) {
+    // Always thread a present recipient so the runLoop anti-substitution
+    // equality check (`metadata.recipient === params.chainRecipient`) runs.
     result.recipient = recipient;
+  }
+  const millSignerAddress = obj['millSignerAddress'];
+  if (
+    typeof millSignerAddress === 'string' &&
+    (!chain || validateChainAddress(millSignerAddress, chain, 'address'))
+  ) {
     result.millSignerAddress = millSignerAddress;
   }
   return result;
@@ -1102,10 +1088,21 @@ async function runLoop(
     // address — refuse to accumulate the claim and surface a per-packet
     // rejection with a clear reason code. Missing recipient = legacy
     // (pre-12.6) metadata, permitted.
-    if (
-      metadata.recipient !== undefined &&
-      metadata.recipient !== params.chainRecipient
-    ) {
+    //
+    // #153: EVM addresses are case-insensitive (EIP-55 checksum casing is
+    // purely a typo-detection hint). The mill lowercases its echoed recipient
+    // while the sender may pass a checksummed `chainRecipient` (or vice versa);
+    // compare case-insensitively on EVM targets so a casing-only difference is
+    // NOT flagged as a substitution attack. Non-EVM chains keep the exact
+    // (base58 case-sensitive) comparison.
+    const isEvmTarget = pair.to.chain.startsWith('evm:');
+    const recipientMatches =
+      metadata.recipient === undefined ||
+      (isEvmTarget
+        ? metadata.recipient.toLowerCase() ===
+          params.chainRecipient.toLowerCase()
+        : metadata.recipient === params.chainRecipient);
+    if (!recipientMatches) {
       logger.warn({
         event: 'stream_swap.recipient_mismatch',
         packetIndex,
