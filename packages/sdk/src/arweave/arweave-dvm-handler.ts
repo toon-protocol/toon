@@ -145,12 +145,18 @@ export function createArweaveDvmHandler(
       };
     } catch (error) {
       // Log the full underlying error server-side for operator/gate diagnostics
-      // (e.g. Turbo upload-service rejection, network timeout to upload.ardrive.io).
+      // (e.g. Turbo upload-service rejection, network timeout to upload.ardrive.io,
+      // a >100 KB payload exceeding the unauthenticated free-tier limit, or a
+      // throwing/no-credential adapter — see #146). The stub adapter used to
+      // swallow the cause as a bare "Arweave upload failed"; we now always emit
+      // the real reason here so the failure self-diagnoses from the dvm logs.
       // The client still only receives a generic message (CWE-209): we never
       // forward SDK internals over the wire.
+      const cause =
+        error instanceof Error ? (error.stack ?? error.message) : String(error);
       console.error(
-        `[ArweaveDvmHandler] Arweave upload failed (${parsed.blobData.length} bytes):`,
-        error instanceof Error ? (error.stack ?? error.message) : error
+        `[ArweaveDvmHandler] Arweave upload failed (${parsed.blobData.length} bytes). ` +
+          `Cause: ${cause}`
       );
       return {
         accept: false,
