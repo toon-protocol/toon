@@ -5,16 +5,27 @@
 This document records the **API contract** that `@toon-protocol/sdk` depends on
 from `@toon-protocol/connector`, and the breaking changes between versions.
 
-The contract is enforced as a fast-feedback canary in two paired files:
+The contract is enforced as a fast-feedback canary in three paired files:
 
 - `packages/sdk/tests/integration/connector-contract.test.ts` — runtime
-  behavioral assertions (vitest, esbuild-transpiled).
+  behavioral assertions for the EVM claim path + the connector's
+  `sendPacket`/`registerPeer`/`openChannel`/`PaymentHandler` surface (vitest,
+  esbuild-transpiled).
 - `packages/sdk/tests/integration/connector-contract.types.ts` — type-only
   guards (tsc-checked via `tests/integration/tsconfig.json`). These guards
   catch shape changes that vitest's esbuild transform silently strips
   (`@ts-expect-error` directives, type-level field-presence checks).
+- `packages/sdk/tests/integration/connector-contract.multichain.test.ts` — the
+  **non-EVM** claim/balance-proof envelope canary: asserts the Solana
+  (Ed25519) and Mina (`mina-signer` `signFields`) off-chain claim envelope
+  shapes + round-trips sign→verify against the SDK's own
+  `verifyEd25519Signature` / `verifyMinaSignature` so signer↔verifier drift on
+  the Solana/Mina paths fails on every PR. Pure (no Docker/RPC/chain). The Mina
+  sign/verify round-trip self-skips when the optional `mina-signer` peer dep is
+  absent; the on-chain Mina zkApp `claimFromChannel` proof path (o1js compile)
+  is intentionally out of scope and covered only by the nightly Docker E2E.
 
-The CI canary job (`connector-contract-canary`) runs both. When either
+The CI canary job (`connector-contract-canary`) runs all three. When any
 fails, this is the first place to look.
 
 > **Why this exists.** The connector v2.3.0 → v3.3.2 upgrade silently broke
@@ -85,7 +96,7 @@ contract canary.
 > change).** Fixes toon-protocol/connector#121: the on-chain `claimFromChannel`
 > rejected the `signBalanceProof` wrapper
 > (`{commitment, signature: {r, s}, ...}`) with `INVALID_PARAMETERS: Invalid
-> signatureA` because it expected a bare `{r, s}` signature object. On 3.9.9 the
+signatureA` because it expected a bare `{r, s}` signature object. On 3.9.9 the
 > connector reached `event:"claim_from_channel" nonce:2` and then threw this error
 > before any tx was submitted. `3.9.10` makes `claimFromChannel` accept the
 > wrapper as `signatureA`, so the connector actually submits the on-chain Mina
@@ -190,7 +201,7 @@ contract canary.
 > `F06 — Invalid channelId format (expected 0x-prefixed 64-char hex)`, blocking
 > the Solana publish→settle loop at the apex. `validateSolanaClaim` accepts
 > `{ blockchain:'solana', programId, channelAccount (base58), nonce,
-> transferredAmount, signature, signerPublicKey (base58), cluster? }`. The EVM
+transferredAmount, signature, signerPublicKey (base58), cluster? }`. The EVM
 > claim shape and the consumed SDK/admin surface are unchanged.
 >
 > **`3.9.0` — Solana + Mina settlement wired end-to-end (toon-protocol/connector#86),
@@ -326,12 +337,12 @@ The connector image runs **two distinct HTTP servers**:
 
 Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 
-| Method              | Path                                     | Shape                                                                                                                                                                                                                |
-| ------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getEarnings()`     | `GET {adminApi.port}/admin/earnings.json` | `EarningsResponse` — `{ uptimeSeconds: number, peers: [{ peerId, byAsset: [{ assetCode, assetScale, claimsReceivedTotal, claimsSentTotal, netBalance, lastClaimAt }] }], connectorFees: [{ assetCode, assetScale, total }], recentClaims: [{ peerId, assetCode, assetScale, amount, direction: 'inbound'\|'outbound', at }], timestamp: { iso } }`. Throws on shape drift. Connector source-of-truth: `@toon-protocol/connector packages/connector/src/http/admin-api.ts:261-304`. Added connector v3.2.0. |
-| `getHealth()`       | `GET {healthCheckPort}/health`           | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                      |
-| `getPeers()`        | `GET {adminApi.port}/admin/peers`        | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                            |
-| `getMetrics()`      | `GET {adminApi.port}/admin/metrics.json` | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }` |
+| Method                 | Path                                                          | Shape                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getEarnings()`        | `GET {adminApi.port}/admin/earnings.json`                     | `EarningsResponse` — `{ uptimeSeconds: number, peers: [{ peerId, byAsset: [{ assetCode, assetScale, claimsReceivedTotal, claimsSentTotal, netBalance, lastClaimAt }] }], connectorFees: [{ assetCode, assetScale, total }], recentClaims: [{ peerId, assetCode, assetScale, amount, direction: 'inbound'\|'outbound', at }], timestamp: { iso } }`. Throws on shape drift. Connector source-of-truth: `@toon-protocol/connector packages/connector/src/http/admin-api.ts:261-304`. Added connector v3.2.0.                                                                                                                                                                               |
+| `getHealth()`          | `GET {healthCheckPort}/health`                                | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `getPeers()`           | `GET {adminApi.port}/admin/peers`                             | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `getMetrics()`         | `GET {adminApi.port}/admin/metrics.json`                      | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. **Note:** `PacketLogEntry` does not carry an event `kind` field. Townhouse's `GET /api/nodes/:nodeId/jobs/recent` feature-detects `entry.kind`; if absent, packets are grouped under bucket `kind: 0` ("unattributed") and the canonical `byKind` is sourced from the DVM container's in-memory health counter instead. To enable per-kind attribution from the connector side, add `kind?: number` to `PacketLogEntry` (populated from the ILP packet's TOON-decoded event kind). |
 
 > **`getEarnings()` (added story 47.1):** When the connector is started without `accountManager` / `claimReceiver` (i.e., without full EVM settlement config), this endpoint returns 503 with `{ error: 'Service Unavailable', message: 'Earnings subsystem not enabled (accountManager or claimReceiver missing)' }` — see connector source `admin-api.ts:1888-1896`. Townhouse's apex always wires both subsystems; 503 in production indicates connector misconfiguration. The wire-level `timestamp: string` is wrapped on the Townhouse side into `EarningsTimestamp { iso: string }` — the adapter lives in `ConnectorAdminClient.getEarnings()`.
@@ -396,6 +407,7 @@ Townhouse-side wrap (`ConnectorAdminClient.getEarnings(): Promise<EarningsRespon
 the **v3.3.3+** floor in `DEFAULT_CONNECTOR_IMAGE`. If you are bumping to a connector version
 older than v3.2.0, the canary will fail on this endpoint.
 Verify:
+
 - `packages/townhouse/src/connector/types.ts` — 6 earnings interfaces (`AssetEarnings`,
   `PeerEarnings`, `ConnectorFeeEntry`, `RecentClaim`, `EarningsTimestamp`, `EarningsResponse`)
 - `packages/townhouse/src/connector/admin-client.ts` — `getEarnings()` method
