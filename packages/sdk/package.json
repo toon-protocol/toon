@@ -73,6 +73,7 @@
     "@toon-protocol/relay": "workspace:*",
     "@types/node": "^20.0.0",
     "@types/ws": "^8.0.0",
+    "mina-signer": ">=3.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
     "viem": "^2.0.0",

@@ -23,6 +23,7 @@ import { keccak_256 } from '@noble/hashes/sha3.js';
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha512 } from '@noble/hashes/sha2.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import { hexToMinaBase58PrivateKey } from '@toon-protocol/core';
 import { IdentityError } from './errors.js';
 
 /**
@@ -377,6 +378,13 @@ async function deriveMinaIdentity(
   }
 
   const keyBytes = new Uint8Array(hdKey.privateKey);
+  // Clamp the top 2 bits so the big-endian scalar is within the Pallas
+  // base-field order. A raw BIP-32 child scalar can exceed it (~75% of 256-bit
+  // values do), and mina-signer then rejects it with
+  // "Scalar: inputs larger than … are not allowed". Matches the client's
+  // deriveMinaKey and mill's deriveMillKeys, so all three produce the SAME Mina
+  // key for a given mnemonic + accountIndex.
+  keyBytes[0] = (keyBytes[0] ?? 0) & 0x3f;
   const hexKey = bytesToHex(keyBytes);
 
   try {
@@ -386,11 +394,29 @@ async function deriveMinaIdentity(
       'default' in MinaSignerLib ? MinaSignerLib.default : MinaSignerLib;
     const client = new Client({ network: 'mainnet' });
 
-    const publicKey: string = client.derivePublicKey(hexKey);
+    // mina-signer's derivePublicKey expects a Mina base58check ("EK…") private
+    // key, NOT a raw hex scalar. Convert first — passing hex makes mina-signer
+    // throw `fromBase58: invalid character`, which the old broad catch silently
+    // swallowed (so Mina derivation always returned undefined). Keep the
+    // exposed privateKey as hex for consumer compatibility (e.g. the client's
+    // MinaSigner accepts hex and converts internally).
+    const minaBase58PrivateKey = hexToMinaBase58PrivateKey(hexKey);
+    const publicKey: string = client.derivePublicKey(minaBase58PrivateKey);
     return { privateKey: hexKey, publicKey };
-  } catch {
-    // mina-signer not installed -- graceful degradation
-    return undefined;
+  } catch (err: unknown) {
+    // Degrade gracefully ONLY when mina-signer is genuinely absent (optional
+    // dependency). Surface any other failure instead of masking it — the broad
+    // catch previously hid the hex-vs-base58 key-format bug above.
+    const code = (err as { code?: string } | undefined)?.code;
+    if (code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND') {
+      return undefined;
+    }
+    throw new IdentityError(
+      `Mina identity derivation failed at path ${path}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      err instanceof Error ? err : undefined
+    );
   }
 }
 

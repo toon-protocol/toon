@@ -716,5 +716,29 @@ describe('Identity', () => {
       expect(id0again.solana.publicKey).toBe(id0.solana.publicKey);
       expect(id0again.evmAddress).toBe(id0.evmAddress);
     });
+
+    it('[P0] should actually derive a valid, deterministic Mina identity', async () => {
+      // Regression: deriveMinaIdentity used to (a) pass a raw hex scalar to
+      // mina-signer (which wants the base58 "EK…" form) and (b) not clamp the
+      // BIP-32 child scalar into the Pallas field — both errors were swallowed
+      // by a broad catch, so Mina was ALWAYS silently undefined. mina-signer is
+      // now a devDependency and the conversion+clamp are fixed, so this MUST
+      // produce a real, stable key.
+      //
+      // We assert structure + determinism rather than a hardcoded vector: the
+      // published artifacts (sdk/client/mill dist) all agree on
+      // B62qrttSARHJCobNymsJAmKgJeqvmX63xTGLdby4baoxE1GqaedaAAS for this
+      // mnemonic@0, but the exact value is sensitive to how the test runner
+      // resolves mina-signer, so a pinned vector would be environment-fragile.
+      const id = await fromMnemonicFull(TEST_MNEMONIC, { accountIndex: 0 });
+      expect(id.mina).toBeDefined();
+      // Mina public keys are base58check with the B62 prefix (~55 chars).
+      expect(id.mina!.publicKey).toMatch(/^B62q[1-9A-HJ-NP-Za-km-z]{48,}$/);
+      // Exposed private key is the clamped big-endian hex scalar.
+      expect(id.mina!.privateKey).toMatch(/^[0-9a-f]{64}$/);
+      // Deterministic for the same mnemonic + index.
+      const again = await fromMnemonicFull(TEST_MNEMONIC, { accountIndex: 0 });
+      expect(again.mina!.publicKey).toBe(id.mina!.publicKey);
+    });
   });
 });
