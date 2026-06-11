@@ -695,5 +695,26 @@ describe('Identity', () => {
         expect(identity.mina.publicKey).toBeTruthy();
       }
     });
+
+    it('[P1] should derive distinct identities on EVERY chain per accountIndex', async () => {
+      // The e2e dev wallet (one seed → distinct per-peer identities) relies on
+      // accountIndex varying ALL chains. EVM/Nostr already did; Solana
+      // (m/44'/501'/{i}'/0') and Mina (m/44'/12586'/{i}'/0/0) now do too.
+      const mnemonic = TEST_MNEMONIC;
+      const id0 = await fromMnemonicFull(mnemonic, { accountIndex: 0 });
+      const id1 = await fromMnemonicFull(mnemonic, { accountIndex: 1 });
+
+      expect(id1.evmAddress).not.toBe(id0.evmAddress);
+      expect(id1.solana.publicKey).not.toBe(id0.solana.publicKey);
+      if (id0.mina && id1.mina) {
+        expect(id1.mina.publicKey).not.toBe(id0.mina.publicKey);
+      }
+
+      // Index 0 stays on the historical fixed path — deterministic and
+      // unchanged for existing keys (backward compatible).
+      const id0again = await fromMnemonicFull(mnemonic, { accountIndex: 0 });
+      expect(id0again.solana.publicKey).toBe(id0.solana.publicKey);
+      expect(id0again.evmAddress).toBe(id0.evmAddress);
+    });
   });
 });

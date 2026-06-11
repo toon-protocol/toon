@@ -131,8 +131,9 @@ export function fromMnemonic(
     const secretKey = hdKey.privateKey;
     const base = deriveIdentity(secretKey);
 
-    // Derive Solana Ed25519 identity from the same seed via SLIP-0010
-    const solana = deriveSolanaIdentity(seed);
+    // Derive Solana Ed25519 identity from the same seed via SLIP-0010,
+    // varying by accountIndex so distinct indices yield distinct Solana keys.
+    const solana = deriveSolanaIdentity(seed, accountIndex);
 
     return { ...base, solana };
   } catch (error: unknown) {
@@ -309,19 +310,32 @@ function slip0010Derive(seed: Uint8Array, path: number[]): Uint8Array {
   return key;
 }
 
-/** Standard SLIP-0010 path for Solana: m/44'/501'/0'/0' (all hardened). */
-const SOLANA_PATH = [
-  0x8000002c, // 44'
-  0x800001f5, // 501'
-  0x80000000, // 0'
-  0x80000000, // 0'
-];
+/**
+ * SLIP-0010 path for Solana, varying the hardened account component by
+ * `accountIndex`: m/44'/501'/{accountIndex}'/0' (all hardened). At
+ * `accountIndex` 0 this is the canonical m/44'/501'/0'/0', so existing
+ * (index-0) keys are unchanged.
+ */
+function solanaPath(accountIndex: number): number[] {
+  return [
+    0x8000002c, // 44'
+    0x800001f5, // 501'
+    (0x80000000 + accountIndex) >>> 0, // {accountIndex}'
+    0x80000000, // 0'
+  ];
+}
 
 /**
  * Derives a Solana Ed25519 identity from a BIP-39 seed using SLIP-0010.
+ *
+ * @param accountIndex - Hardened account index (default 0). Distinct indices
+ *   yield distinct keypairs from the same seed.
  */
-function deriveSolanaIdentity(seed: Uint8Array): SolanaIdentity {
-  const privateKey = slip0010Derive(seed, SOLANA_PATH);
+function deriveSolanaIdentity(
+  seed: Uint8Array,
+  accountIndex = 0
+): SolanaIdentity {
+  const privateKey = slip0010Derive(seed, solanaPath(accountIndex));
   const publicKeyBytes = ed25519.getPublicKey(privateKey);
 
   // Solana keypair = 32-byte private key + 32-byte public key = 64 bytes
@@ -339,16 +353,21 @@ function deriveSolanaIdentity(seed: Uint8Array): SolanaIdentity {
 /**
  * Derives a Mina Pallas identity from a BIP-39 seed.
  *
- * Uses BIP-32 secp256k1 derivation at path m/44'/12586'/0'/0/0 to produce
- * a 32-byte scalar, then converts to Mina key format via mina-signer.
+ * Uses BIP-32 secp256k1 derivation at path m/44'/12586'/{accountIndex}'/0/0 to
+ * produce a 32-byte scalar, then converts to Mina key format via mina-signer.
+ * At `accountIndex` 0 this is the canonical m/44'/12586'/0'/0/0, so existing
+ * (index-0) keys are unchanged.
  *
  * @param seed - The BIP-39 seed (64 bytes).
+ * @param accountIndex - Hardened account index (default 0). Distinct indices
+ *   yield distinct keys from the same seed.
  * @returns The Mina identity, or undefined if mina-signer is not installed.
  */
 async function deriveMinaIdentity(
-  seed: Uint8Array
+  seed: Uint8Array,
+  accountIndex = 0
 ): Promise<MinaIdentity | undefined> {
-  const path = "m/44'/12586'/0'/0/0";
+  const path = `m/44'/12586'/${accountIndex}'/0/0`;
   const hdKey = HDKey.fromMasterSeed(seed).derive(path);
 
   if (!hdKey.privateKey) {
@@ -386,8 +405,12 @@ async function deriveMinaIdentity(
  * Chains derived:
  * - Nostr (secp256k1): m/44'/1237'/0'/0/{accountIndex}
  * - EVM (secp256k1): same key as Nostr, Keccak-256 for address
- * - Solana (Ed25519): m/44'/501'/0'/0' (SLIP-0010)
- * - Mina (Pallas): m/44'/12586'/0'/0/0 (optional, requires mina-signer)
+ * - Solana (Ed25519): m/44'/501'/{accountIndex}'/0' (SLIP-0010)
+ * - Mina (Pallas): m/44'/12586'/{accountIndex}'/0/0 (optional, requires mina-signer)
+ *
+ * All four chains vary by `accountIndex`, so distinct indices yield fully
+ * distinct multi-chain identities from one seed. Index 0 is unchanged from the
+ * historical fixed paths.
  *
  * @param mnemonic - A valid BIP-39 mnemonic (12 or 24 words).
  * @param options - Optional derivation options (accountIndex defaults to 0).
@@ -400,12 +423,13 @@ export async function fromMnemonicFull(
 ): Promise<ToonIdentity> {
   // Derive Nostr + EVM + Solana synchronously
   const identity = fromMnemonic(mnemonic, options);
+  const accountIndex = options?.accountIndex ?? 0;
 
-  // Attempt async Mina derivation
+  // Attempt async Mina derivation (varies by accountIndex, like the others)
   let seed: Uint8Array | undefined;
   try {
     seed = mnemonicToSeedSync(mnemonic);
-    const mina = await deriveMinaIdentity(seed);
+    const mina = await deriveMinaIdentity(seed, accountIndex);
     if (mina) {
       return { ...identity, mina };
     }
