@@ -1073,12 +1073,29 @@ async function claimFromChannel(
   writeU64LE(claimData, 8, nonce);
   writeU64LE(claimData, 16, transferredAmount);
 
+  // Account layout (connector#99 / toon#172): the fee-payer/submitter (index 0)
+  // signs the tx, and the credited participant (index 1, the balance-proof
+  // signer) is a NON-signer whose authorization is the Ed25519 precompile over
+  // the balance proof. This decouples the tx signer from the claiming
+  // participant so the connector can unilaterally redeem an inbound peer's
+  // signed claim. The participant account (index 1) is required by the deployed
+  // program; omitting it makes claim_from_channel revert at simulation with
+  // "insufficient account keys for instruction" (code -32002).
+  //   0. [signer]    fee_payer    — claimer (submitter / fee-payer)
+  //   1. []          participant  — signerPubkey (precompile-authorized, non-signer)
+  //   2. [writable]  channel_pda
+  //   3. []          instructions sysvar
   return buildAndSendTransaction(claimer, [
     ed25519Ix,
     {
       programId,
       keys: [
         { pubkey: claimer.pubkeyBase58, isSigner: true, isWritable: false },
+        {
+          pubkey: base58Encode(signerPubkey),
+          isSigner: false,
+          isWritable: false,
+        },
         { pubkey: channelPDA, isSigner: false, isWritable: true },
         { pubkey: INSTRUCTIONS_SYSVAR_ID, isSigner: false, isWritable: false },
       ],
