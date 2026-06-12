@@ -403,6 +403,24 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       );
     });
 
+    it('base-sepolia carries the deployed TOON settlement addresses (devnet/testnet tier)', () => {
+      const b = CHAIN_PRESETS['base-sepolia'];
+      expect(b.chainId).toBe(84532);
+      expect(b.tokenNetworkAddress).toBe(
+        '0x47616F4b9cF4dA25F74FD727Cd85E9CA0C70Ec5C'
+      );
+      expect(b.registryAddress).toBe(
+        '0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7'
+      );
+      expect(b.usdcAddress).toBe('0xac80670b86db1eeb5c18c82e18a6bda98fcb4504');
+    });
+
+    it('base-mainnet has no TOON settlement contracts yet (unconfigured)', () => {
+      const b = CHAIN_PRESETS['base-mainnet'];
+      expect(b.tokenNetworkAddress).toBe('');
+      expect(b.registryAddress).toBe('');
+    });
+
     it('anvil preset uses MOCK_USDC_ADDRESS from usdc.ts (no hardcoded duplication)', () => {
       // Verify the anvil preset's usdcAddress is the same constant imported
       // from usdc.ts, ensuring a single source of truth for the address.
