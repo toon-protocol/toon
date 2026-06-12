@@ -108,21 +108,31 @@ export const SETTLEMENT_PRIVATE_KEY_B = (process.env[
 ] ||
   '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba') as `0x${string}`;
 
-// Account #6 — docker-workflow-chain-e2e
-export const WORKFLOW_PRIVATE_KEY =
-  '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' as const;
+// Account #6 — docker-workflow-chain-e2e.
+// Each suite signs its OWN on-chain channel txs, so each needs its OWN funded
+// EVM key. Local mode (Anvil) uses the well-known accounts below; public mode
+// overrides them with mnemonic-derived, treasury-funded keys (idx6-10) the
+// harness writes to .env.sdk-e2e (scripts/e2e-derive-peer-config.mjs +
+// scripts/fund-e2e-peers.mjs). Without the override, public runs hit
+// INSUFFICIENT_FUNDS opening channels on Base Sepolia.
+export const WORKFLOW_PRIVATE_KEY = (process.env['EVM_WORKFLOW_PRIVATE_KEY'] ||
+  '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e') as `0x${string}`;
 // Account #7 — docker-dvm-lifecycle-e2e
-export const DVM_LIFECYCLE_PRIVATE_KEY =
-  '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' as const;
+export const DVM_LIFECYCLE_PRIVATE_KEY = (process.env[
+  'EVM_DVM_LIFECYCLE_PRIVATE_KEY'
+] ||
+  '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356') as `0x${string}`;
 // Account #8 — docker-dvm-submission-e2e
-export const DVM_SUBMISSION_PRIVATE_KEY =
-  '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' as const;
+export const DVM_SUBMISSION_PRIVATE_KEY = (process.env[
+  'EVM_DVM_SUBMISSION_PRIVATE_KEY'
+] ||
+  '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97') as `0x${string}`;
 // Account #9 — docker-swarm-e2e
-export const SWARM_PRIVATE_KEY =
-  '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' as const;
+export const SWARM_PRIVATE_KEY = (process.env['EVM_SWARM_PRIVATE_KEY'] ||
+  '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6') as `0x${string}`;
 // Account #10 — docker-pet-dvm-e2e
-export const PET_DVM_PRIVATE_KEY =
-  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897' as const;
+export const PET_DVM_PRIVATE_KEY = (process.env['EVM_PET_DVM_PRIVATE_KEY'] ||
+  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897') as `0x${string}`;
 
 // 31337 (Anvil) by default; 84532 (Base Sepolia) in public mode via EVM_CHAIN_ID.
 export const CHAIN_ID = Number(process.env['EVM_CHAIN_ID'] || 31337);

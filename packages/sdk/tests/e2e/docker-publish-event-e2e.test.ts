@@ -136,7 +136,7 @@ describe('Docker SDK Publish Event E2E', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
-            chain: 'evm:31337',
+            chain: `evm:${CHAIN_ID}`,
           },
         ],
         routes: [],

@@ -109,7 +109,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
             url: PEER1_BTP_URL,
             authToken: '',
             evmAddress: PEER1_EVM_ADDRESS,
-            chain: 'evm:31337',
+            chain: `evm:${CHAIN_ID}`,
           },
         ],
         routes: [],
