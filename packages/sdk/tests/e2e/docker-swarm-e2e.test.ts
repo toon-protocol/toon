@@ -55,6 +55,7 @@ import {
   REGISTRY_ADDRESS,
   SWARM_PRIVATE_KEY,
   CHAIN_ID,
+  publicModeSettlementKey,
   waitForEventOnRelay,
   waitForPeer2Bootstrap,
   checkAllServicesReady,
@@ -85,6 +86,11 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
     const nostrPubkey = getPublicKey(nodeSecretKey);
     const testIlpAddress = `g.toon.test.swarm.${nostrPubkey.slice(0, 8)}`;
 
+    // Public mode: open this run's channel with a FRESH, just-in-time-funded
+    // participant so we never collide with a prior run's channel on the
+    // persistent testnet (InvalidChannelState). Local Anvil: pass-through.
+    const swarmKeyId = await publicModeSettlementKey(SWARM_PRIVATE_KEY);
+
     const connectorLogger = createLogger('test-swarm-connector', 'warn');
     connector = new ConnectorNode(
       {
@@ -111,7 +117,7 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
             tokenAddress: TOKEN_ADDRESS,
-            keyId: SWARM_PRIVATE_KEY,
+            keyId: swarmKeyId,
           },
         ],
       },

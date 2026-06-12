@@ -59,6 +59,7 @@ import {
   REGISTRY_ADDRESS,
   DVM_SUBMISSION_PRIVATE_KEY,
   CHAIN_ID,
+  publicModeSettlementKey,
   waitForEventOnRelay,
   checkAllServicesReady,
   skipIfNotReady,
@@ -171,6 +172,10 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const nostrPubkey = getPublicKey(nostrSecretKey);
     const testIlpAddress = `g.toon.test.dvm.${nostrPubkey.slice(0, 8)}`;
 
+    // Public mode: fresh, just-in-time-funded channel participant so this run
+    // opens a brand-new channel with peer1. Local Anvil: pass-through.
+    const dvmKeyId = await publicModeSettlementKey(DVM_SUBMISSION_PRIVATE_KEY);
+
     const connectorLogger = createLogger('test-dvm-connector', 'warn');
     connector = new ConnectorNode(
       {
@@ -197,7 +202,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
             tokenAddress: TOKEN_ADDRESS,
-            keyId: DVM_SUBMISSION_PRIVATE_KEY,
+            keyId: dvmKeyId,
           },
         ],
       },

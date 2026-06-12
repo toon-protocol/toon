@@ -71,6 +71,7 @@ import {
   SETTLEMENT_PRIVATE_KEY_A,
   SETTLEMENT_PRIVATE_KEY_B,
   CHAIN_ID,
+  publicModeSettlementKey,
   anvilChain,
   TOKEN_NETWORK_ABI,
   ERC20_ABI,
@@ -99,6 +100,10 @@ describe('Docker SDK Publish Event E2E', () => {
   let channelId: string;
   let tokenBalanceBefore: bigint;
   let channelCounterBefore: bigint;
+  // The EVM address the connector actually opens its channel from. In local
+  // Anvil this is TEST_EVM_ADDRESS; in public mode it's the fresh, just-in-time
+  // funded participant returned by publicModeSettlementKey (issue #191).
+  let connectorParticipantAddress: Hex = TEST_EVM_ADDRESS;
 
   beforeAll(async () => {
     // -------------------------------------------------------------------
@@ -108,9 +113,19 @@ describe('Docker SDK Publish Event E2E', () => {
     if (!ready) return;
 
     // -------------------------------------------------------------------
-    // Phase 2: Snapshot on-chain state before tests
+    // Phase 2: Resolve the channel participant key.
+    // Public mode: a FRESH, just-in-time-funded participant so this run opens a
+    // brand-new channel with peer1 (no InvalidChannelState collision). Local
+    // Anvil: pass-through to the deterministic TEST_PRIVATE_KEY.
     // -------------------------------------------------------------------
-    tokenBalanceBefore = await getTokenBalance(TEST_EVM_ADDRESS);
+    const testKeyId = await publicModeSettlementKey(TEST_PRIVATE_KEY);
+    connectorParticipantAddress = privateKeyToAccount(testKeyId).address;
+
+    // -------------------------------------------------------------------
+    // Phase 2b: Snapshot on-chain state before tests (against the actual
+    // channel participant, which differs from TEST_EVM_ADDRESS in public mode).
+    // -------------------------------------------------------------------
+    tokenBalanceBefore = await getTokenBalance(connectorParticipantAddress);
     channelCounterBefore = await getChannelCounter();
 
     // -------------------------------------------------------------------
@@ -151,7 +166,7 @@ describe('Docker SDK Publish Event E2E', () => {
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
             tokenAddress: TOKEN_ADDRESS,
-            keyId: TEST_PRIVATE_KEY,
+            keyId: testKeyId,
           },
         ],
       },
@@ -243,7 +258,7 @@ describe('Docker SDK Publish Event E2E', () => {
   it('token balance decreased after channel deposit', async () => {
     if (skipIfNotReady(servicesReady)) return;
 
-    const balanceAfter = await getTokenBalance(TEST_EVM_ADDRESS);
+    const balanceAfter = await getTokenBalance(connectorParticipantAddress);
     expect(balanceAfter).toBeLessThan(tokenBalanceBefore);
 
     const deposited = tokenBalanceBefore - balanceAfter;
@@ -260,8 +275,10 @@ describe('Docker SDK Publish Event E2E', () => {
 
     // Verify both participants
     const isTestParticipant =
-      state.participant1.toLowerCase() === TEST_EVM_ADDRESS.toLowerCase() ||
-      state.participant2.toLowerCase() === TEST_EVM_ADDRESS.toLowerCase();
+      state.participant1.toLowerCase() ===
+        connectorParticipantAddress.toLowerCase() ||
+      state.participant2.toLowerCase() ===
+        connectorParticipantAddress.toLowerCase();
     expect(isTestParticipant).toBe(true);
 
     const isPeer1Participant =
@@ -270,7 +287,10 @@ describe('Docker SDK Publish Event E2E', () => {
     expect(isPeer1Participant).toBe(true);
 
     // Verify deposit amount on-chain via participants view
-    const info = await getParticipantInfo(channelId as Hex, TEST_EVM_ADDRESS);
+    const info = await getParticipantInfo(
+      channelId as Hex,
+      connectorParticipantAddress
+    );
     expect(info.deposit).toBeGreaterThanOrEqual(1000000n);
   });
 

@@ -11,7 +11,15 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPublicClient, http, defineChain, type Hex } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  defineChain,
+  parseEther,
+  type Hex,
+} from 'viem';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import WebSocket from 'ws';
 import { decodeEventFromToon } from '@toon-protocol/relay';
 
@@ -314,6 +322,88 @@ export function createViemClient() {
     chain: anvilChain,
     transport: http(ANVIL_RPC),
   });
+}
+
+/**
+ * Resolve the EVM settlement (channel-participant) key a host-side ephemeral
+ * test connector should use to open its on-demand channel with peer1.
+ *
+ * ## Why this exists (issue #191)
+ *
+ * Each host-side test connector opens a payment channel with peer1 via its
+ * `chainProviders[].keyId` participant. The Raiden-style `TokenNetwork` allows
+ * only ONE channel per (participant1, participant2) pair.
+ *
+ * - **Local mode (Anvil, CHAIN_ID === 31337):** the chain reverts every run, so
+ *   a DETERMINISTIC key is fine — no prior channel survives. This helper is a
+ *   pure pass-through: it returns `funderKey` unchanged, performs no funding,
+ *   and preserves the well-known deterministic Anvil accounts byte-for-byte.
+ *
+ * - **Public mode (persistent testnet, e.g. Base Sepolia CHAIN_ID 84532):** a
+ *   channel opened by `funderKey` in a PRIOR run still exists on-chain, so
+ *   re-opening with the same participant reverts with `InvalidChannelState()`
+ *   (0xf806e9d9), and with no channel claim-generation can't resolve the
+ *   TokenNetwork (errorCode T00). To guarantee a brand-new channel every run we
+ *   generate a FRESH key (fresh participant ⇒ fresh channelId ⇒ no collision)
+ *   and JUST-IN-TIME fund it from `funderKey`: a little native ETH for gas and a
+ *   little MockUSDC for the channel deposit. We WAIT for both receipts before
+ *   returning so the connector can immediately open + deposit.
+ *
+ * Multi-connector suites MUST call this once PER connector so each ephemeral
+ * connector gets its OWN fresh participant (distinct channelId).
+ *
+ * @param funderKey the already-funded EVM key for this suite/connector (in
+ *   public mode the idx6–11 treasury-funded keys the harness writes to
+ *   `.env.sdk-e2e`; in local mode the deterministic Anvil account).
+ * @returns the key the connector should use as its channel participant —
+ *   `funderKey` unchanged on Anvil, or a freshly-funded `0x…` key in public mode.
+ */
+export async function publicModeSettlementKey(funderKey: Hex): Promise<Hex> {
+  // Local Anvil: deterministic accounts, no persistent channel — pass through.
+  if (CHAIN_ID === 31337) return funderKey;
+
+  // Public mode: mint a fresh participant and fund it just-in-time so this run
+  // opens a brand-new channel with peer1 (no InvalidChannelState collision).
+  const freshKey = generatePrivateKey();
+  const freshAccount = privateKeyToAccount(freshKey);
+  const funderAccount = privateKeyToAccount(funderKey);
+
+  const publicClient = createViemClient();
+  const walletClient = createWalletClient({
+    account: funderAccount,
+    chain: anvilChain,
+    transport: http(ANVIL_RPC),
+  });
+
+  // Gas: a small native top-up. Channel open/deposit is a couple of txs.
+  // MockUSDC is 18-decimal; channel deposits are tiny (~0x015180 base units ≈
+  // 88064 wei-scale), so fund a small amount with generous margin.
+  const ethForGas = parseEther('0.003');
+  const usdcForDeposit = 10_000_000_000_000_000n; // 0.01 MockUSDC (18 decimals)
+
+  // 1) Native ETH for gas.
+  const ethTx = await walletClient.sendTransaction({
+    to: freshAccount.address,
+    value: ethForGas,
+  });
+  // 2) MockUSDC for the channel deposit.
+  const usdcTx = await walletClient.writeContract({
+    address: TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'transfer',
+    args: [freshAccount.address, usdcForDeposit],
+    // Explicit gas: public RPCs sometimes underestimate a cold-recipient
+    // transfer (cold SSTORE) and the auto-estimate can revert.
+    gas: 100_000n,
+  });
+
+  // Wait for BOTH receipts before returning so the connector can open+deposit.
+  await Promise.all([
+    publicClient.waitForTransactionReceipt({ hash: ethTx }),
+    publicClient.waitForTransactionReceipt({ hash: usdcTx }),
+  ]);
+
+  return freshKey;
 }
 
 export async function getChannelState(channelId: Hex) {

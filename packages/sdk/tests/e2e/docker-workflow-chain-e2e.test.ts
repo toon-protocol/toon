@@ -55,6 +55,7 @@ import {
   REGISTRY_ADDRESS,
   WORKFLOW_PRIVATE_KEY,
   CHAIN_ID,
+  publicModeSettlementKey,
   waitForEventOnRelay,
   waitForPeer2Bootstrap,
   checkAllServicesReady,
@@ -80,6 +81,10 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
     nodeSecretKey = generateSecretKey();
     const nostrPubkey = getPublicKey(nodeSecretKey);
     const testIlpAddress = `g.toon.test.workflow.${nostrPubkey.slice(0, 8)}`;
+
+    // Public mode: fresh, just-in-time-funded channel participant so this run
+    // opens a brand-new channel with peer1. Local Anvil: pass-through.
+    const workflowKeyId = await publicModeSettlementKey(WORKFLOW_PRIVATE_KEY);
 
     const connectorLogger = createLogger('test-workflow-connector', 'warn');
     connector = new ConnectorNode(
@@ -107,7 +112,7 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
             tokenAddress: TOKEN_ADDRESS,
-            keyId: WORKFLOW_PRIVATE_KEY,
+            keyId: workflowKeyId,
           },
         ],
       },

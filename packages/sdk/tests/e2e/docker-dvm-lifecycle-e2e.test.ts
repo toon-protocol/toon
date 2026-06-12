@@ -58,6 +58,7 @@ import {
   REGISTRY_ADDRESS,
   DVM_LIFECYCLE_PRIVATE_KEY,
   CHAIN_ID,
+  publicModeSettlementKey,
   waitForEventOnRelay,
   waitForPeer2Bootstrap,
   checkAllServicesReady,
@@ -95,6 +96,12 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     const nostrPubkey = getPublicKey(nodeSecretKey);
     const testIlpAddress = `g.toon.test.lifecycle.${nostrPubkey.slice(0, 8)}`;
 
+    // Public mode: fresh, just-in-time-funded channel participant so this run
+    // opens a brand-new channel with peer1. Local Anvil: pass-through.
+    const lifecycleKeyId = await publicModeSettlementKey(
+      DVM_LIFECYCLE_PRIVATE_KEY
+    );
+
     const connectorLogger = createLogger('test-lifecycle-connector', 'warn');
     connector = new ConnectorNode(
       {
@@ -121,7 +128,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
             rpcUrl: ANVIL_RPC,
             registryAddress: REGISTRY_ADDRESS,
             tokenAddress: TOKEN_ADDRESS,
-            keyId: DVM_LIFECYCLE_PRIVATE_KEY,
+            keyId: lifecycleKeyId,
           },
         ],
       },
