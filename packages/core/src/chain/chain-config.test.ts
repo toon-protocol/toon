@@ -145,6 +145,30 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.name).toBe('anvil');
       expect(config.rpcUrl).toBe('http://localhost:8545');
     });
+
+    // Regression for issue #196: published town image crashed with
+    // `Unknown chain "base-sepolia"` because its bundled core predated the
+    // base-* presets. This asserts the preset resolves (does NOT throw).
+    it('[P0] resolveChainConfig("base-sepolia") resolves (issue #196)', () => {
+      expect(() => resolveChainConfig('base-sepolia')).not.toThrow();
+
+      const config = resolveChainConfig('base-sepolia');
+      expect(config.chainId).toBe(84532);
+      expect(config.rpcUrl).toBe('https://sepolia.base.org');
+      expect(config.name).toBe('base-sepolia');
+      // NOTE: settlement addresses (usdcAddress/tokenNetworkAddress/
+      // registryAddress) are intentionally NOT asserted here — they are being
+      // populated by PR #194 (feat/testnet-settlement-presets). This test only
+      // guards the #196 regression: that the preset RESOLVES (does not throw).
+    });
+
+    it('[P1] resolveChainConfig("base-mainnet") resolves', () => {
+      expect(() => resolveChainConfig('base-mainnet')).not.toThrow();
+
+      const config = resolveChainConfig('base-mainnet');
+      expect(config.chainId).toBe(8453);
+      expect(config.name).toBe('base-mainnet');
+    });
   });
 
   // --------------------------------------------------------------------------
@@ -202,15 +226,22 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       );
     });
 
-    it('[P1] error message lists all valid chain names', () => {
+    it('[P1] error message enumerates the real CHAIN_PRESETS keys (issue #196)', () => {
       try {
         resolveChainConfig('bogus');
         expect.fail('Expected resolveChainConfig to throw');
       } catch (error: unknown) {
         const message = (error as Error).message;
-        expect(message).toContain('anvil');
-        expect(message).toContain('arbitrum-sepolia');
-        expect(message).toContain('arbitrum-one');
+        // The allow-list in the error must be derived from CHAIN_PRESETS, not
+        // a hard-coded literal. Assert EVERY preset key is enumerated — this
+        // fails if the string drifts from the actual presets (the #196 bug:
+        // the literal omitted base-sepolia/base-mainnet).
+        for (const name of Object.keys(CHAIN_PRESETS)) {
+          expect(message).toContain(name);
+        }
+        // Explicit guards for the presets the old stale literal omitted.
+        expect(message).toContain('base-sepolia');
+        expect(message).toContain('base-mainnet');
       }
     });
 

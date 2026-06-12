@@ -257,8 +257,14 @@ export function resolveChainConfig(chain?: ChainName | string): ChainPreset {
   // 2. Look up the chain name in presets
   const preset = CHAIN_PRESETS[name as ChainName];
   if (!preset) {
+    // Enumerate the ACTUAL allow-list from CHAIN_PRESETS rather than a
+    // hard-coded literal. A stale literal here (it previously read
+    // "anvil, arbitrum-sepolia, arbitrum-one") masks newer presets such as
+    // base-sepolia/base-mainnet and produces a misleading diagnostic when an
+    // image bundles older core (see issue #196).
+    const validNames = Object.keys(CHAIN_PRESETS).join(', ');
     throw new ToonError(
-      `Unknown chain "${name}". Valid chains: anvil, arbitrum-sepolia, arbitrum-one`,
+      `Unknown chain "${name}". Valid chains: ${validNames}`,
       'INVALID_CHAIN'
     );
   }
