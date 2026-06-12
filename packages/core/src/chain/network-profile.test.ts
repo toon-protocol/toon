@@ -43,41 +43,61 @@ describe('resolveNetworkProfile', () => {
     });
   });
 
-  describe('testnet', () => {
-    const p = resolveNetworkProfile('testnet');
-    it('uses Base Sepolia as primary EVM', () => {
-      expect(p.nodeEnv.EVM_CHAIN).toBe('base-sepolia');
-      expect(p.nodeEnv.EVM_CHAIN_ID).toBe('84532');
+  // testnet and devnet both resolve to TOON's single deployed public-testnet
+  // environment (Base Sepolia + Solana devnet + Mina devnet; e2e/testnets.json).
+  for (const tier of ['testnet', 'devnet'] as const) {
+    describe(`${tier} (deployed public-testnet triple)`, () => {
+      const p = resolveNetworkProfile(tier);
+      it('uses Base Sepolia as primary EVM', () => {
+        expect(p.nodeEnv.EVM_CHAIN).toBe('base-sepolia');
+        expect(p.nodeEnv.EVM_CHAIN_ID).toBe('84532');
+        expect(p.nodeEnv.EVM_USDC_ADDRESS).toBe(
+          '0xac80670b86db1eeb5c18c82e18a6bda98fcb4504'
+        );
+      });
+      it('uses the deployed Solana devnet program + mint', () => {
+        expect(p.nodeEnv.SOLANA_RPC_URL).toBe('https://api.devnet.solana.com');
+        expect(p.nodeEnv.SOLANA_USDC_MINT).toBe(
+          '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy'
+        );
+      });
+      it('does not use the local solana-devnet/mina-devnet presets', () => {
+        expect(p.nodeEnv.SOLANA_RPC_URL).not.toContain('19899');
+      });
+      it('reports every family settlement-configured when a keyId is supplied', () => {
+        // `status` tracks apex settlement readiness, which the apex resolves
+        // with its settlement signing key (children resolve relay-only).
+        const withKey = resolveNetworkProfile(tier, { keyId: '0xkey' });
+        expect(withKey.status).toEqual({
+          evm: 'configured',
+          solana: 'configured',
+          mina: 'configured',
+        });
+      });
+      it('emits connector providers for all three families when a keyId is supplied', () => {
+        const withKey = resolveNetworkProfile(tier, { keyId: '0xkey' });
+        const types = withKey.chainProviders.map((c) => c.chainType).sort();
+        expect(types).toContain('evm');
+        expect(types).toContain('solana');
+        expect(types).toContain('mina');
+      });
     });
-    it('uses public Solana testnet (no canonical USDC mint)', () => {
-      expect(p.nodeEnv.SOLANA_RPC_URL).toBe('https://api.testnet.solana.com');
-      expect(p.nodeEnv.SOLANA_USDC_MINT).toBeUndefined();
-    });
-  });
+  }
 
-  describe('devnet (public Sepolia for EVM, public Solana/Mina devnets)', () => {
-    const p = resolveNetworkProfile('devnet');
-    it('uses Base Sepolia as primary EVM (no public EVM devnet)', () => {
-      expect(p.nodeEnv.EVM_CHAIN).toBe('base-sepolia');
+  describe('settlement providers require a keyId', () => {
+    it('builds no providers without a keyId even when addresses are present', () => {
+      // testnet presets are settlement-complete, but the apex only emits
+      // connector providers when the settlement signing key is supplied.
+      const noKey = resolveNetworkProfile('testnet');
+      expect(noKey.chainProviders).toEqual([]);
+      expect(noKey.status).toEqual({
+        evm: 'unconfigured',
+        solana: 'unconfigured',
+        mina: 'unconfigured',
+      });
     });
-    it('uses public Solana devnet + USDC mint', () => {
-      expect(p.nodeEnv.SOLANA_RPC_URL).toBe('https://api.devnet.solana.com');
-      expect(p.nodeEnv.SOLANA_USDC_MINT).toBe(
-        '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
-      );
-    });
-    it('does not use the local solana-devnet/mina-devnet presets', () => {
-      expect(p.nodeEnv.SOLANA_RPC_URL).not.toContain('19899');
-    });
-  });
-
-  describe('settlement-complete chains are emitted as connector providers', () => {
-    it('builds an EVM provider once a keyId + on-chain addresses exist', () => {
-      // Simulate a future deploy by passing custom providers through `custom`,
-      // since presets have empty registry today. Here we assert the apex path
-      // only emits providers when keyId is supplied.
+    it('mainnet stays provider-less (contracts not deployed there)', () => {
       const withKey = resolveNetworkProfile('mainnet', { keyId: '0xabc' });
-      // Still empty because preset registry/tokenNetwork are unset.
       expect(withKey.chainProviders).toEqual([]);
     });
   });

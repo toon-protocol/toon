@@ -19,13 +19,16 @@
  *   `localhost:8545` does not exist in the HS network).
  * - **EVM = Base (primary) + Arbitrum.** The single-EVM town node uses Base; the
  *   apex connector and Mill can hold providers for both families.
- * - **Honest settlement status.** TOON's own settlement contracts (EVM
- *   registry/TokenNetwork, Solana program, Mina zkApp) are NOT deployed to public
- *   chains yet, so every public family is currently `unconfigured` for settlement.
- *   The resolver emits real RPC + token addresses (balances, swap quotes) but only
- *   builds a connector `chainProviders` entry for a family once its on-chain
- *   addresses are present — until then nodes run relay-only. No addresses are
- *   invented; filling the presets later requires no change here.
+ * - **Settlement status.** TOON's settlement contracts are deployed for the
+ *   public **testnet/devnet** tiers (EVM Base Sepolia registry + TokenNetwork,
+ *   Solana devnet program, Mina devnet zkApp — source of truth: e2e/testnets.json),
+ *   so those families resolve `configured` and the apex builds real
+ *   `chainProviders` for them. **Mainnet remains unconfigured** (contracts not
+ *   deployed there yet) → relay-only. The resolver only builds a connector
+ *   `chainProviders` entry for a family once its on-chain addresses are present.
+ *   No addresses are invented; filling the remaining (mainnet) presets later
+ *   requires no change here. The deployed testnet/devnet addresses are
+ *   maintained in sync with e2e/testnets.json (the one-time public deploy).
  *
  * The low-level local `solana-devnet` / `mina-devnet` presets in chain-config.ts
  * (used by the dev/e2e stack) are intentionally NOT reused — this module defines
@@ -146,26 +149,30 @@ interface SolanaTierCfg {
   programId: string;
 }
 
+/**
+ * TOON's deployed public-testnet Solana settlement (Solana devnet). Source of
+ * truth: e2e/testnets.json. The TokenNetwork program + its mint are live, so
+ * this is settlement-complete. The `testnet` tier reuses the devnet cluster
+ * because TOON has no deployment on Solana's `testnet` cluster — there is one
+ * public deployment and both operator-facing tiers resolve to it.
+ */
+const SOLANA_DEPLOYED_DEVNET: SolanaTierCfg = {
+  rpcUrl: 'https://api.devnet.solana.com',
+  cluster: 'devnet',
+  usdcMint: '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy',
+  programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
+};
+
 /** Public Solana endpoints per tier (the low-level presets are local-only). */
 const SOLANA_TIER: Record<DerivableTier, SolanaTierCfg> = {
   mainnet: {
     rpcUrl: 'https://api.mainnet-beta.solana.com',
     cluster: 'mainnet-beta',
     usdcMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-    programId: '', // TOON payment-channel program not deployed yet
+    programId: '', // TOON payment-channel program not deployed on mainnet
   },
-  testnet: {
-    rpcUrl: 'https://api.testnet.solana.com',
-    cluster: 'testnet',
-    usdcMint: '', // no canonical USDC on Solana testnet
-    programId: '',
-  },
-  devnet: {
-    rpcUrl: 'https://api.devnet.solana.com',
-    cluster: 'devnet',
-    usdcMint: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
-    programId: '',
-  },
+  testnet: SOLANA_DEPLOYED_DEVNET,
+  devnet: SOLANA_DEPLOYED_DEVNET,
 };
 
 interface MinaTierCfg {
@@ -174,23 +181,26 @@ interface MinaTierCfg {
   zkAppAddress: string;
 }
 
+/**
+ * TOON's deployed public-testnet Mina settlement (Mina devnet). Source of truth:
+ * e2e/testnets.json. Mina has no separate `testnet` network → both the testnet
+ * and devnet tiers resolve to the one deployed devnet zkApp.
+ */
+const MINA_DEPLOYED_DEVNET: MinaTierCfg = {
+  graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
+  network: 'devnet',
+  zkAppAddress: 'B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3',
+};
+
 /** Public Mina endpoints per tier (Mina has no separate testnet → uses devnet). */
 const MINA_TIER: Record<DerivableTier, MinaTierCfg> = {
   mainnet: {
     graphqlUrl: 'https://api.minascan.io/node/mainnet/v1/graphql',
     network: 'mainnet',
-    zkAppAddress: '', // TOON payment-channel zkApp not deployed yet
+    zkAppAddress: '', // TOON payment-channel zkApp not deployed on mainnet
   },
-  testnet: {
-    graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
-    network: 'devnet',
-    zkAppAddress: '',
-  },
-  devnet: {
-    graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
-    network: 'devnet',
-    zkAppAddress: '',
-  },
+  testnet: MINA_DEPLOYED_DEVNET,
+  devnet: MINA_DEPLOYED_DEVNET,
 };
 
 /** An EVM preset is settlement-complete when registry + tokenNetwork are deployed. */
@@ -276,8 +286,11 @@ export function resolveNetworkProfile(
   }
 
   // ── Mina ──
+  // Gated on keyId for parity with EVM/Solana: a connector settlement provider
+  // is only useful with a signing key, and `status` tracks apex settlement
+  // readiness (the apex always resolves with a keyId; child node-env never does).
   const mina = MINA_TIER[tier];
-  if (mina.zkAppAddress) {
+  if (opts.keyId && mina.zkAppAddress) {
     chainProviders.push(
       buildMinaProviderEntry(
         {
