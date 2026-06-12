@@ -17,77 +17,17 @@ import { decodeEventFromToon } from '@toon-protocol/relay';
 
 // Repo root resolved from this file's location, independent of process.cwd().
 // File path: <repo>/packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts → walk up 5 levels.
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
+const REPO_ROOT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../..'
+);
 
-// ---------------------------------------------------------------------------
-// Constants (Docker SDK E2E ports — see docker-compose-sdk-e2e.yml)
-// ---------------------------------------------------------------------------
-
-export const ANVIL_RPC = 'http://localhost:18545';
-
-// Peer 1 (Docker — genesis-like)
-export const PEER1_RELAY_URL = 'ws://localhost:19700';
-export const PEER1_BTP_URL = 'ws://localhost:19000';
-export const PEER1_BLS_URL = 'http://localhost:19100';
-export const PEER1_EVM_ADDRESS =
-  '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as const; // Anvil Account #0
-
-// Peer 2 (Docker — bootstraps from peer1)
-export const PEER2_RELAY_URL = 'ws://localhost:19710';
-export const PEER2_BLS_URL = 'http://localhost:19110';
-
-// Contracts (deterministic Anvil deployment)
-export const TOKEN_ADDRESS =
-  '0x5FbDB2315678afecb367f032d93F642f64180aa3' as const; // Mock USDC (Anvil)
-export const TOKEN_NETWORK_ADDRESS =
-  '0xCafac3dD18aC6c6e92c921884f9E4176737C052c' as const;
-export const REGISTRY_ADDRESS =
-  '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512' as const;
-
-// Per-test-file Anvil accounts to avoid nonce contention.
-// Docker infra uses: Account #0 (peer1), Account #2 (peer2).
-// Each test file gets its own account so concurrent tests don't conflict.
-
-// Account #3 — docker-publish-event-e2e
-export const TEST_PRIVATE_KEY =
-  '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' as const;
-export const TEST_EVM_ADDRESS =
-  '0x90F79bf6EB2c4f870365E785982E1f101E93b906' as const;
-
-// Account #4 — settlement tests within docker-publish-event-e2e
-export const SETTLEMENT_PRIVATE_KEY_A =
-  '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' as const;
-// Account #5 — settlement tests within docker-publish-event-e2e
-export const SETTLEMENT_PRIVATE_KEY_B =
-  '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' as const;
-
-// Account #6 — docker-workflow-chain-e2e
-export const WORKFLOW_PRIVATE_KEY =
-  '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' as const;
-// Account #7 — docker-dvm-lifecycle-e2e
-export const DVM_LIFECYCLE_PRIVATE_KEY =
-  '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' as const;
-// Account #8 — docker-dvm-submission-e2e
-export const DVM_SUBMISSION_PRIVATE_KEY =
-  '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' as const;
-// Account #9 — docker-swarm-e2e
-export const SWARM_PRIVATE_KEY =
-  '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' as const;
-// Account #10 — docker-pet-dvm-e2e
-export const PET_DVM_PRIVATE_KEY =
-  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897' as const;
-
-export const CHAIN_ID = 31337;
-
-// Multi-chain constants
-export const SOLANA_RPC = 'http://localhost:19899';
-export const SOLANA_WS = 'ws://localhost:19900';
-export const MINA_GRAPHQL = 'http://localhost:19085/graphql';
-export const MINA_ACCOUNTS_MANAGER = 'http://localhost:19181';
-
-// Load .env.sdk-e2e if present (written by ./scripts/sdk-e2e-infra.sh up).
+// Load .env.sdk-e2e if present (written by ./scripts/sdk-e2e-infra.sh up / --public).
 // Resolved from REPO_ROOT, not process.cwd(), so it works regardless of where
-// vitest is invoked.
+// vitest is invoked. MUST run before the env-overridable constants below so the
+// EVM/Solana/Mina values (testnet endpoints + derived keys in public mode) are
+// visible when those exports are evaluated. process.env (CI) always wins — the
+// loader only fills keys that are unset/empty.
 function loadSdkE2eEnv(): void {
   try {
     const envPath = resolve(REPO_ROOT, '.env.sdk-e2e');
@@ -108,15 +48,104 @@ function loadSdkE2eEnv(): void {
 }
 loadSdkE2eEnv();
 
+// ---------------------------------------------------------------------------
+// Constants (Docker SDK E2E ports — see docker-compose-sdk-e2e.yml)
+//
+// The EVM RPC / chain-id / contract addresses / client keys default to the
+// local Anvil stack but are overridable via env (written into .env.sdk-e2e by
+// `sdk-e2e-infra.sh --public`, or injected directly in CI). This lets the same
+// helper drive both the local Anvil stack and the public Base-Sepolia testnet
+// run without code changes — mirroring SOLANA_PROGRAM_ID / MINA_ZKAPP_ADDRESS.
+// ---------------------------------------------------------------------------
+
+export const ANVIL_RPC = process.env['EVM_RPC_URL'] || 'http://localhost:18545';
+
+// Peer 1 (Docker — genesis-like)
+export const PEER1_RELAY_URL = 'ws://localhost:19700';
+export const PEER1_BTP_URL = 'ws://localhost:19000';
+export const PEER1_BLS_URL = 'http://localhost:19100';
+export const PEER1_EVM_ADDRESS =
+  '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as const; // Anvil Account #0
+
+// Peer 2 (Docker — bootstraps from peer1)
+export const PEER2_RELAY_URL = 'ws://localhost:19710';
+export const PEER2_BLS_URL = 'http://localhost:19110';
+
+// Contracts — Anvil defaults; overridable for the public Base-Sepolia run via
+// EVM_TOKEN_ADDRESS / EVM_TOKEN_NETWORK_ADDRESS / EVM_REGISTRY_ADDRESS.
+export const TOKEN_ADDRESS = (process.env['EVM_TOKEN_ADDRESS'] ||
+  '0x5FbDB2315678afecb367f032d93F642f64180aa3') as `0x${string}`; // Mock USDC (Anvil default)
+export const TOKEN_NETWORK_ADDRESS = (process.env[
+  'EVM_TOKEN_NETWORK_ADDRESS'
+] || '0xCafac3dD18aC6c6e92c921884f9E4176737C052c') as `0x${string}`;
+export const REGISTRY_ADDRESS = (process.env['EVM_REGISTRY_ADDRESS'] ||
+  '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512') as `0x${string}`;
+
+// Per-test-file Anvil accounts to avoid nonce contention.
+// Docker infra uses: Account #0 (peer1), Account #2 (peer2).
+// Each test file gets its own account so concurrent tests don't conflict.
+//
+// In public mode these client/settlement actors must be FUNDED on the testnet,
+// so the canonical pay-to-write + settlement keys are overridable via env. The
+// harness (`sdk-e2e-infra.sh --public`) derives them from E2E_DEV_MNEMONIC at
+// dedicated indices (client idx3, settlement A idx4, settlement B idx5) and the
+// funder must fund those addresses (see docs/e2e-testnets.md).
+
+// Account #3 (Anvil) — docker-publish-event-e2e; public: EVM_CLIENT_* (idx3)
+export const TEST_PRIVATE_KEY = (process.env['EVM_CLIENT_PRIVATE_KEY'] ||
+  '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6') as `0x${string}`;
+export const TEST_EVM_ADDRESS = (process.env['EVM_CLIENT_ADDRESS'] ||
+  '0x90F79bf6EB2c4f870365E785982E1f101E93b906') as `0x${string}`;
+
+// Account #4 (Anvil) — settlement tests; public: EVM_SETTLEMENT_PRIVATE_KEY_A (idx4)
+export const SETTLEMENT_PRIVATE_KEY_A = (process.env[
+  'EVM_SETTLEMENT_PRIVATE_KEY_A'
+] ||
+  '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a') as `0x${string}`;
+// Account #5 (Anvil) — settlement tests; public: EVM_SETTLEMENT_PRIVATE_KEY_B (idx5)
+export const SETTLEMENT_PRIVATE_KEY_B = (process.env[
+  'EVM_SETTLEMENT_PRIVATE_KEY_B'
+] ||
+  '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba') as `0x${string}`;
+
+// Account #6 — docker-workflow-chain-e2e
+export const WORKFLOW_PRIVATE_KEY =
+  '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' as const;
+// Account #7 — docker-dvm-lifecycle-e2e
+export const DVM_LIFECYCLE_PRIVATE_KEY =
+  '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' as const;
+// Account #8 — docker-dvm-submission-e2e
+export const DVM_SUBMISSION_PRIVATE_KEY =
+  '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' as const;
+// Account #9 — docker-swarm-e2e
+export const SWARM_PRIVATE_KEY =
+  '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' as const;
+// Account #10 — docker-pet-dvm-e2e
+export const PET_DVM_PRIVATE_KEY =
+  '0xf214f2b2cd398c806f84e317254e0f0b801d0643303237d97a22a48e01628897' as const;
+
+// 31337 (Anvil) by default; 84532 (Base Sepolia) in public mode via EVM_CHAIN_ID.
+export const CHAIN_ID = Number(process.env['EVM_CHAIN_ID'] || 31337);
+
+// Multi-chain constants
+export const SOLANA_RPC = 'http://localhost:19899';
+export const SOLANA_WS = 'ws://localhost:19900';
+export const MINA_GRAPHQL = 'http://localhost:19085/graphql';
+export const MINA_ACCOUNTS_MANAGER = 'http://localhost:19181';
+
 function deriveSolanaProgramIdFromKeypair(): string | null {
   try {
-    const kpPath = resolve(REPO_ROOT, 'contracts/solana/payment_channel-keypair.json');
+    const kpPath = resolve(
+      REPO_ROOT,
+      'contracts/solana/payment_channel-keypair.json'
+    );
     const raw = readFileSync(kpPath, 'utf8');
     const kp = JSON.parse(raw) as number[];
     if (kp.length < 64) return null;
     const pubkey = Uint8Array.from(kp.slice(32, 64));
     // Base58 encode (same alphabet as SDK identity module)
-    const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const alphabet =
+      '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     let val = 0n;
     for (const b of pubkey) val = val * 256n + BigInt(b);
     let result = '';
