@@ -97,6 +97,14 @@ export interface OpenChannelResult {
   channelId: string;
   /** Channel status after open request */
   status: string;
+  /**
+   * On-chain channel `depositTotal` (base units), read at open time. Only
+   * surfaced by the Mina opener: the Mina balance-proof signer must bind
+   * `balanceB = depositTotal − balanceA` so the on-chain `claimFromChannel`
+   * signatureA check passes (toon-protocol/connector#133). Left undefined by the
+   * EVM and Solana openers, which do not need it.
+   */
+  depositTotal?: bigint;
 }
 
 /**
