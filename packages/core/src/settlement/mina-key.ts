@@ -50,3 +50,44 @@ export function hexToMinaBase58PrivateKey(privateKey: string): string {
   const checksum = sha256(sha256(payload)).slice(0, 4);
   return base58Encode(concatBytes(payload, checksum));
 }
+
+/**
+ * Derive the Mina base58 (`B62…`) public key for a private-key scalar, using
+ * the optional `mina-signer` peer dep.
+ *
+ * `deriveFullIdentity()` / `deriveMillKeys()` emit only a keccak **hex
+ * placeholder** for the Mina public key — they deliberately avoid pulling
+ * Pallas curve math into derivation. That placeholder is unfundable and is
+ * rejected by Mina GraphQL balance queries, so wallet views that display it
+ * (e.g. the townhouse `/wallet/balances` mill Mina leg) show an unusable hex
+ * string. This resolves the real, fundable `B62…` address when `mina-signer`
+ * is installed.
+ *
+ * Returns `null` (not a throw) when `mina-signer` is absent — a missing
+ * optional peer dep is not an error; callers fall back to the hex placeholder.
+ * The B62 encoding is network-agnostic, so the chosen `network` is irrelevant.
+ *
+ * @param privateKey big-endian hex scalar (as derivation emits) or an
+ *   already-base58 `EK…` Mina private key.
+ */
+export async function deriveMinaPublicKeyBase58(
+  privateKey: string
+): Promise<string | null> {
+  let signerModule: unknown = null;
+  try {
+    // Dynamic specifier the TS compiler can't resolve at build time, so this
+    // package type-checks without the optional `mina-signer` peer dep present.
+    const specifier = 'mina-signer';
+    signerModule = await import(/* @vite-ignore */ specifier);
+  } catch {
+    return null;
+  }
+  if (!signerModule) return null;
+  const mod = signerModule as { default?: unknown };
+  const ClientCtor = (mod.default ?? mod) as new (cfg: {
+    network: 'mainnet' | 'testnet';
+  }) => { derivePublicKey: (privateKey: string) => string };
+  const client = new ClientCtor({ network: 'mainnet' });
+  // mina-signer needs a base58check (`EK…`) private key; convert if hex.
+  return client.derivePublicKey(hexToMinaBase58PrivateKey(privateKey));
+}

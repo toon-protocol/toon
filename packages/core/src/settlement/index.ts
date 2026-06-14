@@ -25,4 +25,7 @@ export {
 
 export { base58Encode, base58Decode } from './base58.js';
 
-export { hexToMinaBase58PrivateKey } from './mina-key.js';
+export {
+  hexToMinaBase58PrivateKey,
+  deriveMinaPublicKeyBase58,
+} from './mina-key.js';

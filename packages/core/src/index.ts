@@ -178,6 +178,7 @@ export {
   base58Encode,
   base58Decode,
   hexToMinaBase58PrivateKey,
+  deriveMinaPublicKeyBase58,
 } from './settlement/index.js';
 
 // Bootstrap service
