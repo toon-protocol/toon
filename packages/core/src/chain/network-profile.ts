@@ -189,7 +189,12 @@ interface MinaTierCfg {
 const MINA_DEPLOYED_DEVNET: MinaTierCfg = {
   graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
   network: 'devnet',
-  zkAppAddress: 'B62qjFgXZWDWVE4P6h63JSzdMRzXpqJEgMM3Gt6PvWzzrSCawBZ4hE3',
+  // Reconciled with e2e/testnets.json (#205): the previous address
+  // (B62qjFgX…) is a bare, unfunded zkApp on-chain (balance 0, channel
+  // nonceField 0) — usable for claim issuance only. This is the funded,
+  // on-chain-settling PaymentChannel zkApp (balance ~4 MINA, nonceField 21
+  // — the on-chain settle proven in #217), same VK hash 21482326…
+  zkAppAddress: 'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6',
 };
 
 /** Public Mina endpoints per tier (Mina has no separate testnet → uses devnet). */
