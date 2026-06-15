@@ -13,8 +13,14 @@ export interface IlpPeerInfo {
   ilpAddress: string;
   /** All ILP addresses of this peer (one per upstream peering). When absent (pre-Epic-7 events), consumers should default to [ilpAddress]. */
   ilpAddresses?: string[];
-  /** BTP WebSocket endpoint URL for packet exchange */
+  /** BTP WebSocket endpoint URL for packet exchange (pay-per-event writes) */
   btpEndpoint: string;
+  /**
+   * Public Nostr relay WebSocket URL for FREE reads (e.g. `wss://<addr>.anyone/`
+   * or `ws://host:7100`). Lets a client discover where to subscribe/read without
+   * out-of-band config. Absent when the relay isn't publicly exposed.
+   */
+  relayUrl?: string;
   /** Optional BLS HTTP endpoint for direct packet delivery (bootstrap only) */
   blsHttpEndpoint?: string;
   /** @deprecated Use supportedChains instead. Kept for backward compatibility. */
