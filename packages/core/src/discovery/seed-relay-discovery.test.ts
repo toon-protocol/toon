@@ -877,6 +877,46 @@ describe('Story 3.4: Seed Relay Discovery', () => {
   });
 
   // --------------------------------------------------------------------------
+  // NIP-40 expiration: skip stale announcements (issue #261)
+  // --------------------------------------------------------------------------
+  describe('NIP-40 expiration (issue #261)', () => {
+    it('skips a kind:10032 whose expiration tag is in the past', async () => {
+      // Arrange -- a structurally valid announcement, but expired long ago.
+      const seedEntries = createSeedRelayList(2);
+      const seedRelayEvent = createSeedRelayEvent(seedEntries);
+      const peerPubkey = 'ab'.repeat(32);
+      const expiredEvent = createIlpPeerInfoEvent(peerPubkey);
+      expiredEvent.tags = [['expiration', '1']]; // unix second 1 — long past
+
+      let callCount = 0;
+      customWebSocketFactory = (_url: string) => {
+        const ws = new MockWebSocket(_url);
+        callCount++;
+        if (callCount === 1) {
+          ws._setKindResponses(SEED_RELAY_LIST_KIND, [seedRelayEvent]);
+        } else {
+          ws._setKindResponses(ILP_PEER_INFO_KIND, [expiredEvent]);
+        }
+        return ws;
+      };
+      webSocketConstructorBehavior = 'custom';
+
+      const discovery = new SeedRelayDiscovery(
+        createDiscoveryConfig({ publicRelays: ['wss://relay.damus.io'] })
+      );
+
+      // Act
+      const result = await discovery.discover();
+
+      // Assert -- the expired announcement is dropped from discovered peers.
+      expect(result.seedRelaysConnected).toBe(1);
+      expect(result.discoveredPeers).toHaveLength(0);
+
+      await discovery.close();
+    });
+  });
+
+  // --------------------------------------------------------------------------
   // Security: Event signature verification (CWE-345)
   // --------------------------------------------------------------------------
   describe('Event signature verification (CWE-345)', () => {

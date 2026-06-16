@@ -3,7 +3,11 @@
  */
 
 export { parseIlpPeerInfo, validateChainId } from './parsers.js';
-export { buildIlpPeerInfoEvent } from './builders.js';
+export {
+  buildIlpPeerInfoEvent,
+  type BuildIlpPeerInfoOptions,
+} from './builders.js';
+export { getEventExpiration, isEventExpired, EXPIRATION_TAG } from './nip40.js';
 export {
   buildSeedRelayListEvent,
   parseSeedRelayList,

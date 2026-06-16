@@ -8,7 +8,19 @@ import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { ToonError } from '../errors.js';
 import { isValidIlpAddressStructure } from '../address/ilp-address-validation.js';
 import { assertSwapPairForBuild } from './swap-pair-validation.js';
+import { EXPIRATION_TAG } from './nip40.js';
 import type { IlpPeerInfo } from '../types.js';
+
+/** Options controlling how a kind:10032 announcement event is built. */
+export interface BuildIlpPeerInfoOptions {
+  /**
+   * NIP-40 time-to-live, in seconds. When set to a positive value, the event
+   * carries an `["expiration", created_at + ttlSeconds]` tag so a stale
+   * announcement from an offline apex expires instead of lingering forever
+   * (issue #261). Omit (or pass a non-positive value) for a non-expiring event.
+   */
+  ttlSeconds?: number;
+}
 
 /**
  * Builds and signs a kind:10032 Nostr event from IlpPeerInfo data.
@@ -19,6 +31,7 @@ import type { IlpPeerInfo } from '../types.js';
  *
  * @param info - The ILP peer info to serialize into the event
  * @param secretKey - The secret key to sign the event with
+ * @param options - Optional build options (e.g. a NIP-40 `ttlSeconds`)
  * @returns A signed Nostr event
  *
  * @throws {ToonError} With code `INVALID_FEE` if `feePerByte` is not a non-negative integer string
@@ -28,7 +41,8 @@ import type { IlpPeerInfo } from '../types.js';
  */
 export function buildIlpPeerInfoEvent(
   info: IlpPeerInfo,
-  secretKey: Uint8Array
+  secretKey: Uint8Array,
+  options: BuildIlpPeerInfoOptions = {}
 ): NostrEvent {
   // Validate feePerByte if provided
   if (info.feePerByte !== undefined) {
@@ -88,12 +102,25 @@ export function buildIlpPeerInfoEvent(
     });
   }
 
+  const createdAt = Math.floor(Date.now() / 1000);
+
+  // NIP-40 expiration: a positive ttlSeconds turns the announcement into a
+  // liveness signal — a live apex re-publishes before it elapses, and a dead
+  // one expires so clients stop dialing its unreachable BTP endpoint (#261).
+  const tags: string[][] = [];
+  if (options.ttlSeconds !== undefined && options.ttlSeconds > 0) {
+    tags.push([
+      EXPIRATION_TAG,
+      String(createdAt + Math.floor(options.ttlSeconds)),
+    ]);
+  }
+
   return finalizeEvent(
     {
       kind: ILP_PEER_INFO_KIND,
       content: JSON.stringify(effectiveInfo),
-      tags: [],
-      created_at: Math.floor(Date.now() / 1000),
+      tags,
+      created_at: createdAt,
     },
     secretKey
   );

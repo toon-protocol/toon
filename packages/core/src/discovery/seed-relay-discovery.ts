@@ -23,6 +23,7 @@ import {
   buildSeedRelayListEvent,
 } from '../events/seed-relay.js';
 import { parseIlpPeerInfo } from '../events/parsers.js';
+import { isEventExpired } from '../events/nip40.js';
 import type { IlpPeerInfo } from '../types.js';
 import type { SeedRelayEntry } from '../events/seed-relay.js';
 
@@ -263,6 +264,14 @@ export class SeedRelayDiscovery {
         if (!verifyEvent(event)) {
           console.warn(
             `[SeedRelayDiscovery] Skipping kind:10032 event with invalid signature: ${event.id}`
+          );
+          continue;
+        }
+        // Skip NIP-40-expired announcements: an apex that stopped re-publishing
+        // is offline, and dialing its advertised BTP endpoint would fail (#261).
+        if (isEventExpired(event)) {
+          console.warn(
+            `[SeedRelayDiscovery] Skipping expired kind:10032 announcement: ${event.id}`
           );
           continue;
         }
