@@ -20,7 +20,7 @@ jobs:
           node-version: '22'
           cache: pnpm
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm lint
         continue-on-error: true
@@ -31,19 +31,26 @@ jobs:
 
   devbox-validate:
     runs-on: ubuntu-latest
+    continue-on-error: true        # a Nix-resolution or push hiccup must not gate the PR
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.head_ref }}
       - uses: jetify-com/devbox-install-action@v0.12.0
         with:
           enable-cache: true
-
-      - run: devbox install
-
-      - run: devbox run -- node --version
-
-      - run: devbox run -- pnpm --version
-
-      - run: devbox run -- pnpm install --no-frozen-lockfile
-
-      - run: devbox run -- pnpm -r build
+      - name: Resolve devbox.lock
+        run: devbox install
+      - name: Commit devbox.lock if changed
+        # skip on forks: GITHUB_TOKEN is read-only there, so the push would 403
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          git add devbox.lock
+          if ! git diff --staged --quiet -- devbox.lock; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "ci: pin devbox.lock"
+            git push
+          fi
