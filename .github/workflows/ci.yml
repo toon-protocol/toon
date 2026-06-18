@@ -28,3 +28,16 @@ jobs:
       - run: pnpm -r build
 
       - run: pnpm -r test --if-present
+
+  devbox-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jetify-com/devbox-install-action@v0.12
+        with:
+          enable-cache: 'true'
+
+      - run: devbox run -- node --version
+
+      - run: devbox run -- pnpm --version

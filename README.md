@@ -19,6 +19,24 @@ pnpm -r build
 pnpm -r test
 ```
 
+## Getting started with Devbox
+
+[Devbox](https://www.jetify.com/devbox) pins the exact Node.js and pnpm versions used by this repo and CI, giving every contributor an identical toolchain without installing anything globally.
+
+1. [Install Devbox](https://www.jetify.com/devbox/docs/installing_devbox/)
+2. Start a shell with the pinned toolchain:
+   ```bash
+   devbox shell
+   ```
+3. Inside the shell the normal dev commands work as-is:
+   ```bash
+   pnpm install
+   pnpm -r build
+   pnpm -r test
+   ```
+
+Devbox reads `devbox.json` and installs Node.js 22 via Nix; pnpm is activated automatically through Corepack using the `packageManager` field in `package.json`.
+
 ## Release
 
 Publishing is done by CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) via [changesets](https://github.com/changesets/changesets) + `pnpm` (which rewrites `workspace:*` to real versions at publish time). Add a changeset with `pnpm changeset`; merging the generated "Version Packages" PR publishes to npm using the org `NPM_TOKEN` secret.
