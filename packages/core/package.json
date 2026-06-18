@@ -43,6 +43,9 @@
     "directory": "packages/core"
   },
   "author": "ALLiDoizCode",
+  "engines": {
+    "node": ">=22"
+  },
   "publishConfig": {
     "access": "public"
   },
