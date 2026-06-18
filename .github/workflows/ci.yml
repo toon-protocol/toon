@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
           cache: pnpm
 
       - run: pnpm install --no-frozen-lockfile
@@ -41,3 +41,7 @@ jobs:
       - run: devbox run -- node --version
 
       - run: devbox run -- pnpm --version
+
+      - run: devbox run -- pnpm install --no-frozen-lockfile
+
+      - run: devbox run -- pnpm -r build
