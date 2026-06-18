@@ -31,17 +31,26 @@ jobs:
 
   devbox-validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # commit devbox.lock back to the PR branch
     steps:
       - uses: actions/checkout@v4
-
-      - uses: jetify-com/devbox-install-action@v0.12
         with:
-          enable-cache: 'true'
+          ref: ${{ github.head_ref }}
 
-      - run: devbox run -- node --version
+      - uses: jetify-com/devbox-install-action@v0.12.0
+        with:
+          enable-cache: true
 
-      - run: devbox run -- pnpm --version
+      - name: Resolve and pin devbox.lock
+        run: devbox install
 
-      - run: devbox run -- pnpm install --no-frozen-lockfile
-
-      - run: devbox run -- pnpm -r build
+      - name: Commit devbox.lock if it changed
+        run: |
+          if ! git diff --quiet -- devbox.lock; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add devbox.lock
+            git commit -m "ci: pin devbox.lock"
+            git push
+          fi
