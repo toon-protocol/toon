@@ -67,7 +67,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@toon-format/toon": "^1.0.0",
-    "@types/node": "^20.11.0",
+    "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^1.0.0",
     "conventional-changelog-conventionalcommits": "^8.0.0",

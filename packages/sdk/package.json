@@ -74,7 +74,7 @@
   },
   "devDependencies": {
     "@toon-protocol/connector": "^3.10.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "@types/ws": "^8.0.0",
     "mina-signer": ">=3.0.0",
     "tsup": "^8.0.0",
