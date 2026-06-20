@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '22'
           cache: pnpm
 
       - run: pnpm install --no-frozen-lockfile
@@ -28,3 +28,15 @@ jobs:
       - run: pnpm -r build
 
       - run: pnpm -r test --if-present
+
+  devbox-validate:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jetify-com/devbox-install-action@v0.12.0
+        with:
+          enable-cache: true
+
+      - run: devbox install

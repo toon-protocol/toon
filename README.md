@@ -19,6 +19,21 @@ pnpm -r build
 pnpm -r test
 ```
 
+## Getting started with Devbox
+
+[Devbox](https://www.jetify.com/devbox) pins the exact Node and pnpm versions used in CI so your local environment always matches.
+
+```bash
+# Enter the pinned shell (Node 22 + pnpm via Corepack)
+devbox shell
+
+# Or run a command directly without entering the shell
+devbox run -- pnpm install
+devbox run -- node --version   # should print v22.x.x
+```
+
+Node 22 and pnpm (at the version declared in `packageManager`) are provided automatically — no separate installation needed inside the shell.
+
 ## Release
 
 Publishing is done by CI ([`.github/workflows/release.yml`](.github/workflows/release.yml)) via [changesets](https://github.com/changesets/changesets) + `pnpm` (which rewrites `workspace:*` to real versions at publish time). Add a changeset with `pnpm changeset`; merging the generated "Version Packages" PR publishes to npm using the org `NPM_TOKEN` secret.
