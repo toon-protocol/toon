@@ -21,7 +21,7 @@ pnpm -r test
 
 ## Getting started with Devbox
 
-[Devbox](https://www.jetify.com/devbox) pins the exact Node and pnpm versions used in CI so your local environment always matches.
+[Devbox](https://www.jetify.com/devbox) pins the Node major version (22.x) used in CI. pnpm is provided via Corepack from the `packageManager` field, not from Devbox itself.
 
 ```bash
 # Enter the pinned shell (Node 22 + pnpm via Corepack)
