@@ -67,6 +67,50 @@ describe('parseIlpPeerInfo', () => {
     expect(result.settlementEngine).toBe('xrp-paychan');
   });
 
+  it('round-trips ILP-over-HTTP advertisement (httpEndpoint + supportsUpgrade)', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      httpEndpoint: 'https://host.example:3000/ilp',
+      supportsUpgrade: true,
+    };
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+
+    // Act
+    const result = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(result.httpEndpoint).toBe('https://host.example:3000/ilp');
+    expect(result.supportsUpgrade).toBe(true);
+  });
+
+  it('omits ILP-over-HTTP fields when not advertised', () => {
+    const secretKey = generateSecretKey();
+    const event = buildIlpPeerInfoEvent(createTestIlpPeerInfo(), secretKey);
+    const result = parseIlpPeerInfo(event);
+    expect(result.httpEndpoint).toBeUndefined();
+    expect(result.supportsUpgrade).toBeUndefined();
+  });
+
+  it('throws when httpEndpoint is not a string', () => {
+    const event = createMockEvent(
+      10032,
+      JSON.stringify({ ...createTestIlpPeerInfo(), httpEndpoint: 123 })
+    );
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow(/httpEndpoint must be a string/);
+  });
+
+  it('throws when supportsUpgrade is not a boolean', () => {
+    const event = createMockEvent(
+      10032,
+      JSON.stringify({ ...createTestIlpPeerInfo(), supportsUpgrade: 'yes' })
+    );
+    expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
+    expect(() => parseIlpPeerInfo(event)).toThrow(/supportsUpgrade must be a boolean/);
+  });
+
   it('throws for wrong event kind', () => {
     // Arrange
     const event = createMockEvent(1, JSON.stringify(createTestIlpPeerInfo()));

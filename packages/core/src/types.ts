@@ -16,6 +16,21 @@ export interface IlpPeerInfo {
   /** BTP WebSocket endpoint URL for packet exchange (pay-per-event writes) */
   btpEndpoint: string;
   /**
+   * ILP-over-HTTP endpoint URL (RFC-0035) for stateless, one-shot writes:
+   * `POST` an ILP PREPARE here and receive a FULFILL/REJECT body. Suited to
+   * pure consumers, browsers, and NAT'd agents that don't need a duplex BTP
+   * session. Absent when the node only exposes BTP. The same host typically
+   * also accepts an HTTP `Upgrade` to BTP — see {@link supportsUpgrade}.
+   */
+  httpEndpoint?: string;
+  /**
+   * Whether `httpEndpoint`'s host accepts an HTTP `Upgrade` to a BTP/WebSocket
+   * session (`Sec-WebSocket-Protocol: btp`). Lets a client start on
+   * ILP-over-HTTP and upgrade to duplex BTP when it becomes a peer or needs
+   * server-initiated packets, carrying its HTTP-proven identity across.
+   */
+  supportsUpgrade?: boolean;
+  /**
    * Public Nostr relay WebSocket URL for FREE reads (e.g. `wss://<addr>.anyone/`
    * or `ws://host:7100`). Lets a client discover where to subscribe/read without
    * out-of-band config. Absent when the relay isn't publicly exposed.

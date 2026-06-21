@@ -155,6 +155,15 @@ export interface NodeConfig {
   ilpAddress?: string;
   /** BTP endpoint URL advertised in kind:10032 announcements */
   btpEndpoint?: string;
+  /**
+   * ILP-over-HTTP endpoint URL (RFC-0035) advertised in kind:10032, for
+   * stateless one-shot writes (`POST /ilp`). With the shared transport server,
+   * this is typically the same host/port as `btpEndpoint` (e.g.
+   * `http://host:3000/ilp`).
+   */
+  httpEndpoint?: string;
+  /** Whether `httpEndpoint` accepts an HTTP Upgrade to BTP (default: false). */
+  supportsUpgrade?: boolean;
   /** Asset code (default: 'USD') */
   assetCode?: string;
   /** Asset scale (default: 6) */
@@ -765,6 +774,8 @@ export function createNode(config: NodeConfig): ServiceNode {
     ilpAddress: resolvedIlpAddress,
     ilpAddresses: resolvedIlpAddresses,
     btpEndpoint: config.btpEndpoint ?? '',
+    ...(config.httpEndpoint !== undefined && { httpEndpoint: config.httpEndpoint }),
+    ...(config.supportsUpgrade !== undefined && { supportsUpgrade: config.supportsUpgrade }),
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
     feePerByte: String(config.feePerByte ?? 0n),
