@@ -29,6 +29,8 @@ import {
   resolveChainConfig,
   buildEip712Domain,
   CHAIN_PRESETS,
+  resolveSolanaChainConfig,
+  resolveMinaChainConfig,
 } from './chain-config.js';
 import type { ChainPreset } from './chain-config.js';
 import { MOCK_USDC_ADDRESS } from './usdc.js';
@@ -472,5 +474,69 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.usdcAddress).toBe(ARBITRUM_ONE_USDC);
       expect(config.name).toBe('arbitrum-one');
     });
+  });
+});
+
+// ============================================================================
+// Solana and Mina preset resolution
+// ============================================================================
+
+const SOLANA_DEVNET_PROGRAM_ID = 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG';
+const MINA_DEVNET_ZKAPP_ADDRESS =
+  'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6';
+
+describe('resolveSolanaChainConfig', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('[P0] solana-devnet preset resolves the deployed programId', () => {
+    const config = resolveSolanaChainConfig('solana-devnet');
+    expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
+    expect(config.programId).not.toBe('');
+    expect(config.chainType).toBe('solana');
+    expect(config.cluster).toBe('devnet');
+  });
+
+  it('[P1] SOLANA_PROGRAM_ID env override wins over preset', () => {
+    const override = 'OverrideProgramId111111111111111111111111111';
+    vi.stubEnv('SOLANA_PROGRAM_ID', override);
+    const config = resolveSolanaChainConfig('solana-devnet');
+    expect(config.programId).toBe(override);
+  });
+
+  it('[P1] SOLANA_RPC_URL env override wins over preset rpcUrl', () => {
+    vi.stubEnv('SOLANA_RPC_URL', 'https://my-solana-rpc.example.com');
+    const config = resolveSolanaChainConfig('solana-devnet');
+    expect(config.rpcUrl).toBe('https://my-solana-rpc.example.com');
+    expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
+  });
+});
+
+describe('resolveMinaChainConfig', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('[P0] mina-devnet preset resolves the deployed zkAppAddress', () => {
+    const config = resolveMinaChainConfig('mina-devnet');
+    expect(config.zkAppAddress).toBe(MINA_DEVNET_ZKAPP_ADDRESS);
+    expect(config.zkAppAddress).not.toBe('');
+    expect(config.chainType).toBe('mina');
+    expect(config.network).toBe('devnet');
+  });
+
+  it('[P1] MINA_ZKAPP_ADDRESS env override wins over preset', () => {
+    const override = 'B62qOverrideAddressXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    vi.stubEnv('MINA_ZKAPP_ADDRESS', override);
+    const config = resolveMinaChainConfig('mina-devnet');
+    expect(config.zkAppAddress).toBe(override);
+  });
+
+  it('[P1] MINA_GRAPHQL_URL env override wins over preset graphqlUrl', () => {
+    vi.stubEnv('MINA_GRAPHQL_URL', 'https://my-mina-graphql.example.com');
+    const config = resolveMinaChainConfig('mina-devnet');
+    expect(config.graphqlUrl).toBe('https://my-mina-graphql.example.com');
+    expect(config.zkAppAddress).toBe(MINA_DEVNET_ZKAPP_ADDRESS);
   });
 });

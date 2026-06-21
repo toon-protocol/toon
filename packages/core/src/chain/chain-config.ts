@@ -82,7 +82,7 @@ export interface SolanaChainPreset {
   chainType: 'solana';
   /** Solana cluster RPC endpoint (HTTP). */
   rpcUrl: string;
-  /** Payment channel program ID (base58-encoded). TBD until deployed. */
+  /** Payment channel program ID (base58-encoded). */
   programId: string;
   /** Solana cluster name for chain ID namespacing (e.g., 'devnet'). */
   cluster: string;
@@ -100,7 +100,7 @@ export interface MinaChainPreset {
   chainType: 'mina';
   /** Mina GraphQL endpoint. */
   graphqlUrl: string;
-  /** zkApp address for the payment channel contract. TBD until deployed. */
+  /** zkApp address for the payment channel contract. */
   zkAppAddress: string;
   /** Mina network name (e.g., 'devnet'). */
   network: string;
@@ -338,7 +338,7 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       name: 'solana-devnet',
       chainType: 'solana',
       rpcUrl: 'http://localhost:19899',
-      programId: '', // TBD: set after program deployment
+      programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
       cluster: 'devnet',
     },
   };
@@ -353,7 +353,7 @@ export const MINA_CHAIN_PRESETS: Record<MinaChainName, MinaChainPreset> = {
     name: 'mina-devnet',
     chainType: 'mina',
     graphqlUrl: 'http://localhost:19085/graphql',
-    zkAppAddress: '', // TBD: set after zkApp deployment
+    zkAppAddress: 'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6',
     network: 'devnet',
   },
 };
