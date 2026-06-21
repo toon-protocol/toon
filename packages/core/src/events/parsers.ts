@@ -61,6 +61,8 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   const {
     ilpAddress,
     btpEndpoint,
+    httpEndpoint,
+    supportsUpgrade,
     blsHttpEndpoint,
     settlementEngine,
     assetCode,
@@ -81,6 +83,15 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   // cannot be read back. Only a present-but-non-string value is invalid.
   if (btpEndpoint !== undefined && typeof btpEndpoint !== 'string') {
     throw new InvalidEventError('Invalid field: btpEndpoint must be a string');
+  }
+
+  // ILP-over-HTTP advertisement (RFC-0035). Both optional; a node may advertise
+  // an HTTP endpoint and/or whether it accepts an Upgrade to BTP.
+  if (httpEndpoint !== undefined && typeof httpEndpoint !== 'string') {
+    throw new InvalidEventError('Invalid field: httpEndpoint must be a string');
+  }
+  if (supportsUpgrade !== undefined && typeof supportsUpgrade !== 'boolean') {
+    throw new InvalidEventError('Invalid field: supportsUpgrade must be a boolean');
   }
 
   if (typeof assetCode !== 'string' || assetCode.length === 0) {
@@ -242,6 +253,10 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   return {
     ilpAddress,
     btpEndpoint: typeof btpEndpoint === 'string' ? btpEndpoint : '',
+    ...(httpEndpoint !== undefined &&
+      typeof httpEndpoint === 'string' && { httpEndpoint }),
+    ...(supportsUpgrade !== undefined &&
+      typeof supportsUpgrade === 'boolean' && { supportsUpgrade }),
     ...(blsHttpEndpoint !== undefined &&
       typeof blsHttpEndpoint === 'string' && { blsHttpEndpoint }),
     assetCode,
