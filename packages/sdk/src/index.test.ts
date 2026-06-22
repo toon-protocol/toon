@@ -198,11 +198,11 @@ describe('@toon-protocol/sdk package.json structure (AC1)', () => {
     expect(pkg['type']).toBe('module');
   });
 
-  it('[P2] has "engines" requiring Node.js >=20 (T-1.11-01)', () => {
+  it('[P2] has "engines" requiring Node.js >=22 (T-1.11-01)', () => {
     // Arrange & Act & Assert
     const engines = pkg['engines'] as Record<string, string> | undefined;
     expect(engines).toBeDefined();
-    expect(engines?.['node']).toBe('>=20');
+    expect(engines?.['node']).toBe('>=22');
   });
 
   it('[P2] has @toon-protocol/connector as optional peer dependency (T-1.11-01)', () => {
