@@ -41,7 +41,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/toon-protocol/town.git",
+    "url": "https://github.com/toon-protocol/toon.git",
     "directory": "packages/sdk"
   },
   "author": "ALLiDoizCode",
