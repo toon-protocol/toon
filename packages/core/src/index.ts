@@ -351,6 +351,17 @@ export {
   type LogEntry,
 } from './logger.js';
 
+// NIP-on-TOON UI renderer resolution (pure ui→kind:31036 coordinate helpers)
+export {
+  UI_RENDERER_KIND,
+  UI_TAG,
+  parseUiCoordinate,
+  buildUiCoordinate,
+  getUiCoordinate,
+  selectLatestAddressable,
+  type UiCoordinate,
+} from './ui/index.js';
+
 // NIP-34: Git stuff
 // NOTE: Import from '@toon-protocol/core/nip34' to use Git integration
 // This avoids loading simple-git dependency when not needed
