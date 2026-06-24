@@ -1,5 +1,12 @@
 # @toon-protocol/sdk
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [816fc80]
+  - @toon-protocol/core@1.6.0
+
 ## 1.0.0
 
 ### Major Changes
