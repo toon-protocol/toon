@@ -1,5 +1,5 @@
-// One-shot EVM→Mina swap swap through the running toon-clientd daemon.
-// Same gift-wrap-then-/swap-passthrough flow as swap-swap.mjs, target = Mina.
+// One-shot EVM→Mina swap through the running toon-clientd daemon.
+// Same gift-wrap-then-/swap-passthrough flow as swap.mjs, target = Mina.
 // First Mina swap triggers the swap's one-time PaymentChannel.compile() (~30s).
 import {
   wrapSwapPacketToToon,
