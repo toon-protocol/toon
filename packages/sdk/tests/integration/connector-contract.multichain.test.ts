@@ -17,7 +17,7 @@
  *     recipient present) and round-trip it through `verifyEd25519Signature`.
  *     Then assert `buildSolanaSettlementTx` emits a `SettlementBundle` with
  *     `chainKind: 'solana'` and the connector-consumed metadata.
- *   - Mina: build the Mill-format claim envelope by signing the shared
+ *   - Mina: build the Swap-format claim envelope by signing the shared
  *     `balanceProofFieldsMina` field-element message with `mina-signer`
  *     (`signFields`), assert the envelope shape (chain discriminator `mina`,
  *     base58 signature string as UTF-8 `claimBytes`), round-trip through
@@ -57,7 +57,7 @@ import {
   type MinaSignerClientLike,
 } from '../../src/settlement/mina.js';
 import type {
-  MillSignerConfig,
+  SwapSignerConfig,
   SettlementBundle,
 } from '../../src/settlement/types.js';
 
@@ -119,14 +119,14 @@ function signedSolanaClaim(): {
     sourceAmount: 1_000_000n,
     targetAmount: 500n,
     claimBytes: sig,
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: SOLANA_PAIR,
     receivedAt: Date.now(),
     channelId,
     nonce,
     cumulativeAmount,
     recipient,
-    millSignerAddress: signerAddress,
+    swapSignerAddress: signerAddress,
   };
   return { claim, signerAddress };
 }
@@ -154,7 +154,7 @@ describe(
       expect(typeof claim.recipient).toBe('string');
       expect(typeof claim.cumulativeAmount).toBe('string');
       expect(typeof claim.nonce).toBe('string');
-      expect(typeof claim.millSignerAddress).toBe('string');
+      expect(typeof claim.swapSignerAddress).toBe('string');
     });
 
     it('round-trip: a freshly-signed envelope verifies via verifyEd25519Signature (signer<->verifier parity)', () => {
@@ -183,7 +183,7 @@ describe(
 
     it('buildSolanaSettlementTx emits a SettlementBundle with chainKind:solana + connector-consumed metadata', () => {
       const { claim, signerAddress } = signedSolanaClaim();
-      const signer: MillSignerConfig = {
+      const signer: SwapSignerConfig = {
         address: signerAddress,
         programId: base58Encode(fill32(0x66)),
       };
@@ -244,7 +244,7 @@ beforeAll(() => {
 });
 
 /**
- * Reproduce the Mill's Mina signing path: sign the shared field-element message
+ * Reproduce the Swap's Mina signing path: sign the shared field-element message
  * (`balanceProofFieldsMina`) via `signFields` and emit the base58 signature
  * string as UTF-8 `claimBytes` — the exact wire form a sender receives.
  */
@@ -276,14 +276,14 @@ function signedMinaClaim(): {
     sourceAmount: 1_000_000n,
     targetAmount: 500n,
     claimBytes,
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: MINA_PAIR,
     receivedAt: Date.now(),
     channelId,
     nonce,
     cumulativeAmount,
     recipient,
-    millSignerAddress: keys.publicKey,
+    swapSignerAddress: keys.publicKey,
   };
   return { claim, signerAddress: keys.publicKey };
 }
@@ -309,7 +309,7 @@ describe(
         expect(claim.pair.to.chain).toBe('mina:mainnet');
         expect(claim.pair.to.chain.startsWith('mina:')).toBe(true);
 
-        // Signature encoding: the Mill emits a base58 mina-signer signature
+        // Signature encoding: the Swap emits a base58 mina-signer signature
         // STRING carried as UTF-8 bytes (NOT a fixed-length binary blob).
         expect(claim.claimBytes).toBeInstanceOf(Uint8Array);
         expect(claim.claimBytes.length).toBeGreaterThan(0);
@@ -321,8 +321,8 @@ describe(
         expect(typeof claim.recipient).toBe('string');
         expect(typeof claim.cumulativeAmount).toBe('string');
         expect(typeof claim.nonce).toBe('string');
-        // Mill signer address is a B62-prefixed Mina public key.
-        expect(claim.millSignerAddress?.startsWith('B62')).toBe(true);
+        // Swap signer address is a B62-prefixed Mina public key.
+        expect(claim.swapSignerAddress?.startsWith('B62')).toBe(true);
       }
     );
 
@@ -371,7 +371,7 @@ describe(
       'buildMinaSettlementTx emits a SettlementBundle with chainKind:mina + re-emits the verified proof bytes',
       () => {
         const { claim, signerAddress } = signedMinaClaim();
-        const signer: MillSignerConfig = { address: signerAddress };
+        const signer: SwapSignerConfig = { address: signerAddress };
         const bundle: SettlementBundle = buildMinaSettlementTx(
           claim,
           signer,
@@ -385,7 +385,7 @@ describe(
         expect(bundle.cumulativeAmount).toBe('500');
         expect(bundle.nonce).toBe('1');
         expect(bundle.recipient).toBe(claim.recipient);
-        expect(bundle.millSignerAddress).toBe(signerAddress);
+        expect(bundle.swapSignerAddress).toBe(signerAddress);
         // Envelope re-emits the verified balance-proof signature verbatim.
         expect(bundle.unsignedTxBytes).toEqual(claim.claimBytes);
       }

@@ -87,10 +87,10 @@ export interface StreamSwapClient {
 export interface StreamSwapParams {
   /** SDK client with BTP wiring (see {@link StreamSwapClient}). */
   client: StreamSwapClient;
-  /** Mill's 64-char lowercase hex pubkey (recipient of gift wrap). */
-  millPubkey: string;
-  /** Mill's ILP destination address (e.g., 'g.toon.mill1'). */
-  millIlpAddress: string;
+  /** Swap's 64-char lowercase hex pubkey (recipient of gift wrap). */
+  swapPubkey: string;
+  /** Swap's ILP destination address (e.g., 'g.toon.swap1'). */
+  swapIlpAddress: string;
   /** The `SwapPair` being executed (from kind:10032 discovery, Story 12.1). */
   pair: SwapPair;
   /** Sender's 32-byte secp256k1 secret key. Used for seal signing AND FULFILL decryption. */
@@ -184,7 +184,7 @@ export interface PacketProgress {
  *
  * Story 12.6 ADDITIVE extension: the settlement-context fields
  * `channelId`, `nonce`, `cumulativeAmount`, `recipient`, and
- * `millSignerAddress` are marked optional (`?:`) for one story-cycle of
+ * `swapSignerAddress` are marked optional (`?:`) for one story-cycle of
  * backward compat but are REQUIRED in practice: Story 12.6's
  * `buildSettlementTx()` throws `MISSING_SETTLEMENT_METADATA` when any of
  * these are absent.
@@ -205,9 +205,9 @@ export interface AccumulatedClaim {
   targetAmount: bigint;
   /** Decrypted signed claim bytes. Chain-specific encoding per Story 12.4. */
   claimBytes: Uint8Array;
-  /** Mill's ephemeral pubkey from the FULFILL (64-char lowercase hex). */
-  millEphemeralPubkey: string;
-  /** Optional Mill-side claim ID (passed through from handler metadata). */
+  /** Swap's ephemeral pubkey from the FULFILL (64-char lowercase hex). */
+  swapEphemeralPubkey: string;
+  /** Optional Swap-side claim ID (passed through from handler metadata). */
   claimId?: string;
   /** Swap pair this claim was priced against (copy of `pair` for settlement-time routing). */
   pair: SwapPair;
@@ -222,8 +222,8 @@ export interface AccumulatedClaim {
   cumulativeAmount?: string;
   /** Recipient address (the sender's target-asset address). */
   recipient?: string;
-  /** Mill's on-chain signer address. */
-  millSignerAddress?: string;
+  /** Swap's on-chain signer address. */
+  swapSignerAddress?: string;
 }
 
 /**
@@ -405,7 +405,7 @@ export function validateChainAddress(
  * shape.
  *
  * Story 12.6 extension: also parses the settlement-context fields
- * (`channelId`, `nonce`, `cumulativeAmount`, `recipient`, `millSignerAddress`).
+ * (`channelId`, `nonce`, `cumulativeAmount`, `recipient`, `swapSignerAddress`).
  * These are OPTIONAL and best-effort (#153): each is threaded through only
  * when it is a well-formed string for the target chain; an absent or malformed
  * settlement field is silently dropped rather than failing the whole decode,
@@ -413,7 +413,7 @@ export function validateChainAddress(
  * Only `claim` and `ephemeralPubkey` are strictly required.
  *
  * @param chain Optional `pair.to.chain` string for per-chain format validation
- *   of channelId / recipient / millSignerAddress. When omitted, format checks
+ *   of channelId / recipient / swapSignerAddress. When omitted, format checks
  *   fall back to a length-only sanity check.
  */
 function decodeFulfillMetadata(
@@ -423,13 +423,13 @@ function decodeFulfillMetadata(
   claim: string;
   ephemeralPubkey: string;
   claimId?: string;
-  /** Optional Mill-reported actual target amount (decimal string). Used for rate deviation when present. */
+  /** Optional Swap-reported actual target amount (decimal string). Used for rate deviation when present. */
   targetAmount?: string;
   channelId?: string;
   nonce?: string;
   cumulativeAmount?: string;
   recipient?: string;
-  millSignerAddress?: string;
+  swapSignerAddress?: string;
 } {
   if (data === undefined || data === null || data === '') {
     throw new StreamSwapError('FULFILL_DECODE_FAILED', 'FULFILL data missing');
@@ -495,7 +495,7 @@ function decodeFulfillMetadata(
     nonce?: string;
     cumulativeAmount?: string;
     recipient?: string;
-    millSignerAddress?: string;
+    swapSignerAddress?: string;
   } = {
     claim,
     ephemeralPubkey,
@@ -503,9 +503,9 @@ function decodeFulfillMetadata(
   if (typeof obj['claimId'] === 'string') {
     result.claimId = obj['claimId'] as string;
   }
-  // Mill-reported target amount (optional). MUST be a non-negative integer
+  // Swap-reported target amount (optional). MUST be a non-negative integer
   // decimal string — reject signed / fractional / non-numeric values so a
-  // malicious or buggy Mill cannot poison `cumulativeTarget`, the deviation
+  // malicious or buggy Swap cannot poison `cumulativeTarget`, the deviation
   // calc, or the `AccumulatedClaim.targetAmount` surface that Story 12.6
   // settles against. Presence of the field with a malformed value is a
   // FULFILL_DECODE_FAILED — the sender cannot safely consume the metadata.
@@ -525,24 +525,24 @@ function decodeFulfillMetadata(
   // (Story 12.6), which performs on-chain target redemption — a flow that is
   // itself #82-bounded (synthetic devnet channels) and independently validates
   // every field it consumes before signing. They are NOT required to surface
-  // the mill's signed claim to the caller.
+  // the swap's signed claim to the caller.
   //
   // The previous contract was all-or-nothing AND hard-failed the entire FULFILL
   // decode (`FULFILL_DECODE_FAILED`) on any partial/malformed settlement field.
-  // That rejected otherwise-valid mill FULFILLs whenever the mill's real
+  // That rejected otherwise-valid swap FULFILLs whenever the swap's real
   // envelope carried, e.g., a cross-chain channelId (an EVM-style hex channelId
   // echoed on a `solana:`/`mina:` target) or a checksummed address — so a
   // fulfilled swap reported `state: failed` with an empty `claims[]`.
   //
   // New contract: thread each settlement field through ONLY when it is a
   // well-formed string for the target chain; silently drop any field that is
-  // absent or malformed. A swap whose mill omits/garbles settlement metadata
+  // absent or malformed. A swap whose swap omits/garbles settlement metadata
   // still completes with the signed claim; `buildSettlementTx()` will then
   // surface `MISSING_SETTLEMENT_METADATA` at settlement time if the caller
   // actually attempts on-chain redemption with an incomplete bundle.
   //
   // `recipient` is special-cased: it is the anti-substitution security check in
-  // `runLoop` (the mill must echo the sender-supplied `chainRecipient`). We thread
+  // `runLoop` (the swap must echo the sender-supplied `chainRecipient`). We thread
   // it through whenever it is a non-empty string — even if it fails the chain
   // format check — so the runLoop equality check still fires. The equality
   // comparison there is the real boundary; a format-only mismatch must not be
@@ -571,12 +571,12 @@ function decodeFulfillMetadata(
     // equality check (`metadata.recipient === params.chainRecipient`) runs.
     result.recipient = recipient;
   }
-  const millSignerAddress = obj['millSignerAddress'];
+  const swapSignerAddress = obj['swapSignerAddress'];
   if (
-    typeof millSignerAddress === 'string' &&
-    (!chain || validateChainAddress(millSignerAddress, chain, 'address'))
+    typeof swapSignerAddress === 'string' &&
+    (!chain || validateChainAddress(swapSignerAddress, chain, 'address'))
   ) {
-    result.millSignerAddress = millSignerAddress;
+    result.swapSignerAddress = swapSignerAddress;
   }
   return result;
 }
@@ -675,12 +675,12 @@ function validateParams(params: StreamSwapParams): void {
   }
 
   if (
-    typeof params.millPubkey !== 'string' ||
-    !HEX64_REGEX.test(params.millPubkey)
+    typeof params.swapPubkey !== 'string' ||
+    !HEX64_REGEX.test(params.swapPubkey)
   ) {
     throw new StreamSwapError(
       'INVALID_STATE',
-      'millPubkey must be a 64-char lowercase hex string'
+      'swapPubkey must be a 64-char lowercase hex string'
     );
   }
 
@@ -781,18 +781,18 @@ function validateParams(params: StreamSwapParams): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Drive a multi-packet swap against a Mill and return a `StreamSwapResult`.
+ * Drive a multi-packet swap against a Swap and return a `StreamSwapResult`.
  *
  * `streamSwap()` does NOT throw on mid-stream failure — inspect the result's
  * `state`, `abortReason`, `rejections[]`, and `errors[]` to diagnose.
  *
  * @example
  * ```ts
- * // Discover the SwapPair from the Mill's kind:10032 peer-info event (Story 12.1).
+ * // Discover the SwapPair from the Swap's kind:10032 peer-info event (Story 12.1).
  * const result = await streamSwap({
  *   client: toonClient,
- *   millPubkey: mill.pubkey,
- *   millIlpAddress: 'g.toon.mill1',
+ *   swapPubkey: swap.pubkey,
+ *   swapIlpAddress: 'g.toon.swap1',
  *   pair,
  *   senderSecretKey,
  *   totalAmount: 1_000_000n,
@@ -997,8 +997,8 @@ async function runLoop(
       const wrapped = wrapSwapPacketToToon({
         rumor,
         senderSecretKey: params.senderSecretKey,
-        recipientPubkey: params.millPubkey,
-        destination: params.millIlpAddress,
+        recipientPubkey: params.swapPubkey,
+        destination: params.swapIlpAddress,
         amount: sourceAmount,
       });
       // `wrapped.ilpPrepare.data` is base64 per buildIlpPrepare. Decode back
@@ -1021,7 +1021,7 @@ async function runLoop(
     let sendResult: IlpSendResultLike;
     try {
       sendResult = await params.client.sendSwapPacket({
-        destination: params.millIlpAddress,
+        destination: params.swapIlpAddress,
         amount: sourceAmount,
         toonData,
         timeout: params.packetTimeoutMs ?? 30000,
@@ -1065,7 +1065,7 @@ async function runLoop(
       nonce?: string;
       cumulativeAmount?: string;
       recipient?: string;
-      millSignerAddress?: string;
+      swapSignerAddress?: string;
     };
     try {
       metadata = decodeFulfillMetadata(sendResult.data, pair.to.chain);
@@ -1082,15 +1082,15 @@ async function runLoop(
       continue;
     }
 
-    // Story 12.9 AC-7: when the Mill echoes a `recipient` in FULFILL metadata
+    // Story 12.9 AC-7: when the Swap echoes a `recipient` in FULFILL metadata
     // (Story 12.6 settlement context), it MUST equal the sender-supplied
-    // `chainRecipient`. A mismatch indicates the Mill is substituting its own
+    // `chainRecipient`. A mismatch indicates the Swap is substituting its own
     // address — refuse to accumulate the claim and surface a per-packet
     // rejection with a clear reason code. Missing recipient = legacy
     // (pre-12.6) metadata, permitted.
     //
     // #153: EVM addresses are case-insensitive (EIP-55 checksum casing is
-    // purely a typo-detection hint). The mill lowercases its echoed recipient
+    // purely a typo-detection hint). The swap lowercases its echoed recipient
     // while the sender may pass a checksummed `chainRecipient` (or vice versa);
     // compare case-insensitively on EVM targets so a casing-only difference is
     // NOT flagged as a substitution attack. Non-EVM chains keep the exact
@@ -1112,8 +1112,8 @@ async function runLoop(
       rejections.push({
         packetIndex,
         sourceAmount,
-        code: 'MILL_RECIPIENT_MISMATCH',
-        message: `Mill echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
+        code: 'SWAP_RECIPIENT_MISMATCH',
+        message: `Swap echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
       });
       continue;
     }
@@ -1155,7 +1155,7 @@ async function runLoop(
       rate: pair.rate,
     });
 
-    // If the Mill includes a `targetAmount` in the FULFILL metadata, use it
+    // If the Swap includes a `targetAmount` in the FULFILL metadata, use it
     // (chain-specific parsing of `claimBytes` is Story 12.6's job). Otherwise
     // fall back to the advertised-rate expected amount so settlement-time
     // verification still has a baseline.
@@ -1203,7 +1203,7 @@ async function runLoop(
       sourceAmount,
       targetAmount,
       claimBytes,
-      millEphemeralPubkey: metadata.ephemeralPubkey,
+      swapEphemeralPubkey: metadata.ephemeralPubkey,
       pair,
       receivedAt: Date.now(),
     };
@@ -1216,8 +1216,8 @@ async function runLoop(
       accumulated.cumulativeAmount = metadata.cumulativeAmount;
     if (metadata.recipient !== undefined)
       accumulated.recipient = metadata.recipient;
-    if (metadata.millSignerAddress !== undefined)
-      accumulated.millSignerAddress = metadata.millSignerAddress;
+    if (metadata.swapSignerAddress !== undefined)
+      accumulated.swapSignerAddress = metadata.swapSignerAddress;
     claims.push(accumulated);
 
     logger.debug({
@@ -1303,7 +1303,7 @@ async function runLoop(
   ) {
     finalState = 'failed';
     // If we drained the entire schedule without accepting any claim AND the
-    // only failures were Mill rejections, surface that explicitly so callers
+    // only failures were Swap rejections, surface that explicitly so callers
     // can distinguish "all rejected" from "loop aborted early with no claims".
     if (
       abortReason === 'complete' &&

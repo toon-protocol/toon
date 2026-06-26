@@ -5,7 +5,7 @@
  * NIP-59 three-layer gift wrap construction (rumor -> seal -> gift wrap).
  * Intermediary peers routing ILP packets see only opaque TOON-encoded binary
  * in the data field -- they cannot determine the event kind, sender identity,
- * or swap intent. Only the destination Mill can unwrap and process.
+ * or swap intent. Only the destination Swap can unwrap and process.
  *
  * Also provides NIP-44 encryption/decryption for FULFILL claim return path
  * (D12-008), using ephemeral keys so intermediaries on the return path see
@@ -41,7 +41,7 @@ export interface WrapSwapPacketParams {
   rumor: UnsignedEvent;
   /** Sender's secp256k1 secret key. */
   senderSecretKey: Uint8Array;
-  /** Mill's compressed hex pubkey (64 chars). */
+  /** Swap's compressed hex pubkey (64 chars). */
   recipientPubkey: string;
 }
 
@@ -57,7 +57,7 @@ export interface WrapSwapPacketResult {
 export interface UnwrapSwapPacketParams {
   /** A kind:1059 gift wrap event. */
   giftWrap: NostrEvent;
-  /** Recipient's (Mill's) secret key. */
+  /** Recipient's (Swap's) secret key. */
   recipientSecretKey: Uint8Array;
 }
 
@@ -75,7 +75,7 @@ export interface WrapSwapPacketToToonParams {
   rumor: UnsignedEvent;
   /** Sender's secp256k1 secret key. */
   senderSecretKey: Uint8Array;
-  /** Mill's compressed hex pubkey (64 chars). */
+  /** Swap's compressed hex pubkey (64 chars). */
   recipientPubkey: string;
   /** ILP destination address. */
   destination: string;
@@ -97,7 +97,7 @@ export interface WrapSwapPacketToToonResult {
 export interface UnwrapSwapPacketFromToonParams {
   /** The data field from an incoming ILP PREPARE (TOON-encoded gift wrap). */
   toonData: Uint8Array;
-  /** Recipient's (Mill's) secret key. */
+  /** Recipient's (Swap's) secret key. */
   recipientSecretKey: Uint8Array;
 }
 
@@ -113,7 +113,7 @@ export interface EncryptFulfillClaimParams {
 export interface EncryptFulfillClaimResult {
   /** NIP-44 encrypted claim bytes. */
   ciphertext: Uint8Array;
-  /** The Mill's ephemeral pubkey (included in FULFILL so sender can decrypt). */
+  /** The Swap's ephemeral pubkey (included in FULFILL so sender can decrypt). */
   ephemeralPubkey: string;
 }
 
@@ -121,7 +121,7 @@ export interface EncryptFulfillClaimResult {
 export interface DecryptFulfillClaimParams {
   /** The encrypted claim bytes from the FULFILL data field. */
   ciphertext: Uint8Array;
-  /** The Mill's ephemeral pubkey from the FULFILL data field. */
+  /** The Swap's ephemeral pubkey from the FULFILL data field. */
   ephemeralPubkey: string;
   /** The sender's (recipient of FULFILL) secret key. */
   recipientSecretKey: Uint8Array;
@@ -327,7 +327,7 @@ export function wrapSwapPacketToToon(
  * Convenience: decode TOON binary from an incoming ILP PREPARE data field
  * and unwrap the gift-wrapped swap packet.
  *
- * This is the path that the Mill handler (Story 12.3) will use to process
+ * This is the path that the Swap handler (Story 12.3) will use to process
  * incoming swap packets.
  */
 export function unwrapSwapPacketFromToon(
@@ -427,7 +427,7 @@ export function encryptFulfillClaim(
 /**
  * Decrypt a FULFILL claim from the return path.
  *
- * Uses the sender's secret key and the Mill's ephemeral pubkey (from the
+ * Uses the sender's secret key and the Swap's ephemeral pubkey (from the
  * FULFILL data field) to NIP-44 decrypt the claim bytes.
  *
  * @throws {GiftWrapError} If decryption fails (wrong key, malformed ciphertext).

@@ -24,7 +24,7 @@ import { buildSolanaSettlementTx, verifyEd25519Signature } from './solana.js';
 import type {
   BuildSettlementTxParams,
   BuildSettlementTxResult,
-  MillSignerConfig,
+  SwapSignerConfig,
   SettlementBundle,
 } from './types.js';
 
@@ -46,7 +46,7 @@ function chainKindOf(chain: string): 'evm' | 'solana' | 'mina' | 'unknown' {
  *   2. Optionally verify each claim's signature. Rejected claims land in
  *      `result.rejected[]` and are dropped from further processing.
  *   3. Group surviving claims by `(chain, channelId)`. Within each group,
- *      assert recipient + millSignerAddress consensus, unique nonces, and
+ *      assert recipient + swapSignerAddress consensus, unique nonces, and
  *      non-decreasing cumulativeAmount with nonce.
  *   4. Pick the winning claim per group (highest nonce).
  *   5. Dispatch each winner to its chain-specific tx builder.
@@ -63,7 +63,7 @@ function chainKindOf(chain: string): 'evm' | 'solana' | 'mina' | 'unknown' {
  *   claims: result.claims,
  *   signers: {
  *     'evm:base:8453': {
- *       address: '0xmill...',
+ *       address: '0xswap...',
  *       contractAddress: '0xtokennetwork...',
  *       chainId: 8453,
  *     },
@@ -102,11 +102,11 @@ export function buildSettlementTx(
       c.nonce === undefined ||
       c.cumulativeAmount === undefined ||
       c.recipient === undefined ||
-      c.millSignerAddress === undefined
+      c.swapSignerAddress === undefined
     ) {
       throw new SettlementTxError(
         'MISSING_SETTLEMENT_METADATA',
-        `claims[${i}] missing one or more of { channelId, nonce, cumulativeAmount, recipient, millSignerAddress }`
+        `claims[${i}] missing one or more of { channelId, nonce, cumulativeAmount, recipient, swapSignerAddress }`
       );
     }
   }
@@ -326,11 +326,11 @@ export function buildSettlementTx(
     const first = g.claims[0];
     if (!first) continue;
     const firstRecipient = first.claim.recipient;
-    const firstMillSigner = first.claim.millSignerAddress;
-    if (firstRecipient === undefined || firstMillSigner === undefined) {
+    const firstSwapSigner = first.claim.swapSignerAddress;
+    if (firstRecipient === undefined || firstSwapSigner === undefined) {
       throw new SettlementTxError(
         'MISSING_SETTLEMENT_METADATA',
-        'winner claim missing recipient/millSignerAddress (unreachable after validation)'
+        'winner claim missing recipient/swapSignerAddress (unreachable after validation)'
       );
     }
     for (let i = 1; i < g.claims.length; i++) {
@@ -343,10 +343,10 @@ export function buildSettlementTx(
           `claims in channel ${g.channelId} disagree on recipient: ${firstRecipient} vs ${String(c.recipient)} (claim indices ${first.originalIndex}, ${entry.originalIndex})`
         );
       }
-      if (c.millSignerAddress !== firstMillSigner) {
+      if (c.swapSignerAddress !== firstSwapSigner) {
         throw new SettlementTxError(
-          'MILL_SIGNER_MISMATCH',
-          `claims in channel ${g.channelId} disagree on millSignerAddress: ${firstMillSigner} vs ${String(c.millSignerAddress)}`
+          'SWAP_SIGNER_MISMATCH',
+          `claims in channel ${g.channelId} disagree on swapSignerAddress: ${firstSwapSigner} vs ${String(c.swapSignerAddress)}`
         );
       }
     }
@@ -414,12 +414,12 @@ export function buildSettlementTx(
     if (kind === 'evm') {
       // Recipient address consistency check: bundle recipient MUST match
       // the claim's recipient. The recipients map is the sender's declared
-      // address — any disagreement with the Mill-reported recipient signals
-      // an adversarial Mill or caller misconfiguration.
+      // address — any disagreement with the Swap-reported recipient signals
+      // an adversarial Swap or caller misconfiguration.
       if (recipient.toLowerCase() !== firstRecipient.toLowerCase()) {
         throw new SettlementTxError(
           'RECIPIENT_MISMATCH',
-          `recipients[${g.chain}] (${recipient}) does not match Mill-reported recipient (${firstRecipient})`
+          `recipients[${g.chain}] (${recipient}) does not match Swap-reported recipient (${firstRecipient})`
         );
       }
       bundle = buildEvmSettlementTx(
@@ -433,7 +433,7 @@ export function buildSettlementTx(
       if (recipient !== firstRecipient) {
         throw new SettlementTxError(
           'RECIPIENT_MISMATCH',
-          `recipients[${g.chain}] (${recipient}) does not match Mill-reported recipient (${firstRecipient})`
+          `recipients[${g.chain}] (${recipient}) does not match Swap-reported recipient (${firstRecipient})`
         );
       }
       bundle = buildSolanaSettlementTx(
@@ -448,7 +448,7 @@ export function buildSettlementTx(
       if (recipient !== firstRecipient) {
         throw new SettlementTxError(
           'RECIPIENT_MISMATCH',
-          `recipients[${g.chain}] (${recipient}) does not match Mill-reported recipient (${firstRecipient})`
+          `recipients[${g.chain}] (${recipient}) does not match Swap-reported recipient (${firstRecipient})`
         );
       }
       bundle = buildMinaSettlementTx(
@@ -479,7 +479,7 @@ export function buildSettlementTx(
 
 /**
  * Standalone utility: verify a single `AccumulatedClaim`'s signature against
- * a `MillSignerConfig` without running the full grouping/winner pipeline.
+ * a `SwapSignerConfig` without running the full grouping/winner pipeline.
  *
  * Useful inside a `streamSwap()` `onPacket` callback for mid-stream claim
  * validation.
@@ -494,7 +494,7 @@ export function buildSettlementTx(
  */
 export function verifyAccumulatedClaim(
   claim: AccumulatedClaim,
-  signer: MillSignerConfig,
+  signer: SwapSignerConfig,
   minaSignerClient?: MinaSignerClientLike
 ): { valid: true } | { valid: false; reason: string } {
   const kind = chainKindOf(claim.pair.to.chain);

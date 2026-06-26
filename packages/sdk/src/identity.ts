@@ -382,7 +382,7 @@ async function deriveMinaIdentity(
   // base-field order. A raw BIP-32 child scalar can exceed it (~75% of 256-bit
   // values do), and mina-signer then rejects it with
   // "Scalar: inputs larger than … are not allowed". Matches the client's
-  // deriveMinaKey and mill's deriveMillKeys, so all three produce the SAME Mina
+  // deriveMinaKey and swap's deriveSwapKeys, so all three produce the SAME Mina
   // key for a given mnemonic + accountIndex.
   keyBytes[0] = (keyBytes[0] ?? 0) & 0x3f;
   const hexKey = bytesToHex(keyBytes);

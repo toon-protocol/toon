@@ -1,7 +1,7 @@
 /**
  * StoreHealthResponse — canonical type for the Store BLS health endpoint.
  * Exported from @toon-protocol/sdk so the node and the entrypoint share
- * the same definition (mirrors MillHealthResponse from @toon-protocol/mill).
+ * the same definition (mirrors SwapHealthResponse from @toon-protocol/swap).
  */
 
 /** Per-kind job count for jobsRecent.byKind */

@@ -19,7 +19,7 @@ import {
   concatBytes,
   hexToBytes,
 } from './hashes.js';
-import type { MillSignerConfig, SettlementBundle } from './types.js';
+import type { SwapSignerConfig, SettlementBundle } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Function selector + event signature
@@ -289,7 +289,7 @@ function rlpEncodeUnsignedTx(params: {
  */
 export function buildEvmSettlementTx(
   winner: AccumulatedClaim,
-  signer: MillSignerConfig,
+  signer: SwapSignerConfig,
   recipient: string,
   selectedClaimIndex: number,
   claimsMerged: number
@@ -299,7 +299,7 @@ export function buildEvmSettlementTx(
     winner.cumulativeAmount === undefined ||
     winner.nonce === undefined ||
     winner.recipient === undefined ||
-    winner.millSignerAddress === undefined
+    winner.swapSignerAddress === undefined
   ) {
     throw new SettlementTxError(
       'MISSING_SETTLEMENT_METADATA',
@@ -309,7 +309,7 @@ export function buildEvmSettlementTx(
   if (!signer.contractAddress) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      `EVM MillSignerConfig.contractAddress is required for chain ${winner.pair.to.chain}`
+      `EVM SwapSignerConfig.contractAddress is required for chain ${winner.pair.to.chain}`
     );
   }
   if (
@@ -319,7 +319,7 @@ export function buildEvmSettlementTx(
   ) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      `EVM MillSignerConfig.chainId must be a positive integer, got ${signer.chainId}`
+      `EVM SwapSignerConfig.chainId must be a positive integer, got ${signer.chainId}`
     );
   }
 
@@ -352,7 +352,7 @@ export function buildEvmSettlementTx(
     cumulativeAmount: winner.cumulativeAmount,
     nonce: winner.nonce,
     recipient,
-    millSignerAddress: winner.millSignerAddress,
+    swapSignerAddress: winner.swapSignerAddress,
     unsignedTxBytes,
     expectedEventSignature: EVM_SETTLEMENT_EVENT_TOPIC,
     claimsMerged,
@@ -377,7 +377,7 @@ export function buildEvmSettlementTx(
 export function fillEvmSettlementTxGas(
   bundle: SettlementBundle,
   gas: { nonce: bigint; gasPrice: bigint; gasLimit: bigint },
-  signer: MillSignerConfig
+  signer: SwapSignerConfig
 ): Uint8Array {
   if (bundle.chainKind !== 'evm') {
     throw new SettlementTxError(
@@ -388,13 +388,13 @@ export function fillEvmSettlementTxGas(
   if (!signer.contractAddress) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      'EVM MillSignerConfig.contractAddress is required for gas-fill'
+      'EVM SwapSignerConfig.contractAddress is required for gas-fill'
     );
   }
   if (typeof signer.chainId !== 'number' || signer.chainId <= 0) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      'EVM MillSignerConfig.chainId must be a positive integer'
+      'EVM SwapSignerConfig.chainId must be a positive integer'
     );
   }
   // Decode calldata from the original bundle's RLP: we know calldata starts

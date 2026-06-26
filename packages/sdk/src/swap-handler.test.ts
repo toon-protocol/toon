@@ -1,8 +1,8 @@
 /**
- * ATDD Tests: Mill Swap Handler (Story 12.3)
+ * ATDD Tests: Swap Swap Handler (Story 12.3)
  *
  * Failing acceptance tests for `createSwapHandler()` factory — the kind:1059
- * Mill inbound-swap handler that unwraps NIP-59 gift-wrapped ILP packets,
+ * Swap inbound-swap handler that unwraps NIP-59 gift-wrapped ILP packets,
  * applies per-packet rate conversion, delegates signed claim issuance to a
  * pluggable ClaimIssuer, and returns the claim NIP-44 encrypted with an
  * ephemeral key on the FULFILL response path.
@@ -143,7 +143,7 @@ function makeGiftWrappedCtx(params: {
 }): HandlerContext {
   const rumor = params.rumor ?? makeRumor({});
   const amount = params.amount ?? 1_000_000n;
-  const destination = params.destination ?? 'g.mill.test';
+  const destination = params.destination ?? 'g.swap.test';
 
   const { ilpPrepare } = wrapSwapPacketToToon({
     rumor,
@@ -256,10 +256,10 @@ describe('T-017 Handler unwraps valid gift-wrapped packet and accepts (AC-4, AC-
       expect(typeof res.metadata!['claim']).toBe('string');
       expect(typeof res.metadata!['ephemeralPubkey']).toBe('string');
       expect(res.metadata!['claimId']).toBe('test-claim-1');
-      // Story 12.5 extension: Mill MUST emit the computed targetAmount as a
+      // Story 12.5 extension: Swap MUST emit the computed targetAmount as a
       // decimal string so senders can rate-deviation-check without parsing
       // chain-specific claim bytes. Without this, streamSwap's
-      // rateDeviationThreshold feature silently no-ops against real Mills.
+      // rateDeviationThreshold feature silently no-ops against real Swaps.
       expect(typeof res.metadata!['targetAmount']).toBe('string');
       expect(res.metadata!['targetAmount']).toMatch(/^[0-9]+$/);
     }
@@ -278,7 +278,7 @@ describe('T-017 Handler unwraps valid gift-wrapped packet and accepts (AC-4, AC-
       toon: Buffer.from(new Uint8Array([0])).toString('base64'),
       meta: makeMockMeta({ kind: 1, pubkey: '0'.repeat(64) }),
       amount: 1_000_000n,
-      destination: 'g.mill.test',
+      destination: 'g.swap.test',
       toonDecoder: () => {
         throw new Error('unused');
       },
@@ -381,7 +381,7 @@ describe('T-021 Handler rejects non-gift-wrapped packet (AC-6)', () => {
       toon: toonBase64,
       meta: makeMockMeta({ kind: 1059, pubkey: '0'.repeat(64) }),
       amount: 1_000_000n,
-      destination: 'g.mill.test',
+      destination: 'g.swap.test',
       toonDecoder: () => fakeEvent,
     });
 
@@ -410,7 +410,7 @@ describe('T-022 Handler rejects malformed gift wrap (AC-5)', () => {
       toon: Buffer.from(garbage).toString('base64'),
       meta: makeMockMeta({ kind: 1059, pubkey: '0'.repeat(64) }),
       amount: 1n,
-      destination: 'g.mill.test',
+      destination: 'g.swap.test',
       toonDecoder: () => {
         throw new Error('should not decode');
       },
@@ -963,8 +963,8 @@ describe('SwapHandlerError (AC-2)', () => {
 // ---------------------------------------------------------------------------
 // Story 12.6 AC-3 — FULFILL metadata extension regression
 //
-// The Mill's swap handler MUST emit the five settlement-context fields
-// (channelId, nonce, cumulativeAmount, recipient, millSignerAddress) in the
+// The Swap's swap handler MUST emit the five settlement-context fields
+// (channelId, nonce, cumulativeAmount, recipient, swapSignerAddress) in the
 // FULFILL metadata WHEN the ClaimIssuer returns them. When the issuer omits
 // those fields (legacy pre-12.6 path), the metadata MUST remain in the
 // pre-12.6 shape (all-or-nothing contract).
@@ -976,9 +976,9 @@ describe('SwapHandlerError (AC-2)', () => {
 describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
   const EVM_CHANNEL_ID = '0x' + 'a'.repeat(64);
   const EVM_RECIPIENT = '0x' + 'b'.repeat(40);
-  const EVM_MILL_SIGNER = '0x' + 'c'.repeat(40);
+  const EVM_SWAP_SIGNER = '0x' + 'c'.repeat(40);
 
-  it('[P0] emits channelId/nonce/cumulativeAmount/recipient/millSignerAddress when issuer supplies them', async () => {
+  it('[P0] emits channelId/nonce/cumulativeAmount/recipient/swapSignerAddress when issuer supplies them', async () => {
     const issueClaim = vi.fn(
       async (_p: IssueClaimParams): Promise<IssueClaimResult> => ({
         claim: new Uint8Array([1, 2, 3]),
@@ -987,7 +987,7 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
         nonce: 7n,
         cumulativeAmount: 123_456_789n,
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       })
     );
     const handler = createSwapHandler({
@@ -1024,8 +1024,8 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
     expect(res.metadata!['recipient']).toBe(EVM_RECIPIENT);
     expect(res.metadata!['recipient']).toMatch(/^0x[0-9a-f]{40}$/);
 
-    expect(res.metadata!['millSignerAddress']).toBe(EVM_MILL_SIGNER);
-    expect(res.metadata!['millSignerAddress']).toMatch(/^0x[0-9a-f]{40}$/);
+    expect(res.metadata!['swapSignerAddress']).toBe(EVM_SWAP_SIGNER);
+    expect(res.metadata!['swapSignerAddress']).toMatch(/^0x[0-9a-f]{40}$/);
   });
 
   it('[P0] omits all five settlement fields when issuer returns legacy shape', async () => {
@@ -1047,7 +1047,7 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
     expect(res.metadata!['nonce']).toBeUndefined();
     expect(res.metadata!['cumulativeAmount']).toBeUndefined();
     expect(res.metadata!['recipient']).toBeUndefined();
-    expect(res.metadata!['millSignerAddress']).toBeUndefined();
+    expect(res.metadata!['swapSignerAddress']).toBeUndefined();
 
     // Existing fields unaffected.
     expect(typeof res.metadata!['claim']).toBe('string');
@@ -1064,7 +1064,7 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
         nonce: 0n,
         cumulativeAmount: 0n,
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       })
     );
     const handler = createSwapHandler({
@@ -1091,7 +1091,7 @@ describe('Story 12.6 AC-3 — FULFILL metadata settlement fields', () => {
         nonce: HUGE,
         cumulativeAmount: HUGE,
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       })
     );
     const handler = createSwapHandler({

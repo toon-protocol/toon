@@ -7,7 +7,7 @@
  * to point at the project's dev chains — e.g. the Akash-hosted anvil + solana.)
  *
  * - the **apex** standalone connector (its `chainProviders` settlement array), and
- * - the **children** node containers (relay/mill), via a small set of env vars the
+ * - the **children** node containers (relay/swap), via a small set of env vars the
  *   HS compose template interpolates (`EVM_CHAIN`, `EVM_RPC_URL`, `EVM_CHAIN_ID`,
  *   `EVM_USDC_ADDRESS`, `SOLANA_RPC_URL`, `SOLANA_USDC_MINT`).
  *
@@ -18,7 +18,7 @@
  *   permanently disconnected (an empty RPC fell back to the `anvil` preset whose
  *   `localhost:8545` does not exist in the HS network).
  * - **EVM = Base (primary) + Arbitrum.** The single-EVM relay node uses Base; the
- *   apex connector and Mill can hold providers for both families.
+ *   apex connector and Swap can hold providers for both families.
  * - **Settlement status.** TOON's settlement contracts are deployed for the
  *   public **testnet/devnet** tiers (EVM Base Sepolia registry + TokenNetwork,
  *   Solana devnet program, Mina devnet zkApp — source of truth: e2e/testnets.json),

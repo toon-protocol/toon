@@ -2,15 +2,15 @@
  * Shared balance-proof hash helpers — the single source of truth for the
  * byte/field layout that ALL signers and verifiers across the monorepo depend
  * on:
- *  - the Mill-side signer (`packages/mill/src/payment-channel-signer.ts`)
+ *  - the Swap-side signer (`packages/swap/src/payment-channel-signer.ts`)
  *  - the sender-side settlement verifier (`packages/sdk/src/settlement/{evm,solana,mina}.ts`)
  *  - the client-side balance-proof signers (`packages/client/src/signing/{solana,mina}-signer.ts`)
  *
- * Originally extracted from the Mill signer (Story 12.4) into `@toon-protocol/sdk`
+ * Originally extracted from the Swap signer (Story 12.4) into `@toon-protocol/sdk`
  * (Story 12.6 AC-6). Relocated here to `@toon-protocol/core` so the client can
  * consume the canonical hashes WITHOUT taking a dependency on `@toon-protocol/sdk`
  * (the client only depends on core). `@toon-protocol/sdk` re-exports these names
- * unchanged, so Mill and existing SDK consumers are unaffected.
+ * unchanged, so Swap and existing SDK consumers are unaffected.
  *
  * Any change to a hash layout here automatically applies to every signer AND
  * verifier — they cannot drift.
@@ -133,7 +133,7 @@ export function balanceProofHashSolana(
  * `channelId` / `recipient` strings into the fixed field-element array a Mina
  * Schnorr signature is computed over.
  *
- * @stable — Mill signer and SDK verifier depend on the exact derivation.
+ * @stable — Swap signer and SDK verifier depend on the exact derivation.
  */
 export function minaHashToField(s: string): bigint {
   const digestHex = bytesToHex(sha256(new TextEncoder().encode(s)));
@@ -147,20 +147,20 @@ export function minaHashToField(s: string): bigint {
  *     nonce,
  *     minaHashToField(recipient) ]
  *
- * This is the EXACT `fields` array that the Mill's `MinaPaymentChannelSigner`
+ * This is the EXACT `fields` array that the Swap's `MinaPaymentChannelSigner`
  * passes to `mina-signer`'s `signFields(...)`, and that the sender-side
  * `verifyMinaSignature` re-derives and passes to `verifyFields(...)`. Keeping
- * the derivation here (shared across `@toon-protocol/mill`, `@toon-protocol/sdk`,
+ * the derivation here (shared across `@toon-protocol/swap`, `@toon-protocol/sdk`,
  * and `@toon-protocol/client`) prevents signer/verifier drift — mirroring the
  * EVM/Solana hash helpers above.
  *
- * NOTE: this is the Mill↔sender wire contract (a Schnorr signature over four
+ * NOTE: this is the Swap↔sender wire contract (a Schnorr signature over four
  * field elements), NOT the connector's on-chain `MinaPaymentChannelSDK`
  * Poseidon-commitment proof shape. The two are distinct; see
  * `packages/sdk/src/settlement/mina.ts` for the relationship + the
  * remaining on-chain-settlement gap.
  *
- * @stable — Mill signer and SDK verifier depend on the exact byte layout.
+ * @stable — Swap signer and SDK verifier depend on the exact byte layout.
  */
 export function balanceProofFieldsMina(
   channelId: string,

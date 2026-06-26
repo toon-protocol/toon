@@ -43,7 +43,7 @@ import type { NostrEvent, UnsignedEvent } from 'nostr-tools/pure';
 let senderSecretKey: Uint8Array;
 let senderPubkey: string;
 
-/** Recipient keypair (Bob — the Mill). */
+/** Recipient keypair (Bob — the Swap). */
 let recipientSecretKey: Uint8Array;
 let recipientPubkey: string;
 
@@ -356,7 +356,7 @@ describe('Timestamp randomization — T-016', () => {
 describe('wrapSwapPacketToToon() / unwrapSwapPacketFromToon() — AC-3 / AC-4', () => {
   it('T-014: TOON binary roundtrip — wrap to ILP PREPARE, extract, unwrap recovers rumor', () => {
     const rumor = createTestRumor();
-    const destination = 'g.toon.mill.swap';
+    const destination = 'g.toon.swap.swap';
     const amount = 5000000n;
 
     const { ilpPrepare, ephemeralPubkey } = wrapSwapPacketToToon({
@@ -780,13 +780,13 @@ describe('wrapSwapPacketToToon() — expiresAt parameter', () => {
       rumor,
       senderSecretKey,
       recipientPubkey,
-      destination: 'g.toon.mill.swap',
+      destination: 'g.toon.swap.swap',
       amount: 1000n,
       expiresAt: futureDate,
     });
 
     expect(ilpPrepare).toBeDefined();
-    expect(ilpPrepare.destination).toBe('g.toon.mill.swap');
+    expect(ilpPrepare.destination).toBe('g.toon.swap.swap');
     expect(ephemeralPubkey).toHaveLength(64);
 
     // Verify the data still roundtrips
@@ -873,7 +873,7 @@ describe('Story 12.9 AC-15 — chain-recipient tag round-trip', () => {
       rumor,
       senderSecretKey,
       recipientPubkey,
-      destination: 'g.toon.mill.12_9',
+      destination: 'g.toon.swap.12_9',
       amount: 1_000_000n,
     });
     const toonData = new Uint8Array(Buffer.from(ilpPrepare.data, 'base64'));

@@ -27,7 +27,7 @@ import {
   hexToBytes,
 } from './hashes.js';
 import { loadMinaSignerClient } from './mina.js';
-import type { MillSignerConfig } from './types.js';
+import type { SwapSignerConfig } from './types.js';
 
 const EVM_PAIR: SwapPair = {
   from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
@@ -67,17 +67,17 @@ function deriveEvmAddress(privateKey: Uint8Array): string {
   return '0x' + bytesToHex(addrHash.slice(-20)).toLowerCase();
 }
 
-const MILL_PK = new Uint8Array(32);
-MILL_PK[31] = 7;
-const MILL_ADDR = deriveEvmAddress(MILL_PK);
+const SWAP_PK = new Uint8Array(32);
+SWAP_PK[31] = 7;
+const SWAP_ADDR = deriveEvmAddress(SWAP_PK);
 const CHANNEL_A = '0x' + 'aa'.repeat(32);
 const CHANNEL_B = '0x' + 'bb'.repeat(32);
 const RECIPIENT = '0x' + 'cc'.repeat(20);
 const CONTRACT = '0x' + 'dd'.repeat(20);
 
-function makeSignerCfg(): MillSignerConfig {
+function makeSignerCfg(): SwapSignerConfig {
   return {
-    address: MILL_ADDR,
+    address: SWAP_ADDR,
     contractAddress: CONTRACT,
     chainId: 8453,
   };
@@ -89,13 +89,13 @@ function makeClaim(params: {
   cumulativeAmount: bigint;
   nonce: bigint;
   recipient?: string;
-  millSignerAddress?: string;
+  swapSignerAddress?: string;
   privateKey?: Uint8Array;
   pair?: SwapPair;
   tamperSig?: boolean;
 }): AccumulatedClaim {
   const recipient = params.recipient ?? RECIPIENT;
-  const pk = params.privateKey ?? MILL_PK;
+  const pk = params.privateKey ?? SWAP_PK;
   const sig = signBalanceProofEvm(
     pk,
     params.channelId,
@@ -109,14 +109,14 @@ function makeClaim(params: {
     sourceAmount: 1_000_000n,
     targetAmount: params.cumulativeAmount,
     claimBytes: sig,
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: params.pair ?? EVM_PAIR,
     receivedAt: Date.now(),
     channelId: params.channelId,
     nonce: params.nonce.toString(),
     cumulativeAmount: params.cumulativeAmount.toString(),
     recipient,
-    millSignerAddress: params.millSignerAddress ?? MILL_ADDR,
+    swapSignerAddress: params.swapSignerAddress ?? SWAP_ADDR,
   };
 }
 
@@ -137,7 +137,7 @@ describe('buildSettlementTx validation (AC-4)', () => {
       sourceAmount: 1n,
       targetAmount: 1n,
       claimBytes: new Uint8Array(65),
-      millEphemeralPubkey: '0'.repeat(64),
+      swapEphemeralPubkey: '0'.repeat(64),
       pair: EVM_PAIR,
       receivedAt: 0,
     };
@@ -384,7 +384,7 @@ describe('buildSettlementTx grouping + winner selection (AC-5, AC-8, T-048)', ()
     expect(res.bundles.length).toBe(1);
   });
 
-  it('[P0] throws MILL_SIGNER_MISMATCH when claims in same channel disagree on millSignerAddress', () => {
+  it('[P0] throws SWAP_SIGNER_MISMATCH when claims in same channel disagree on swapSignerAddress', () => {
     const claims = [
       makeClaim({
         packetIndex: 0,
@@ -397,7 +397,7 @@ describe('buildSettlementTx grouping + winner selection (AC-5, AC-8, T-048)', ()
         channelId: CHANNEL_A,
         cumulativeAmount: 200n,
         nonce: 2n,
-        millSignerAddress: '0x' + 'ee'.repeat(20),
+        swapSignerAddress: '0x' + 'ee'.repeat(20),
       }),
     ];
     try {
@@ -409,7 +409,7 @@ describe('buildSettlementTx grouping + winner selection (AC-5, AC-8, T-048)', ()
       });
       throw new Error('should have thrown');
     } catch (err) {
-      expect((err as SettlementTxError).code).toBe('MILL_SIGNER_MISMATCH');
+      expect((err as SettlementTxError).code).toBe('SWAP_SIGNER_MISMATCH');
     }
   });
 
@@ -482,14 +482,14 @@ describe('buildSettlementTx grouping + winner selection (AC-5, AC-8, T-048)', ()
       sourceAmount: 1_000_000n,
       targetAmount: 777n,
       claimBytes: solSig,
-      millEphemeralPubkey: '0'.repeat(64),
+      swapEphemeralPubkey: '0'.repeat(64),
       pair: solPair,
       receivedAt: Date.now(),
       channelId: solChannelId,
       nonce: '1',
       cumulativeAmount: '777',
       recipient: solRecipient,
-      millSignerAddress: solSignerAddr,
+      swapSignerAddress: solSignerAddr,
     };
 
     const res = buildSettlementTx({
@@ -578,14 +578,14 @@ describe('verifyAccumulatedClaim (AC-10)', () => {
       sourceAmount: 1n,
       targetAmount: 250n,
       claimBytes: sig,
-      millEphemeralPubkey: '0'.repeat(64),
+      swapEphemeralPubkey: '0'.repeat(64),
       pair,
       receivedAt: 0,
       channelId,
       nonce: '3',
       cumulativeAmount: '250',
       recipient,
-      millSignerAddress: solSignerAddr,
+      swapSignerAddress: solSignerAddr,
     };
     const res = verifyAccumulatedClaim(claim, {
       address: solSignerAddr,
@@ -605,14 +605,14 @@ describe('verifyAccumulatedClaim (AC-10)', () => {
       sourceAmount: 1n,
       targetAmount: 1n,
       claimBytes: new Uint8Array(64),
-      millEphemeralPubkey: '0'.repeat(64),
+      swapEphemeralPubkey: '0'.repeat(64),
       pair,
       receivedAt: 0,
       channelId: 'mina-channel',
       nonce: '1',
       cumulativeAmount: '1',
       recipient: 'B62qmina',
-      millSignerAddress: 'B62qmina',
+      swapSignerAddress: 'B62qmina',
     };
     const res = verifyAccumulatedClaim(claim, { address: 'B62qmina' });
     expect(res.valid).toBe(false);
@@ -688,14 +688,14 @@ function makeMinaClaim(opts?: {
     sourceAmount: 1_000_000n,
     targetAmount: 500n,
     claimBytes: new TextEncoder().encode(sigStr),
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: MINA_PAIR,
     receivedAt: Date.now(),
     channelId,
     nonce,
     cumulativeAmount,
     recipient,
-    millSignerAddress: keys.publicKey,
+    swapSignerAddress: keys.publicKey,
   };
   return { claim, signerAddress: keys.publicKey };
 }
@@ -767,14 +767,14 @@ describe.skipIf(!hasMinaSigner)(
           sourceAmount: 1_000_000n,
           targetAmount: BigInt(n * 100),
           claimBytes: new TextEncoder().encode(sigStr),
-          millEphemeralPubkey: '0'.repeat(64),
+          swapEphemeralPubkey: '0'.repeat(64),
           pair: MINA_PAIR,
           receivedAt: Date.now(),
           channelId,
           nonce: String(n),
           cumulativeAmount: String(n * 100),
           recipient,
-          millSignerAddress: keys.publicKey,
+          swapSignerAddress: keys.publicKey,
         } satisfies AccumulatedClaim;
       });
       const res = buildSettlementTx({

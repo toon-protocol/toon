@@ -27,7 +27,7 @@ describe('hexToMinaBase58PrivateKey', () => {
 describe('deriveMinaPublicKeyBase58', () => {
   it('returns null without mina-signer, or a B62 address when the peer dep is present', async () => {
     // mina-signer is an OPTIONAL peer dep: absent in most CI/dev installs
-    // (→ null), present in the mill E2E image (→ real B62). Assert both shapes
+    // (→ null), present in the swap E2E image (→ real B62). Assert both shapes
     // so the test is robust either way and never throws.
     const pub = await deriveMinaPublicKeyBase58(HEX_SCALAR);
     expect(pub === null || pub.startsWith('B62')).toBe(true);

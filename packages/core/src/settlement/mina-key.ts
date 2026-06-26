@@ -1,13 +1,13 @@
 /**
  * Mina private-key format conversion.
  *
- * `deriveFullIdentity()` / `deriveMillKeys()` emit a Mina Pallas scalar as a
+ * `deriveFullIdentity()` / `deriveSwapKeys()` emit a Mina Pallas scalar as a
  * big-endian hex string, but `mina-signer`'s `signFields`/`derivePublicKey`
  * require the Mina base58check (`EK…`) private-key format. This helper bridges
  * the two so a hex-derived Mina key produces signatures verifiable by the
  * sender-side `verifyMinaSignature`.
  *
- * Mirrors `hexToMinaBase58PrivateKey` in `packages/mill/src/payment-channel-signer.ts`
+ * Mirrors `hexToMinaBase58PrivateKey` in `packages/swap/src/payment-channel-signer.ts`
  * (same fixed Mina base58check wire standard — version byte `0x5a`, non-zero
  * tag `0x01`, little-endian scalar, double-sha256 checksum).
  *
@@ -55,11 +55,11 @@ export function hexToMinaBase58PrivateKey(privateKey: string): string {
  * Derive the Mina base58 (`B62…`) public key for a private-key scalar, using
  * the optional `mina-signer` peer dep.
  *
- * `deriveFullIdentity()` / `deriveMillKeys()` emit only a keccak **hex
+ * `deriveFullIdentity()` / `deriveSwapKeys()` emit only a keccak **hex
  * placeholder** for the Mina public key — they deliberately avoid pulling
  * Pallas curve math into derivation. That placeholder is unfundable and is
  * rejected by Mina GraphQL balance queries, so wallet views that display it
- * (e.g. a mill node's `/wallet/balances` Mina leg) show an unusable hex
+ * (e.g. a swap node's `/wallet/balances` Mina leg) show an unusable hex
  * string. This resolves the real, fundable `B62…` address when `mina-signer`
  * is installed.
  *

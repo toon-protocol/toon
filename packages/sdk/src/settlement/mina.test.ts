@@ -3,7 +3,7 @@
  * (`verifyMinaSignature`) + settlement-bundle construction
  * (`buildMinaSettlementTx`).
  *
- * These tests exercise the EXACT Mill↔sender wire contract: the Mill's
+ * These tests exercise the EXACT Swap↔sender wire contract: the Swap's
  * `MinaPaymentChannelSigner` signs `balanceProofFieldsMina(...)` via
  * `mina-signer`'s `signFields` and emits the base58 signature string as the
  * claim's `claimBytes` (UTF-8). We reproduce that signing here with the real
@@ -22,7 +22,7 @@ import {
   loadMinaSignerClient,
   type MinaSignerClientLike,
 } from './mina.js';
-import type { MillSignerConfig } from './types.js';
+import type { SwapSignerConfig } from './types.js';
 
 const PAIR: SwapPair = {
   from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
@@ -41,7 +41,7 @@ interface MinaSignerFullClient extends MinaSignerClientLike {
 
 // `mina-signer` is an OPTIONAL peer dep. When it is absent (the default in
 // CI, where peer deps are not installed) these round-trip tests are skipped —
-// mirroring the Mill's `payment-channel-signer.test.ts` gating. The core
+// mirroring the Swap's `payment-channel-signer.test.ts` gating. The core
 // behaviour (verifier dispatch, rejection without a client) is covered by
 // `build-settlement-tx.test.ts` without the peer dep.
 const initialClient = (await loadMinaSignerClient()) as
@@ -57,10 +57,10 @@ beforeAll(() => {
 });
 
 /**
- * Reproduce the Mill's signing path: sign the shared field-element message and
+ * Reproduce the Swap's signing path: sign the shared field-element message and
  * emit the base58 signature string as UTF-8 claimBytes.
  */
-function signMillClaim(
+function signSwapClaim(
   privateKey: string,
   channelId: string,
   cumulativeAmount: bigint,
@@ -100,7 +100,7 @@ function makeSignedClaim(opts?: {
   const cumulativeAmount = opts?.cumulativeAmount ?? '500';
   const nonce = opts?.nonce ?? '1';
 
-  const claimBytes = signMillClaim(
+  const claimBytes = signSwapClaim(
     keys.privateKey,
     channelId,
     BigInt(cumulativeAmount),
@@ -113,20 +113,20 @@ function makeSignedClaim(opts?: {
     sourceAmount: 1_000_000n,
     targetAmount: 500n,
     claimBytes,
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: PAIR,
     receivedAt: Date.now(),
     channelId,
     nonce,
     cumulativeAmount,
     recipient,
-    millSignerAddress: keys.publicKey,
+    swapSignerAddress: keys.publicKey,
   };
   return { claim, signerAddress: keys.publicKey };
 }
 
 describe.skipIf(!hasMinaSigner)('verifyMinaSignature (Story 12.8)', () => {
-  it('[P0] returns true for a valid Mill-format signature (round-trip)', () => {
+  it('[P0] returns true for a valid Swap-format signature (round-trip)', () => {
     const { claim, signerAddress } = makeSignedClaim();
     expect(verifyMinaSignature(claim, signerAddress, client)).toBe(true);
   });
@@ -202,7 +202,7 @@ describe.skipIf(!hasMinaSigner)('verifyMinaSignature (Story 12.8)', () => {
 describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
   it('[P0] bundle carries chain/channelId/cumulative/nonce/recipient + proof bytes', () => {
     const { claim, signerAddress } = makeSignedClaim();
-    const signer: MillSignerConfig = { address: signerAddress };
+    const signer: SwapSignerConfig = { address: signerAddress };
     const bundle = buildMinaSettlementTx(claim, signer, claim.recipient!, 0, 1);
     expect(bundle.chain).toBe('mina:mainnet');
     expect(bundle.chainKind).toBe('mina');
@@ -210,7 +210,7 @@ describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
     expect(bundle.cumulativeAmount).toBe('500');
     expect(bundle.nonce).toBe('1');
     expect(bundle.recipient).toBe(claim.recipient);
-    expect(bundle.millSignerAddress).toBe(signerAddress);
+    expect(bundle.swapSignerAddress).toBe(signerAddress);
     expect(bundle.sourceChain).toBe('evm:base:8453');
     expect(bundle.sourceAssetCode).toBe('USDC');
     // The envelope re-emits the verified balance-proof signature verbatim.
@@ -222,7 +222,7 @@ describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
   it('[P0] throws MISSING_SETTLEMENT_METADATA when settlement fields are absent', () => {
     const { claim, signerAddress } = makeSignedClaim();
     const incomplete: AccumulatedClaim = { ...claim, nonce: undefined };
-    const signer: MillSignerConfig = { address: signerAddress };
+    const signer: SwapSignerConfig = { address: signerAddress };
     try {
       buildMinaSettlementTx(incomplete, signer, claim.recipient!, 0, 1);
       throw new Error('should have thrown');
@@ -236,7 +236,7 @@ describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
 
   it('[P0] throws INVALID_INPUT when signer address is empty', () => {
     const { claim } = makeSignedClaim();
-    const bad: MillSignerConfig = { address: '' };
+    const bad: SwapSignerConfig = { address: '' };
     expect(() =>
       buildMinaSettlementTx(claim, bad, claim.recipient!, 0, 1)
     ).toThrow(/address/);
@@ -245,7 +245,7 @@ describe.skipIf(!hasMinaSigner)('buildMinaSettlementTx (Story 12.8)', () => {
   it('[P0] throws INVALID_SIGNATURE_LENGTH on empty claimBytes', () => {
     const { claim, signerAddress } = makeSignedClaim();
     const empty: AccumulatedClaim = { ...claim, claimBytes: new Uint8Array(0) };
-    const signer: MillSignerConfig = { address: signerAddress };
+    const signer: SwapSignerConfig = { address: signerAddress };
     expect(() =>
       buildMinaSettlementTx(empty, signer, claim.recipient!, 0, 1)
     ).toThrow(SettlementTxError);

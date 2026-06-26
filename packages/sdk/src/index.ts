@@ -178,7 +178,7 @@ export type {
 } from './stream-swap.js';
 
 // Internal testing surface (NOT a stable public API). Exposed so cross-package
-// tests in `packages/mill` can drive helpers (e.g. `buildSwapRumor`) without
+// tests in `packages/swap` can drive helpers (e.g. `buildSwapRumor`) without
 // reaching across package boundaries via relative `../../sdk/src/*.js` paths
 // (which vitest cannot resolve cross-package). Underscore-prefixed name and
 // the `__streamSwapTesting` alias are intentional — do not import in product
@@ -206,7 +206,7 @@ export type {
   SettlementBundle,
   BuildSettlementTxParams,
   BuildSettlementTxResult,
-  MillSignerConfig,
+  SwapSignerConfig,
   MinaSignerClientLike,
 } from './settlement/index.js';
 

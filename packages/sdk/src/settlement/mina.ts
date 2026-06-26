@@ -4,9 +4,9 @@
  *
  * ## What is implemented (and unit-tested)
  *
- * - {@link verifyMinaSignature}: verifies the Mill's off-chain balance-proof
+ * - {@link verifyMinaSignature}: verifies the Swap's off-chain balance-proof
  *   signature using `mina-signer` (`verifyFields`). This is the EXACT inverse
- *   of the Mill's {@link MinaPaymentChannelSigner} (`packages/mill/src/payment-channel-signer.ts`),
+ *   of the Swap's {@link MinaPaymentChannelSigner} (`packages/swap/src/payment-channel-signer.ts`),
  *   which signs `balanceProofFieldsMina(channelId, cumulativeAmount, nonce, recipient)`
  *   via `mina-signer`'s `signFields` and emits the base58 signature string as
  *   the claim's `claimBytes` (UTF-8). The field-element derivation lives in
@@ -32,10 +32,10 @@
  * generate the proof + broadcast. See the on-chain settlement note below
  * (connector 3.8.1 wires the dual-party claim path — connector#84).
  *
- * Note also: the Mill↔sender wire proof here (a Schnorr signature over four
+ * Note also: the Swap↔sender wire proof here (a Schnorr signature over four
  * field elements) is a DIFFERENT object than the connector's on-chain
  * `MinaPaymentChannelSDK` Poseidon-commitment proof shape
- * (`{ commitment, signature, nonce }`). The verifier matches the Mill's
+ * (`{ commitment, signature, nonce }`). The verifier matches the Swap's
  * actual emitted format (`MinaPaymentChannelSigner`), which is what a sender
  * receives on-wire.
  *
@@ -46,14 +46,14 @@
 import { SettlementTxError } from '../errors.js';
 import type { AccumulatedClaim } from '../stream-swap.js';
 import { balanceProofFieldsMina } from './hashes.js';
-import type { MillSignerConfig, SettlementBundle } from './types.js';
+import type { SwapSignerConfig, SettlementBundle } from './types.js';
 
 /**
- * Network id the Mill signs with (`MinaPaymentChannelSigner` uses
+ * Network id the Swap signs with (`MinaPaymentChannelSigner` uses
  * `network: 'mainnet'`). The signature itself is network-agnostic for the
  * `signFields`/`verifyFields` path — `mina-signer` only folds the network id
  * into message-string hashing, not pre-hashed field arrays — but we keep this
- * aligned with the Mill for clarity and future-proofing.
+ * aligned with the Swap for clarity and future-proofing.
  */
 const MINA_NETWORK = 'mainnet';
 
@@ -108,8 +108,8 @@ export async function loadMinaSignerClient(): Promise<
  * `AccumulatedClaim`.
  *
  * Re-derives the signed field-element message via {@link balanceProofFieldsMina}
- * (identical to the Mill signer), decodes the claim's `claimBytes` to the
- * base58 signature string the Mill emitted, and verifies it against
+ * (identical to the Swap signer), decodes the claim's `claimBytes` to the
+ * base58 signature string the Swap emitted, and verifies it against
  * `expectedSignerAddress` using a `mina-signer` `Client`.
  *
  * `client` MUST be a pre-loaded `mina-signer` `Client` (see
@@ -145,7 +145,7 @@ export function verifyMinaSignature(
     );
   }
 
-  // The Mill emits the `mina-signer` base58 signature string as UTF-8 bytes.
+  // The Swap emits the `mina-signer` base58 signature string as UTF-8 bytes.
   const signature = new TextDecoder().decode(claim.claimBytes);
 
   const fields = balanceProofFieldsMina(
@@ -188,7 +188,7 @@ export function verifyMinaSignature(
  *
  * Unlike the EVM/Solana builders (which produce a chain-native unsigned tx),
  * this builder produces a settlement ENVELOPE: it validates the winning
- * claim's settlement context and re-emits the Mill's verified balance-proof
+ * claim's settlement context and re-emits the Swap's verified balance-proof
  * signature bytes in `unsignedTxBytes`. The actual on-chain `claimFromChannel`
  * zkApp transaction (o1js proof generation) is the responsibility of a
  * Mina-capable settler — see the module docblock + the on-chain settlement note.
@@ -201,7 +201,7 @@ export function verifyMinaSignature(
  */
 export function buildMinaSettlementTx(
   winner: AccumulatedClaim,
-  signer: MillSignerConfig,
+  signer: SwapSignerConfig,
   recipient: string,
   selectedClaimIndex: number,
   claimsMerged: number
@@ -211,7 +211,7 @@ export function buildMinaSettlementTx(
     winner.cumulativeAmount === undefined ||
     winner.nonce === undefined ||
     winner.recipient === undefined ||
-    winner.millSignerAddress === undefined
+    winner.swapSignerAddress === undefined
   ) {
     throw new SettlementTxError(
       'MISSING_SETTLEMENT_METADATA',
@@ -221,7 +221,7 @@ export function buildMinaSettlementTx(
   if (!signer.address) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      `Mina MillSignerConfig.address is required for chain ${winner.pair.to.chain}`
+      `Mina SwapSignerConfig.address is required for chain ${winner.pair.to.chain}`
     );
   }
   if (winner.claimBytes.length === 0) {
@@ -243,7 +243,7 @@ export function buildMinaSettlementTx(
     cumulativeAmount: winner.cumulativeAmount,
     nonce: winner.nonce,
     recipient,
-    millSignerAddress: winner.millSignerAddress,
+    swapSignerAddress: winner.swapSignerAddress,
     unsignedTxBytes,
     claimsMerged,
     selectedClaimIndex,
