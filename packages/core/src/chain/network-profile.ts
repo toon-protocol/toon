@@ -7,17 +7,17 @@
  * to point at the project's dev chains — e.g. the Akash-hosted anvil + solana.)
  *
  * - the **apex** standalone connector (its `chainProviders` settlement array), and
- * - the **children** node containers (town/mill), via a small set of env vars the
+ * - the **children** node containers (relay/mill), via a small set of env vars the
  *   HS compose template interpolates (`EVM_CHAIN`, `EVM_RPC_URL`, `EVM_CHAIN_ID`,
  *   `EVM_USDC_ADDRESS`, `SOLANA_RPC_URL`, `SOLANA_USDC_MINT`).
  *
  * Design notes:
  * - **All tiers are public.** No tier resolves to a local chain (anvil/lightnet),
  *   so a node never points at an unreachable `localhost` RPC. This is what fixes
- *   the "JsonRpcProvider failed to detect network" boot-loop that left town nodes
+ *   the "JsonRpcProvider failed to detect network" boot-loop that left relay nodes
  *   permanently disconnected (an empty RPC fell back to the `anvil` preset whose
  *   `localhost:8545` does not exist in the HS network).
- * - **EVM = Base (primary) + Arbitrum.** The single-EVM town node uses Base; the
+ * - **EVM = Base (primary) + Arbitrum.** The single-EVM relay node uses Base; the
  *   apex connector and Mill can hold providers for both families.
  * - **Settlement status.** TOON's settlement contracts are deployed for the
  *   public **testnet/devnet** tiers (EVM Base Sepolia registry + TokenNetwork,
@@ -100,7 +100,7 @@ export interface NetworkFamilyStatus {
  * Only keys with real values are present (absent ⇒ compose `${VAR:-}` default).
  */
 export interface NetworkNodeEnv {
-  /** Primary EVM chain preset name → town `TOON_CHAIN` (`'none'` ⇒ relay-only). */
+  /** Primary EVM chain preset name → relay `TOON_CHAIN` (`'none'` ⇒ relay-only). */
   EVM_CHAIN?: string;
   EVM_RPC_URL?: string;
   EVM_CHAIN_ID?: string;
@@ -128,7 +128,7 @@ export interface NetworkProfile {
   status: NetworkFamilyStatus;
 }
 
-/** Sentinel for the town node meaning "no EVM settlement chain — run relay-only". */
+/** Sentinel for the relay node meaning "no EVM settlement chain — run relay-only". */
 export const RELAY_ONLY_CHAIN = 'none';
 
 /** Primary + secondary EVM presets per derivable tier (Base is primary). */
@@ -433,7 +433,7 @@ export function resolveClientNetwork(
 /**
  * Resolve the `custom` mode. Two operator paths:
  *   1. explicit `providers` (the chains editor / `chains add`) → used verbatim;
- *      the apex settles on them, the town node runs relay-only with their RPC.
+ *      the apex settles on them, the relay node runs relay-only with their RPC.
  *   2. URL-only (`endpoints` from `--evm-url`/`--sol-url`) → point the apex +
  *      nodes at the project's dev chains (chain-id 31338 `akash-anvil`, which is
  *      settlement-complete; Solana RPC + Mock-USDC, relay-only).
@@ -466,7 +466,7 @@ function resolveCustom(
     nodeEnv.EVM_CHAIN = RELAY_ONLY_CHAIN;
     if (evm.registryAddress) status.evm = 'configured';
   } else {
-    // No EVM in a custom config → town runs relay-only.
+    // No EVM in a custom config → relay runs relay-only.
     nodeEnv.EVM_CHAIN = RELAY_ONLY_CHAIN;
   }
 
@@ -503,9 +503,9 @@ function resolveCustomEndpoints(
   };
   const chainProviders: ChainProviderConfigEntry[] = [];
 
-  // EVM_CHAIN points the town node at the akash-anvil preset (chain-id 31338 +
+  // EVM_CHAIN points the relay node at the akash-anvil preset (chain-id 31338 +
   // deterministic TOON contract addresses); EVM_RPC_URL supplies the operator's
-  // URL, which the town overlays via TOON_RPC_URL.
+  // URL, which the relay overlays via TOON_RPC_URL.
   const nodeEnv: NetworkNodeEnv = {
     EVM_CHAIN: DEV_EVM_PRESET,
     EVM_CHAIN_ID: String(evm.chainId),
@@ -522,7 +522,7 @@ function resolveCustomEndpoints(
       );
     }
   } else {
-    // No URL → akash-anvil preset rpcUrl is '' → town runs relay-only.
+    // No URL → akash-anvil preset rpcUrl is '' → relay runs relay-only.
     nodeEnv.EVM_CHAIN = RELAY_ONLY_CHAIN;
   }
 

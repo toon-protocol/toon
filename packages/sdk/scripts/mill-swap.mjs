@@ -16,7 +16,7 @@ const MILL_PUBKEY =
   '7e05a33203ad3d164312239b0124d27fd670ee36560e72f6807dba0a0e33858a';
 const CHAIN_RECIPIENT = '2VVaZGFQQ4fFVnTM1AE6uCkADbgMfaBgAzLvJJ7Jsed5'; // Solana payout
 
-// Operator-provided pair (kind:10032 not on town relay yet — hard-coded per #197):
+// Operator-provided pair (kind:10032 not on relay yet — hard-coded per #197):
 // EVM USDC (evm:base:84532) → Solana USDC (solana:devnet) rate 1.0 min 1000 max 1e9
 const pair = {
   from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:84532' },
