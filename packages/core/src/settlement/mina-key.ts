@@ -59,7 +59,7 @@ export function hexToMinaBase58PrivateKey(privateKey: string): string {
  * placeholder** for the Mina public key — they deliberately avoid pulling
  * Pallas curve math into derivation. That placeholder is unfundable and is
  * rejected by Mina GraphQL balance queries, so wallet views that display it
- * (e.g. the townhouse `/wallet/balances` mill Mina leg) show an unusable hex
+ * (e.g. a mill node's `/wallet/balances` Mina leg) show an unusable hex
  * string. This resolves the real, fundable `B62…` address when `mina-signer`
  * is installed.
  *

@@ -1,6 +1,6 @@
 /**
  * DvmHealthResponse — canonical type for the DVM BLS health endpoint.
- * Exported from @toon-protocol/sdk so Townhouse and the entrypoint share
+ * Exported from @toon-protocol/sdk so the node and the entrypoint share
  * the same definition (mirrors MillHealthResponse from @toon-protocol/mill).
  */
 

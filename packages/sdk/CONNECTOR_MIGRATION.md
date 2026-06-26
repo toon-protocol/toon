@@ -51,7 +51,7 @@ contract canary.
 > zkApp account via a signed `AccountUpdate`, and `settle()` drains the custodied
 > balance to the participants (`balanceB`→participantB / the apex recipient,
 > `balanceA`→participantA / the depositor refund). Its compiled `PaymentChannel`
-> verification key is **byte-identical** to the zkApp the townhouse harness
+> verification key is **byte-identical** to the zkApp the TOON harness
 > deploys (VK hash
 > `21482326729342759163995140331524541410906862862696135294081643945442581537217`),
 > so connector-driven `claimFromChannel`/`settle` proofs verify against the
@@ -169,7 +169,7 @@ signatureA` because it expected a bare `{r, s}` signature object. On 3.9.9 the
 >
 > **`3.9.3` — Solana settle-executor channel-lookup fixed, a bug fix (not a
 > contract change):** with the claim verified + stored and settlement triggered
-> (the `settlementOptions.threshold` fix in townhouse #119), the settle executor
+> (the `settlementOptions.threshold` fix in toon-protocol/connector#119), the settle executor
 > looked up the on-chain external channel by an **EVM-derived `tokenId`**, which
 > never matched the **programId-keyed** Solana external channel. It therefore
 > treated the channel as absent and opened a **NEW** channel, and the resulting
@@ -212,7 +212,7 @@ transferredAmount, signature, signerPublicKey (base58), cluster? }`. The EVM
 > settlement is unaffected.
 > Connector `3.7.0+` additionally exposes `packetsLocallyDelivered` in
 > `getMetrics().peers[]` (toon-protocol/connector#73), consumed additively by
-> Townhouse's earnings aggregator (`eventsRelayed`); this is purely additive and
+> The node's earnings aggregator (`eventsRelayed`); this is purely additive and
 > does not change the documented shapes below.
 >
 > **`3.8.0` (Story 50.4 bump) — two runtime fixes, no consumed-surface change:**
@@ -309,22 +309,22 @@ interface PeerRegistrationRequest {
 | `ctx.accept()` return shape       | `{ fulfillment: ... }`             | `fulfillment` field removed from application API (changed in v2.2.0)                  | Drop `fulfillment` from accept-response handling; use `ctx.accept({ data })` |
 
 > **Where these bit us.** Story 22.1 cleaned up trivial config-API drift across
-> `dvm`, `mill`, `town`, and `townhouse` packages. Stories 22.2–22.4 unblocked
+> `dvm`, `mill`, `town`, and `toon` packages. Stories 22.2–22.4 unblocked
 > downstream E2E flows that depended on the new shape. This canary keeps that
 > regression from recurring on the next connector bump.
 
 ---
 
-## Townhouse-Side Contract
+## Consumer-Side Contract
 
-Townhouse does **not** import `@toon-protocol/connector` at runtime — it pulls the
+The TOON apex does **not** import `@toon-protocol/connector` at runtime — it pulls the
 connector **Docker image** (`ghcr.io/toon-protocol/connector:X.Y.Z`) and communicates
 across two seams the SDK canary cannot reach: the admin HTTP API and the
 container's config-file contract.
 
 ### Seam 1 — Admin HTTP API (`ConnectorAdminClient`)
 
-`packages/townhouse/src/connector/admin-client.ts` mirrors the connector's
+The consumer's `ConnectorAdminClient` mirrors the connector's
 served shapes verbatim — see `@toon-protocol/connector`
 `packages/connector/src/http/{types,admin-api}.ts` for the source of truth.
 
@@ -343,9 +343,9 @@ Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 | `getHealth()`          | `GET {healthCheckPort}/health`                                | `HealthStatus` — `{ status: 'healthy'\|'unhealthy'\|'starting'\|'degraded', uptime, peersConnected, totalPeers, timestamp, nodeId?, version? }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `getPeers()`           | `GET {adminApi.port}/admin/peers`                             | Wrapped envelope `{ nodeId, peerCount, connectedCount, peers: [{ id, connected, ilpAddresses, routeCount, settlement? }] }` — client returns the unwrapped `peers` array.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `getMetrics()`         | `GET {adminApi.port}/admin/metrics.json`                      | `AdminMetricsJsonResponse` — `{ uptimeSeconds, aggregate: { packetsForwarded, packetsRejected, bytesSent }, peers: [{ peerId, connected, packetsForwarded, packetsRejected, bytesSent, lastPacketAt }], timestamp }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. **Note:** `PacketLogEntry` does not carry an event `kind` field. Townhouse's `GET /api/nodes/:nodeId/jobs/recent` feature-detects `entry.kind`; if absent, packets are grouped under bucket `kind: 0` ("unattributed") and the canonical `byKind` is sourced from the DVM container's in-memory health counter instead. To enable per-kind attribution from the connector side, add `kind?: number` to `PacketLogEntry` (populated from the ILP packet's TOON-decoded event kind). |
+| `getPacketLog(filter)` | `GET {adminApi.port}/packets?ilpAddress=<>&since=<>&limit=<>` | `PacketLogEntry[]` — `[{ ts: number, ilpAddressFrom: string, ilpAddressTo: string, amount: string, result: 'fulfill'\|'reject'\|'timeout' }]`. Throws with `code='ConnectorEndpointNotFound'` on 404. **Note:** `PacketLogEntry` does not carry an event `kind` field. The apex's `GET /api/nodes/:nodeId/jobs/recent` feature-detects `entry.kind`; if absent, packets are grouped under bucket `kind: 0` ("unattributed") and the canonical `byKind` is sourced from the DVM container's in-memory health counter instead. To enable per-kind attribution from the connector side, add `kind?: number` to `PacketLogEntry` (populated from the ILP packet's TOON-decoded event kind). |
 
-> **`getEarnings()` (added story 47.1):** When the connector is started without `accountManager` / `claimReceiver` (i.e., without full EVM settlement config), this endpoint returns 503 with `{ error: 'Service Unavailable', message: 'Earnings subsystem not enabled (accountManager or claimReceiver missing)' }` — see connector source `admin-api.ts:1888-1896`. Townhouse's apex always wires both subsystems; 503 in production indicates connector misconfiguration. The wire-level `timestamp: string` is wrapped on the Townhouse side into `EarningsTimestamp { iso: string }` — the adapter lives in `ConnectorAdminClient.getEarnings()`.
+> **`getEarnings()` (added story 47.1):** When the connector is started without `accountManager` / `claimReceiver` (i.e., without full EVM settlement config), this endpoint returns 503 with `{ error: 'Service Unavailable', message: 'Earnings subsystem not enabled (accountManager or claimReceiver missing)' }` — see connector source `admin-api.ts:1888-1896`. The apex always wires both subsystems; 503 in production indicates connector misconfiguration. The wire-level `timestamp: string` is wrapped on the apex side into `EarningsTimestamp { iso: string }` — the adapter lives in `ConnectorAdminClient.getEarnings()`.
 
 > **Status of `getPacketLog` (added story 21.10):** The connector image at `DEFAULT_CONNECTOR_IMAGE` (ghcr.io/toon-protocol/connector:3.3.3) does **not** yet expose `GET /packets`. Until the connector exposes this endpoint, `GET /api/nodes/:type/packets/timeseries` returns 503 with `error: 'connector_endpoint_not_found'`. The contract canary asserts the path and shape so any future connector bump that adds it will also be validated. To unblock: add `GET /packets` to the connector's admin HTTP server and update this table.
 
@@ -353,14 +353,13 @@ Pass the appropriate base URL to `ConnectorAdminClient` for each call.
 
 The connector image reads a `config.yaml` mounted at `/app/config.yaml` to
 configure ports, peers, transport mode, and admin API. The standalone
-entrypoint does **not** consume runtime env vars for these values. Townhouse
-ships its config via the docker-compose mount (`docker-compose-townhouse.yml`)
-and the orchestrator's config writer.
+entrypoint does **not** consume runtime env vars for these values. The apex
+ships its config via the docker-compose mount and the orchestrator's config writer.
 
 `ConnectorConfigGenerator.toEnvVars()` exists for environments that
 embed the connector as a library (where env-var-driven config is honored).
 The fields it emits map 1:1 to YAML keys in `config.yaml` and are not the
-contract Townhouse-via-image relies on.
+contract the apex-via-image relies on.
 
 | Field                                  | Description                                                                     |
 | -------------------------------------- | ------------------------------------------------------------------------------- |
@@ -372,48 +371,36 @@ contract Townhouse-via-image relies on.
 
 ### Canary test files
 
-| File                                                                      | Tier                                                                                    | Runtime                |
-| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------- |
-| `packages/townhouse/src/connector/contract-canary.test.ts`                | Stub (no Docker), URL-bound `fetch` mocks — fails on path drift as well as shape drift. | <500 ms                |
-| `packages/townhouse/src/__integration__/connector-image-contract.test.ts` | Real container, all assertions routed through `ConnectorAdminClient`.                   | ~5 s after image cache |
+| File                                                                                               | Tier                                                                                    | Runtime                |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ---------------------- |
+| `packages/sdk/tests/integration/connector-contract.test.ts`                                       | Stub (no Docker), URL-bound `fetch` mocks — fails on path drift as well as shape drift. | <500 ms                |
+| `packages/sdk/tests/integration/connector-contract.multichain.test.ts`                            | Pure sign→verify round-trips for non-EVM claim envelopes.                               | <500 ms                |
 
 ---
 
-## Townhouse Migration Steps
+## Migration Steps
 
 When bumping the connector image tag:
 
 1. Compare versions side by side:
    `pnpm view @toon-protocol/connector dist-tags.latest` should match
-   `DEFAULT_CONNECTOR_IMAGE` in `packages/townhouse/src/constants.ts`.
-2. Update `DEFAULT_CONNECTOR_IMAGE`. The structural test
-   (`packages/townhouse/src/package-structure.test.ts`) fails if
-   `docker-compose-townhouse.yml` drifts out of sync — fix the literal there
-   too if the test flags it.
-3. Run the stub canary:
-   `pnpm --filter @toon-protocol/townhouse test contract-canary`
-4. Run the real-image canary:
-   `pnpm --filter @toon-protocol/townhouse test:canary`
-5. On failure, the connector source-of-truth has likely changed. Read
+   `DEFAULT_CONNECTOR_IMAGE` in the apex's constants file.
+2. Update `DEFAULT_CONNECTOR_IMAGE` and run the SDK stub canary:
+   `pnpm --filter @toon-protocol/sdk test:integration -- tests/integration/connector-contract.test.ts`
+3. On failure, the connector source-of-truth has likely changed. Read
    `@toon-protocol/connector` `packages/connector/src/http/{types,admin-api}.ts`
-   for the new shapes, update `packages/townhouse/src/connector/types.ts` and
-   `admin-client.ts` to match, and back-fill a row in the "Breaking Changes"
-   table above.
+   for the new shapes, update the consumer's `ConnectorAdminClient` types to
+   match, and back-fill a row in the "Breaking Changes" table above.
 
-### Townhouse client (story 47.1) — `getEarnings()` wraps `/admin/earnings.json`
+### Consumer client (story 47.1) — `getEarnings()` wraps `/admin/earnings.json`
 
 The `/admin/earnings.json` endpoint was added in **connector v3.2.0**; story 47.1 adds the
-Townhouse-side wrap (`ConnectorAdminClient.getEarnings(): Promise<EarningsResponse>`) targeting
+consumer-side wrap (`ConnectorAdminClient.getEarnings(): Promise<EarningsResponse>`) targeting
 the **v3.3.3+** floor in `DEFAULT_CONNECTOR_IMAGE`. If you are bumping to a connector version
 older than v3.2.0, the canary will fail on this endpoint.
-Verify:
-
-- `packages/townhouse/src/connector/types.ts` — 6 earnings interfaces (`AssetEarnings`,
-  `PeerEarnings`, `ConnectorFeeEntry`, `RecentClaim`, `EarningsTimestamp`, `EarningsResponse`)
-- `packages/townhouse/src/connector/admin-client.ts` — `getEarnings()` method
-- `packages/townhouse/src/connector/index.ts` — all 6 types re-exported
-- `packages/townhouse/src/connector/contract-canary.test.ts` — `getEarnings()` shape contract block
-- `packages/townhouse/src/__integration__/connector-image-contract.test.ts` — image canary assertion
+Verify the consumer's `ConnectorAdminClient` implements these 6 earnings interfaces:
+`AssetEarnings`, `PeerEarnings`, `ConnectorFeeEntry`, `RecentClaim`, `EarningsTimestamp`,
+`EarningsResponse`.
 
 ---
 
@@ -436,9 +423,8 @@ pnpm --filter @toon-protocol/sdk test:integration -- tests/integration/connector
 
 Expected runtime: <2 seconds. Hard ceiling: 60 seconds (per-test timeout).
 
-The Townhouse canary commands:
+The SDK canary command also covers the multichain path:
 
 ```bash
-pnpm --filter @toon-protocol/townhouse test contract-canary       # stub, <500ms
-pnpm --filter @toon-protocol/townhouse test:canary                # real image, ~5s
+pnpm --filter @toon-protocol/sdk test:integration -- tests/integration/connector-contract.multichain.test.ts
 ```

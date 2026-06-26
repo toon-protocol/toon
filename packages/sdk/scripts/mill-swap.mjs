@@ -11,7 +11,7 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { webcrypto } from 'node:crypto';
 
 const DAEMON = 'http://127.0.0.1:8787';
-const MILL_ILP = 'g.townhouse.mill';
+const MILL_ILP = 'g.proxy.mill';
 const MILL_PUBKEY =
   '7e05a33203ad3d164312239b0124d27fd670ee36560e72f6807dba0a0e33858a';
 const CHAIN_RECIPIENT = '2VVaZGFQQ4fFVnTM1AE6uCkADbgMfaBgAzLvJJ7Jsed5'; // Solana payout
