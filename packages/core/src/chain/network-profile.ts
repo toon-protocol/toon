@@ -1,5 +1,5 @@
 /**
- * Network-mode resolution for the Townhouse `network` flag.
+ * Network-mode resolution for the TOON connector `network` flag.
  *
  * A single operator-facing selector — `mainnet | testnet | devnet | custom` —
  * resolves a coherent multi-chain configuration that is consumed by BOTH:
