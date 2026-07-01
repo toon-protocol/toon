@@ -10,6 +10,14 @@ name: Release
 # policy can't be overridden per-repo. An App is a distinct actor, so its PRs are
 # exempt. If the App isn't installed the token step is skipped and we fall back to
 # GITHUB_TOKEN (publish still works; only the Release-PR step would be blocked).
+#
+# The Release PR's commits are also authored by the App bot (setupGitUser: false +
+# an explicit git identity below), NOT github-actions[bot]. Reason: the required
+# `build` check on the Release PR is a `pull_request` workflow, and runs attributed
+# to github-actions[bot] are gated by the org approval policy as `action_required`
+# (they never turn green, so the Release PR stays BLOCKED forever). Attributing the
+# commits to the App — a trusted installed integration — lets its CI run without the
+# manual-approval gate. Fall back to github-actions[bot] only if the App is absent.
 
 on:
   push:
@@ -32,9 +40,25 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
+      - name: Resolve App bot git identity
+        id: app-user
+        if: steps.app-token.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
+          echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Configure git identity for changeset commits
+        run: |
+          git config user.name "${{ steps.app-user.outputs.name || 'github-actions[bot]' }}"
+          git config user.email "${{ steps.app-user.outputs.email || 'github-actions[bot]@users.noreply.github.com' }}"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -55,6 +79,7 @@ jobs:
         with:
           version: pnpm changeset version
           publish: pnpm changeset publish
+          setupGitUser: false # use the App bot identity configured above, not github-actions[bot]
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
