@@ -210,13 +210,13 @@ export type {
   MinaSignerClientLike,
 } from './settlement/index.js';
 
-// DVM health response type (canonical shape for the DVM BLS /health endpoint)
+// Store health response type (canonical shape for the Store /health endpoint)
 export type {
-  DvmHealthResponse,
-  DvmJobsRecent,
-  DvmJobsByKindEntry,
-  DvmJobsByStatus,
-} from './dvm-health.js';
+  StoreHealthResponse,
+  StoreJobsRecent,
+  StoreJobsByKindEntry,
+  StoreJobsByStatus,
+} from './store-health.js';
 
 // Re-export types from core for convenience
 export type { SkillDescriptor } from '@toon-protocol/core';

@@ -1,31 +1,31 @@
 import { describe, it, expect } from 'vitest';
 import type {
-  DvmHealthResponse,
-  DvmJobsRecent,
-  DvmJobsByStatus,
-  DvmJobsByKindEntry,
-} from './dvm-health.js';
+  StoreHealthResponse,
+  StoreJobsRecent,
+  StoreJobsByStatus,
+  StoreJobsByKindEntry,
+} from './store-health.js';
 
-describe('DvmHealthResponse shape', () => {
-  const mockStatus: DvmJobsByStatus = {
+describe('StoreHealthResponse shape', () => {
+  const mockStatus: StoreJobsByStatus = {
     processing: 2,
     success: 10,
     error: 1,
     partial: 0,
   };
 
-  const mockByKind: DvmJobsByKindEntry[] = [
+  const mockByKind: StoreJobsByKindEntry[] = [
     { kind: 5094, count: 7 },
     { kind: 5250, count: 6 },
   ];
 
-  const mockJobsRecent: DvmJobsRecent = {
+  const mockJobsRecent: StoreJobsRecent = {
     total: 13,
     byKind: mockByKind,
     byStatus: mockStatus,
   };
 
-  const mockResponse: DvmHealthResponse = {
+  const mockResponse: StoreHealthResponse = {
     status: 'ok',
     version: '1.0.0',
     nodePubkey: 'a'.repeat(64),
@@ -72,7 +72,7 @@ describe('DvmHealthResponse shape', () => {
   });
 
   it('all status enum values are accepted', () => {
-    const statuses: DvmHealthResponse['status'][] = [
+    const statuses: StoreHealthResponse['status'][] = [
       'starting',
       'ok',
       'stopping',
@@ -80,7 +80,7 @@ describe('DvmHealthResponse shape', () => {
       'error',
     ];
     for (const s of statuses) {
-      const r: DvmHealthResponse = { ...mockResponse, status: s };
+      const r: StoreHealthResponse = { ...mockResponse, status: s };
       expect(r.status).toBe(s);
     }
   });

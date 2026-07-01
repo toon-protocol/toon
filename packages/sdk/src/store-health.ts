@@ -1,17 +1,17 @@
 /**
- * DvmHealthResponse — canonical type for the DVM BLS health endpoint.
+ * StoreHealthResponse — canonical type for the Store BLS health endpoint.
  * Exported from @toon-protocol/sdk so the node and the entrypoint share
  * the same definition (mirrors MillHealthResponse from @toon-protocol/mill).
  */
 
 /** Per-kind job count for jobsRecent.byKind */
-export interface DvmJobsByKindEntry {
+export interface StoreJobsByKindEntry {
   kind: number;
   count: number;
 }
 
 /** Per-status job counts for the sliding window */
-export interface DvmJobsByStatus {
+export interface StoreJobsByStatus {
   processing: number;
   success: number;
   error: number;
@@ -19,14 +19,14 @@ export interface DvmJobsByStatus {
 }
 
 /** Windowed recent-jobs telemetry (default window: 5 min) */
-export interface DvmJobsRecent {
+export interface StoreJobsRecent {
   total: number;
-  byKind: DvmJobsByKindEntry[];
-  byStatus: DvmJobsByStatus;
+  byKind: StoreJobsByKindEntry[];
+  byStatus: StoreJobsByStatus;
 }
 
-/** Response shape for GET /health on the DVM BLS server (port 3400). */
-export interface DvmHealthResponse {
+/** Response shape for GET /health on the Store BLS server (port 3400). */
+export interface StoreHealthResponse {
   status: 'starting' | 'ok' | 'stopping' | 'stopped' | 'error';
   version: string;
   nodePubkey: string;
@@ -36,5 +36,5 @@ export interface DvmHealthResponse {
   /** Per-kind pricing in string-encoded bigint (e.g. { "5094": "10", "5250": "10000" }). */
   kindPricing: Record<string, string>;
   basePricePerByte: string;
-  jobsRecent: DvmJobsRecent;
+  jobsRecent: StoreJobsRecent;
 }
