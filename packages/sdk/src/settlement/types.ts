@@ -31,8 +31,8 @@ export interface SettlementBundle {
   nonce: string;
   /** Recipient address (the sender's target-asset address — the one that will receive funds). */
   recipient: string;
-  /** Mill's on-chain signer address (expected signer of the balance-proof signature). */
-  millSignerAddress: string;
+  /** Swap's on-chain signer address (expected signer of the balance-proof signature). */
+  swapSignerAddress: string;
   /**
    * Raw UNSIGNED transaction bytes ready for the caller to sign (or for a
    * Chain Bridge DVM to gas-sponsor + sign). EVM: RLP-encoded tx with
@@ -65,13 +65,13 @@ export interface SettlementBundle {
 }
 
 /**
- * Per-chain Mill signer configuration.
+ * Per-chain Swap signer configuration.
  *
  * @since 12.6
  */
-export interface MillSignerConfig {
+export interface SwapSignerConfig {
   /**
-   * Expected on-chain signer address for the Mill. EVM: 0x + 40 lowercase
+   * Expected on-chain signer address for the Swap. EVM: 0x + 40 lowercase
    * hex chars. Solana: base58-encoded 32-byte Ed25519 pubkey. Mina: base58 pubkey.
    */
   address: string;
@@ -98,8 +98,8 @@ export interface MillSignerConfig {
 export interface BuildSettlementTxParams {
   /** Claims to settle. Typically `streamSwapResult.claims`. MUST be non-empty. */
   claims: readonly AccumulatedClaim[];
-  /** Per-chain Mill signer configuration. Keyed by `claim.pair.to.chain`. */
-  signers: Record<string, MillSignerConfig>;
+  /** Per-chain Swap signer configuration. Keyed by `claim.pair.to.chain`. */
+  signers: Record<string, SwapSignerConfig>;
   /** Sender's target-asset address per chain. Keyed by `claim.pair.to.chain`. */
   recipients: Record<string, string>;
   /** When `true` (default), verify every claim's signature against `signers[chain].address`. */

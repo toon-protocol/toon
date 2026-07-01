@@ -14,7 +14,7 @@ import { SettlementTxError } from '../errors.js';
 import { base58Decode, base58Encode } from '../identity.js';
 import type { AccumulatedClaim } from '../stream-swap.js';
 import { balanceProofHashSolana, concatBytes } from './hashes.js';
-import type { MillSignerConfig, SettlementBundle } from './types.js';
+import type { SwapSignerConfig, SettlementBundle } from './types.js';
 
 /**
  * Verify a Solana Ed25519 balance-proof signature.
@@ -123,7 +123,7 @@ function bigintToBytes8LE(x: bigint): Uint8Array {
  */
 export function buildSolanaSettlementTx(
   winner: AccumulatedClaim,
-  signer: MillSignerConfig,
+  signer: SwapSignerConfig,
   recipient: string,
   selectedClaimIndex: number,
   claimsMerged: number
@@ -133,7 +133,7 @@ export function buildSolanaSettlementTx(
     winner.cumulativeAmount === undefined ||
     winner.nonce === undefined ||
     winner.recipient === undefined ||
-    winner.millSignerAddress === undefined
+    winner.swapSignerAddress === undefined
   ) {
     throw new SettlementTxError(
       'MISSING_SETTLEMENT_METADATA',
@@ -143,18 +143,18 @@ export function buildSolanaSettlementTx(
   if (!signer.programId) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      `Solana MillSignerConfig.programId is required for chain ${winner.pair.to.chain}`
+      `Solana SwapSignerConfig.programId is required for chain ${winner.pair.to.chain}`
     );
   }
 
   let programIdBytes: Uint8Array;
   let recipientBytes: Uint8Array;
-  let millBytes: Uint8Array;
+  let swapBytes: Uint8Array;
   let channelIdBytes: Uint8Array;
   try {
     programIdBytes = base58Decode(signer.programId);
     recipientBytes = base58Decode(recipient);
-    millBytes = base58Decode(winner.millSignerAddress);
+    swapBytes = base58Decode(winner.swapSignerAddress);
     channelIdBytes = base58Decode(winner.channelId);
   } catch (err) {
     throw new SettlementTxError(
@@ -175,10 +175,10 @@ export function buildSolanaSettlementTx(
       `Solana recipient must decode to 32 bytes, got ${recipientBytes.length}`
     );
   }
-  if (millBytes.length !== 32) {
+  if (swapBytes.length !== 32) {
     throw new SettlementTxError(
       'INVALID_INPUT',
-      `Solana millSignerAddress must decode to 32 bytes, got ${millBytes.length}`
+      `Solana swapSignerAddress must decode to 32 bytes, got ${swapBytes.length}`
     );
   }
   if (channelIdBytes.length !== 32) {
@@ -196,13 +196,13 @@ export function buildSolanaSettlementTx(
     winner.claimBytes
   );
 
-  // Accounts: [recipient (signer), mill, channel-state, system-program, programId]
+  // Accounts: [recipient (signer), swap, channel-state, system-program, programId]
   // We construct a minimal Message. For simplicity, use 4 accounts:
   //   [0] recipient (signer, writable)
-  //   [1] mill (writable)
+  //   [1] swap (writable)
   //   [2] channel-state (writable, derived — we approximate via channelIdBytes)
   //   [3] program (readonly)
-  const accounts = [recipientBytes, millBytes, channelIdBytes, programIdBytes];
+  const accounts = [recipientBytes, swapBytes, channelIdBytes, programIdBytes];
 
   // Message header: [numRequiredSignatures, numReadonlySigned, numReadonlyUnsigned]
   const header = new Uint8Array([1, 0, 1]); // 1 signer (recipient), 1 readonly unsigned (program)
@@ -215,7 +215,7 @@ export function buildSolanaSettlementTx(
   // Instruction: programIdIndex (u8) || accountsLen (compact-u16) ||
   //   accountIndices(u8 each) || dataLen (compact-u16) || data
   const programIdIndex = new Uint8Array([3]); // index of program in accounts
-  const instrAccountsLen = new Uint8Array([3]); // recipient, mill, channel-state
+  const instrAccountsLen = new Uint8Array([3]); // recipient, swap, channel-state
   const instrAccountIndices = new Uint8Array([0, 1, 2]);
   // Instruction data length as compact-u16 (assume <127)
   if (instructionData.length >= 0x80) {
@@ -250,7 +250,7 @@ export function buildSolanaSettlementTx(
     cumulativeAmount: winner.cumulativeAmount,
     nonce: winner.nonce,
     recipient,
-    millSignerAddress: winner.millSignerAddress,
+    swapSignerAddress: winner.swapSignerAddress,
     unsignedTxBytes,
     claimsMerged,
     selectedClaimIndex,

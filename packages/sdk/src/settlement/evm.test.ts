@@ -21,7 +21,7 @@ import {
   EVM_SETTLEMENT_FUNCTION_SELECTOR,
 } from './evm.js';
 import { balanceProofHashEvm, hexToBytes } from './hashes.js';
-import type { MillSignerConfig } from './types.js';
+import type { SwapSignerConfig } from './types.js';
 
 const PAIR: SwapPair = {
   from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
@@ -69,14 +69,14 @@ function makeClaim(
     sourceAmount: 1_000_000n,
     targetAmount: 500n,
     claimBytes: new Uint8Array(65),
-    millEphemeralPubkey: '0'.repeat(64),
+    swapEphemeralPubkey: '0'.repeat(64),
     pair: PAIR,
     receivedAt: Date.now(),
     channelId: '0x' + 'aa'.repeat(32),
     nonce: '1',
     cumulativeAmount: '500',
     recipient: '0x' + 'bb'.repeat(20),
-    millSignerAddress: '0x' + 'cc'.repeat(20),
+    swapSignerAddress: '0x' + 'cc'.repeat(20),
     ...overrides,
   };
 }
@@ -228,7 +228,7 @@ describe('verifyEvmClaimSignature (AC-7)', () => {
 });
 
 describe('buildEvmSettlementTx (AC-7, T-048)', () => {
-  const signer: MillSignerConfig = {
+  const signer: SwapSignerConfig = {
     address: '0x' + 'cc'.repeat(20),
     contractAddress: '0x' + 'dd'.repeat(20),
     chainId: 8453,
@@ -263,7 +263,7 @@ describe('buildEvmSettlementTx (AC-7, T-048)', () => {
     expect(bundle.cumulativeAmount).toBe('1000');
     expect(bundle.nonce).toBe('5');
     expect(bundle.recipient).toBe(recipient);
-    expect(bundle.millSignerAddress).toBe('0x' + 'cc'.repeat(20));
+    expect(bundle.swapSignerAddress).toBe('0x' + 'cc'.repeat(20));
     expect(bundle.claimsMerged).toBe(1);
     expect(bundle.selectedClaimIndex).toBe(0);
     expect(bundle.sourceChain).toBe('evm:base:8453');
@@ -347,7 +347,7 @@ describe('buildEvmSettlementTx (AC-7, T-048)', () => {
       nonce: '5',
     });
 
-    const bad: MillSignerConfig = { address: signer.address, chainId: 8453 };
+    const bad: SwapSignerConfig = { address: signer.address, chainId: 8453 };
     expect(() => buildEvmSettlementTx(claim, bad, recipient, 0, 1)).toThrow(
       /contractAddress/
     );
@@ -355,7 +355,7 @@ describe('buildEvmSettlementTx (AC-7, T-048)', () => {
 });
 
 describe('fillEvmSettlementTxGas (AC-7)', () => {
-  const signer: MillSignerConfig = {
+  const signer: SwapSignerConfig = {
     address: '0x' + 'cc'.repeat(20),
     contractAddress: '0x' + 'dd'.repeat(20),
     chainId: 8453,
@@ -426,7 +426,7 @@ describe('EVM_SETTLEMENT_FUNCTION_SELECTOR — pinned 4-byte keccak256 prefix', 
       cumulativeAmount: '1000',
       nonce: '5',
     });
-    const signerCfg: MillSignerConfig = {
+    const signerCfg: SwapSignerConfig = {
       address: '0x' + 'cc'.repeat(20),
       contractAddress: '0x' + 'dd'.repeat(20),
       chainId: 8453,

@@ -1,5 +1,5 @@
 /**
- * Mill Swap Handler (Story 12.3)
+ * Swap Handler (Story 12.3)
  *
  * `createSwapHandler()` factory produces a kind:1059 `Handler` that:
  *   1. Unwraps an incoming NIP-59 gift-wrapped ILP swap packet (via Story 12.2).
@@ -35,7 +35,7 @@ import { base58Decode } from './identity.js';
 
 /** Parameters passed to a {@link ClaimIssuer.issueClaim} call. */
 export interface IssueClaimParams {
-  /** Source-asset amount received by the Mill (ILP packet amount, source micro-units). */
+  /** Source-asset amount received by the Swap (ILP packet amount, source micro-units). */
   sourceAmount: bigint;
   /** Target-asset amount owed to the sender (post-rate-conversion, target micro-units). */
   targetAmount: bigint;
@@ -44,9 +44,9 @@ export interface IssueClaimParams {
   /**
    * The sender's real Nostr pubkey (extracted from the unwrapped seal).
    *
-   * Identity-layer key only: used by the Mill for inventory ledger keying and
+   * Identity-layer key only: used by the Swap for inventory ledger keying and
    * the sender→channel sticky binding (`channelState.reserve()` /
-   * `channelState.release()`). The Mill MUST NOT pass this to chain-layer
+   * `channelState.release()`). The Swap MUST NOT pass this to chain-layer
    * signers as the balance-proof `recipient` — use {@link chainRecipient}
    * for that (Story 12.9 D12-011).
    */
@@ -55,11 +55,11 @@ export interface IssueClaimParams {
    * The sender's chain-specific payout address for `pair.to.chain`
    * (Story 12.9 AC-10). Extracted and format-validated from the rumor's
    * `chain-recipient` tag by the swap handler. REQUIRED. This is the
-   * address the Mill's `PaymentChannelSigner` MUST use as the balance-proof
+   * address the Swap's `PaymentChannelSigner` MUST use as the balance-proof
    * `recipient` (e.g., 20-byte EVM address, 32-byte Solana Ed25519 pubkey).
    */
   chainRecipient: string;
-  /** The inner rumor (for optional Mill-side context; may be ignored by the issuer). */
+  /** The inner rumor (for optional Swap-side context; may be ignored by the issuer). */
   rumor: UnsignedEvent;
 }
 
@@ -73,10 +73,10 @@ export interface IssueClaimParams {
 export interface IssueClaimResult {
   /** Signed claim bytes ready for NIP-44 encryption (chain-specific format). */
   claim: Uint8Array;
-  /** Optional Mill-side claim ID for logging/tracing. */
+  /** Optional Swap-side claim ID for logging/tracing. */
   claimId?: string;
   // --- Story 12.6 settlement-context fields (additive, all optional for
-  // one-story-cycle backward compat; the Mill SHOULD emit all of them) ---
+  // one-story-cycle backward compat; the Swap SHOULD emit all of them) ---
   /** Channel identifier on the target chain. */
   channelId?: string;
   /** Balance-proof nonce (monotonically increasing per channel). */
@@ -85,8 +85,8 @@ export interface IssueClaimResult {
   cumulativeAmount?: bigint;
   /** Recipient address (the sender's target-asset address). */
   recipient?: string;
-  /** Mill's on-chain signer address. */
-  millSignerAddress?: string;
+  /** Swap's on-chain signer address. */
+  swapSignerAddress?: string;
 }
 
 /**
@@ -96,7 +96,7 @@ export interface IssueClaimResult {
  * The issuer owns inventory accounting and signing-key material. The handler
  * relies on `issueClaim()` being atomic with inventory debit: if the call
  * resolves, the target-asset amount MUST be considered committed from the
- * Mill's reserves. If the call throws, no inventory change SHOULD have occurred.
+ * Swap's reserves. If the call throws, no inventory change SHOULD have occurred.
  */
 export interface ClaimIssuer {
   /**
@@ -144,9 +144,9 @@ export interface SeenPacketIdsLike {
 
 /** Configuration for {@link createSwapHandler}. */
 export interface CreateSwapHandlerConfig {
-  /** Mill's secp256k1 secret key for unwrapping gift-wrapped packets (32 bytes). */
+  /** Swap's secp256k1 secret key for unwrapping gift-wrapped packets (32 bytes). */
   recipientSecretKey: Uint8Array;
-  /** Swap pairs this Mill currently supports. */
+  /** Swap pairs this Swap currently supports. */
   swapPairs: SwapPair[];
   /** Claim issuer delegate (Story 12.4 plugs in the multi-chain implementation). */
   claimIssuer: ClaimIssuer;
@@ -210,11 +210,11 @@ export const SWAP_HANDLER_REJECT_CODES = {
   UNREACHABLE: 'F02',
   /** Duplicate packet — `seenPacketIds` replay hit. */
   DUPLICATE_PACKET: 'F04',
-  /** Requested swap pair is not advertised by this Mill. */
+  /** Requested swap pair is not advertised by this Swap. */
   UNSUPPORTED_PAIR: 'F06',
   /** Transient internal failure — signing, rate provider, or unexpected. */
   INTERNAL: 'T00',
-  /** Insufficient Mill inventory for the requested amount. */
+  /** Insufficient Swap inventory for the requested amount. */
   INSUFFICIENT_LIQUIDITY: 'T04',
 } as const;
 
@@ -340,7 +340,7 @@ const RATE_REGEX = /^(0|[1-9]\d*)(\.\d+)?$/;
  * Uses BigInt arithmetic throughout — never coerces to `Number` — to preserve
  * 18-decimal EVM precision (Epic 11 retro MAX_SAFE_INTEGER guard).
  *
- * Rounds toward zero (integer division), which economically favors the Mill
+ * Rounds toward zero (integer division), which economically favors the Swap
  * (standard market-maker convention).
  *
  * @throws {SwapHandlerError} If rate format is invalid, rate is zero, or
@@ -512,7 +512,7 @@ const NOOP_LOGGER: SwapHandlerLogger = {
 // ---------------------------------------------------------------------------
 
 /**
- * Construct a kind:1059 Mill inbound-swap handler.
+ * Construct a kind:1059 Swap inbound-swap handler.
  *
  * The returned `Handler` is a pure closure over `config`; two calls with the
  * same config yield two independent-but-equivalent handlers. Register via
@@ -711,7 +711,7 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     let settlementNonce: bigint | undefined;
     let settlementCumulative: bigint | undefined;
     let settlementRecipient: string | undefined;
-    let settlementMillSigner: string | undefined;
+    let settlementSwapSigner: string | undefined;
     try {
       const result = await config.claimIssuer.issueClaim({
         sourceAmount: ctx.amount,
@@ -727,7 +727,7 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       settlementNonce = result.nonce;
       settlementCumulative = result.cumulativeAmount;
       settlementRecipient = result.recipient;
-      settlementMillSigner = result.millSignerAddress;
+      settlementSwapSigner = result.swapSignerAddress;
     } catch (err) {
       const code = (err as { code?: unknown })?.code;
       const message = err instanceof Error ? err.message : String(err);
@@ -773,7 +773,7 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       ephemeralPubkey,
     });
 
-    // Story 12.5: emit the Mill-computed `targetAmount` (decimal string) so
+    // Story 12.5: emit the Swap-computed `targetAmount` (decimal string) so
     // the sender can run an end-to-end rate-deviation check without having to
     // parse the opaque chain-specific `claimBytes`. This is additive and
     // backward compatible — legacy senders that ignore the field get the
@@ -785,7 +785,7 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     };
     if (claimId !== undefined) metadata['claimId'] = claimId;
     // Story 12.6: thread settlement-context fields through when the claim
-    // issuer emits them. All-or-nothing: a Mill that supplies settlement
+    // issuer emits them. All-or-nothing: a Swap that supplies settlement
     // fields MUST supply all five, since the sender's FULFILL decoder
     // enforces all-present-or-all-absent.
     if (
@@ -793,13 +793,13 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       settlementNonce !== undefined &&
       settlementCumulative !== undefined &&
       settlementRecipient !== undefined &&
-      settlementMillSigner !== undefined
+      settlementSwapSigner !== undefined
     ) {
       metadata['channelId'] = settlementChannelId;
       metadata['nonce'] = settlementNonce.toString();
       metadata['cumulativeAmount'] = settlementCumulative.toString();
       metadata['recipient'] = settlementRecipient;
-      metadata['millSignerAddress'] = settlementMillSigner;
+      metadata['swapSignerAddress'] = settlementSwapSigner;
     }
 
     return ctx.accept(metadata);

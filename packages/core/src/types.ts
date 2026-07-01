@@ -61,7 +61,7 @@ export interface IlpPeerInfo {
 }
 
 /**
- * Declarative advertisement of a token swap pair supported by a swap-capable peer (Mill).
+ * Declarative advertisement of a token swap pair supported by a swap-capable peer (Swap).
  *
  * Source and target assets use the same `{blockchain}:{network}[:{chainId}]` chain format
  * as `IlpPeerInfo.supportedChains`. Rate is serialized as a decimal string (not a float) to

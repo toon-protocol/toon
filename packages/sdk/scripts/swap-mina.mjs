@@ -1,6 +1,6 @@
-// One-shot EVM→Mina mill swap through the running toon-clientd daemon.
-// Same gift-wrap-then-/swap-passthrough flow as mill-swap.mjs, target = Mina.
-// First Mina swap triggers the mill's one-time PaymentChannel.compile() (~30s).
+// One-shot EVM→Mina swap through the running toon-clientd daemon.
+// Same gift-wrap-then-/swap-passthrough flow as swap.mjs, target = Mina.
+// First Mina swap triggers the swap's one-time PaymentChannel.compile() (~30s).
 import {
   wrapSwapPacketToToon,
   decryptFulfillClaim,
@@ -9,8 +9,8 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { webcrypto } from 'node:crypto';
 
 const DAEMON = 'http://127.0.0.1:8787';
-const MILL_ILP = 'g.proxy.mill';
-const MILL_PUBKEY =
+const SWAP_ILP = 'g.proxy.swap';
+const SWAP_PUBKEY =
   '7e05a33203ad3d164312239b0124d27fd670ee36560e72f6807dba0a0e33858a';
 const CHAIN_RECIPIENT = 'B62qjBemthF5md3g9nS27Q96Tkaz5bKCkGUEwrFo5cy41VpoCmpfz7J'; // daemon Mina addr
 
@@ -49,20 +49,20 @@ async function attempt(n) {
   const wrapped = wrapSwapPacketToToon({
     rumor,
     senderSecretKey: sk,
-    recipientPubkey: MILL_PUBKEY,
-    destination: MILL_ILP,
+    recipientPubkey: SWAP_PUBKEY,
+    destination: SWAP_ILP,
     amount: sourceAmount,
   });
 
   console.log(
-    `\n[attempt ${n}] swap rumor kind:20032 sender ${senderPubkey.slice(0, 12)}… → mill, USDC:evm:base:84532 → MINA:mina:devnet, amount ${sourceAmount}, recipient ${CHAIN_RECIPIENT.slice(0, 14)}…`
+    `\n[attempt ${n}] swap rumor kind:20032 sender ${senderPubkey.slice(0, 12)}… → swap, USDC:evm:base:84532 → MINA:mina:devnet, amount ${sourceAmount}, recipient ${CHAIN_RECIPIENT.slice(0, 14)}…`
   );
 
   const res = await fetch(`${DAEMON}/swap`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      destination: MILL_ILP,
+      destination: SWAP_ILP,
       amount: sourceAmount.toString(),
       toonData: wrapped.ilpPrepare.data,
     }),
@@ -80,7 +80,7 @@ async function attempt(n) {
           nonce: meta.nonce,
           cumulativeAmount: meta.cumulativeAmount,
           recipient: meta.recipient,
-          millSignerAddress: meta.millSignerAddress,
+          swapSignerAddress: meta.swapSignerAddress,
           targetAmount: meta.targetAmount,
           claimId: meta.claimId,
         },
@@ -101,10 +101,10 @@ async function attempt(n) {
   return false;
 }
 
-// First attempt may time out during the ~30s compile; retry once on a warm mill.
+// First attempt may time out during the ~30s compile; retry once on a warm swap.
 let ok = await attempt(1);
 if (!ok) {
-  console.log('\nfirst attempt did not FULFILL (likely the ~30s compile) — retrying on warm mill…');
+  console.log('\nfirst attempt did not FULFILL (likely the ~30s compile) — retrying on warm swap…');
   ok = await attempt(2);
 }
 process.exit(ok ? 0 : 1);

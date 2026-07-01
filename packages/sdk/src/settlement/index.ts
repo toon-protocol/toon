@@ -36,5 +36,5 @@ export type {
   SettlementBundle,
   BuildSettlementTxParams,
   BuildSettlementTxResult,
-  MillSignerConfig,
+  SwapSignerConfig,
 } from './types.js';

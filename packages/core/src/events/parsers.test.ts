@@ -162,7 +162,7 @@ describe('parseIlpPeerInfo', () => {
 
   it('defaults btpEndpoint to "" when missing (optional — Story 50.3)', () => {
     // Arrange: an ILP-addressed peer reached via a connector advertises no
-    // standalone BTP endpoint (e.g. an embedded/HS-mode Mill).
+    // standalone BTP endpoint (e.g. an embedded/HS-mode Swap).
     const content = JSON.stringify({
       ilpAddress: 'g.example.connector',
       assetCode: 'USD',
@@ -177,11 +177,11 @@ describe('parseIlpPeerInfo', () => {
   });
 
   it('accepts an empty-string btpEndpoint and round-trips swapPairs (Story 50.3)', () => {
-    // Arrange: this is exactly the shape an HS-mode Mill advertises — empty
+    // Arrange: this is exactly the shape an HS-mode Swap advertises — empty
     // btpEndpoint, with swapPairs. Regression guard for the build/parse
-    // asymmetry that silently dropped Mill's swap pair in the 50.3 gate.
+    // asymmetry that silently dropped Swap's swap pair in the 50.3 gate.
     const content = JSON.stringify({
-      ilpAddress: 'g.proxy.mill',
+      ilpAddress: 'g.proxy.swap',
       btpEndpoint: '',
       assetCode: 'USDC',
       assetScale: 6,

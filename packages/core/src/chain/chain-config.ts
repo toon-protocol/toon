@@ -30,7 +30,7 @@ export type ChainType = 'evm' | 'solana' | 'mina';
  * `anvil` is the local-dev chain. `arbitrum-*` and `base-*` are the public
  * Arbitrum and Base networks used by the network-mode resolver
  * (see network-profile.ts). Base is the primary EVM chain for single-EVM
- * nodes; the apex connector and Mill can hold providers for both families.
+ * nodes; the apex connector and Swap can hold providers for both families.
  */
 export type ChainName =
   | 'anvil'

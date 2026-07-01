@@ -72,7 +72,7 @@ export class GiftWrapError extends ToonError {
 }
 
 /**
- * Error thrown when Mill swap handler orchestration fails.
+ * Error thrown when swap handler orchestration fails.
  * Used for rate-conversion errors (invalid format, zero, overflow guards),
  * unsupported pair lookups, and issuer-boundary failures that are NOT
  * gift-wrap-specific. Gift-wrap failures continue to surface as `GiftWrapError`.
@@ -90,7 +90,7 @@ export class SwapHandlerError extends ToonError {
  * All failures are categorized by a narrow `code` so callers can branch on
  * cause. `INVALID_*` codes are construction-time validation failures (thrown
  * synchronously before any packet fires). `FULFILL_DECODE_FAILED` surfaces
- * when the Mill returns `accepted: true` but the FULFILL data cannot be
+ * when the Swap returns `accepted: true` but the FULFILL data cannot be
  * decoded — this is a non-fatal per-packet error and is captured in
  * `StreamSwapResult.errors[]`.
  */
@@ -147,7 +147,7 @@ export class SettlementTxError extends Error {
     | 'UNSUPPORTED_CHAIN'
     | 'MISSING_RECIPIENT'
     | 'RECIPIENT_MISMATCH'
-    | 'MILL_SIGNER_MISMATCH'
+    | 'SWAP_SIGNER_MISMATCH'
     | 'DUPLICATE_NONCE'
     | 'NON_MONOTONIC_CUMULATIVE'
     | 'INVALID_SIGNATURE_LENGTH'

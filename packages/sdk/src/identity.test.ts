@@ -726,7 +726,7 @@ describe('Identity', () => {
       // produce a real, stable key.
       //
       // We assert structure + determinism rather than a hardcoded vector: the
-      // published artifacts (sdk/client/mill dist) all agree on
+      // published artifacts (sdk/client/swap dist) all agree on
       // B62qrttSARHJCobNymsJAmKgJeqvmX63xTGLdby4baoxE1GqaedaAAS for this
       // mnemonic@0, but the exact value is sensitive to how the test runner
       // resolves mina-signer, so a pinned vector would be environment-fragile.

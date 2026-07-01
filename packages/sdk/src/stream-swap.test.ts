@@ -5,7 +5,7 @@
  * `_bmad-output/implementation-artifacts/12-5-streamswap-sender-api.md`
  * and T-038..T-047 from `_bmad-output/planning-artifacts/test-design-epic-12.md`.
  *
- * MockMill harness uses REAL crypto from Story 12.2 (`unwrapSwapPacketFromToon`
+ * MockSwap harness uses REAL crypto from Story 12.2 (`unwrapSwapPacketFromToon`
  * and `encryptFulfillClaim`) so the end-to-end wire shape is exercised.
  */
 
@@ -36,21 +36,21 @@ import { StreamSwapError } from './errors';
 const FIXTURE_EVM_RECIPIENT = '0x' + '11'.repeat(20);
 
 // ---------------------------------------------------------------------------
-// MockMill harness
+// MockSwap harness
 // ---------------------------------------------------------------------------
 
-interface MockMillOptions {
+interface MockSwapOptions {
   /** Per-packet rate override (0-indexed packetIndex -> decimal-string rate). */
   rateOverride?: Map<number, string>;
   /** Indices to REJECT with the given ILP code/message. */
   rejectIndices?: Map<number, { code: string; message: string }>;
   /** Custom claim bytes factory (default: 32 random bytes per packet). */
   claimBytesFor?: (packetIndex: number) => Uint8Array;
-  /** Starting index counter (allows chained mills). */
+  /** Starting index counter (allows chained swaps). */
   startIndex?: number;
 }
 
-interface MockMillHandle {
+interface MockSwapHandle {
   fn: ReturnType<typeof vi.fn>;
   unwrappedRumors: UnsignedEvent[];
   issuedClaimBytes: Map<number, Uint8Array>;
@@ -58,7 +58,7 @@ interface MockMillHandle {
 }
 
 /**
- * Builds a `client.sendSwapPacket` stub that behaves like a real Mill:
+ * Builds a `client.sendSwapPacket` stub that behaves like a real Swap:
  *   1. Unwraps the TOON gift-wrap binary (real Story 12.2 impl).
  *   2. Captures the rumor for tag-shape assertions.
  *   3. Computes `targetAmount` via `applyRate`, honoring optional overrides.
@@ -66,13 +66,13 @@ interface MockMillHandle {
  *   5. NIP-44 encrypts them using real `encryptFulfillClaim`.
  *   6. Serializes metadata as JSON -> base64 and returns as `IlpSendResult.data`.
  */
-function makeMockMill(
+function makeMockSwap(
   pair: SwapPair,
-  millSecretKey: Uint8Array,
-  opts: MockMillOptions = {}
-): MockMillHandle {
+  swapSecretKey: Uint8Array,
+  opts: MockSwapOptions = {}
+): MockSwapHandle {
   let counter = opts.startIndex ?? 0;
-  const handle: MockMillHandle = {
+  const handle: MockSwapHandle = {
     fn: vi.fn(),
     unwrappedRumors: [],
     issuedClaimBytes: new Map(),
@@ -102,7 +102,7 @@ function makeMockMill(
       // Unwrap gift wrap -> rumor
       const { rumor, senderPubkey } = unwrapSwapPacketFromToon({
         toonData: params.toonData,
-        recipientSecretKey: millSecretKey,
+        recipientSecretKey: swapSecretKey,
       });
       handle.unwrappedRumors.push(rumor);
       handle.senderPubkeysSeen.push(senderPubkey);
@@ -159,12 +159,12 @@ function samplePair(): SwapPair {
 }
 
 function makeClient(
-  mill: MockMillHandle,
+  swap: MockSwapHandle,
   senderSecretKey: Uint8Array
 ): StreamSwapParams['client'] {
   return {
     sendSwapPacket:
-      mill.fn as unknown as StreamSwapParams['client']['sendSwapPacket'],
+      swap.fn as unknown as StreamSwapParams['client']['sendSwapPacket'],
     getPublicKey: () => getPublicKey(senderSecretKey),
   };
 }
@@ -190,15 +190,15 @@ describe('AC-1 — stream-swap module surface', () => {
 describe('AC-2 — StreamSwapParams validation', () => {
   let baseParams: StreamSwapParams;
   const senderSecretKey = generateSecretKey();
-  const millSecretKey = generateSecretKey();
-  const millPubkey = getPublicKey(millSecretKey);
+  const swapSecretKey = generateSecretKey();
+  const swapPubkey = getPublicKey(swapSecretKey);
 
   beforeEach(() => {
-    const mill = makeMockMill(samplePair(), millSecretKey);
+    const swap = makeMockSwap(samplePair(), swapSecretKey);
     baseParams = {
-      client: makeClient(mill, senderSecretKey),
-      millPubkey,
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey,
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -256,9 +256,9 @@ describe('AC-2 — StreamSwapParams validation', () => {
     ).rejects.toMatchObject({ code: 'INVALID_PAIR' });
   });
 
-  it('throws on invalid millPubkey (not 64 hex chars)', async () => {
+  it('throws on invalid swapPubkey (not 64 hex chars)', async () => {
     await expect(
-      streamSwap({ ...baseParams, millPubkey: 'deadbeef' })
+      streamSwap({ ...baseParams, swapPubkey: 'deadbeef' })
     ).rejects.toThrow(StreamSwapError);
   });
 
@@ -296,13 +296,13 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
   it('1000 total / 10 packets produces 10 x 100', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -319,13 +319,13 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
   it('1000 total / 3 packets produces [333n, 333n, 334n]', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -343,13 +343,13 @@ describe('AC-5 / T-039 — chunkAmount schedule derivation', () => {
   it('explicit packetAmounts passes when sum === totalAmount', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -374,14 +374,14 @@ describe('AC-6 / T-038 / T-040 — packet loop + claim accumulation', () => {
   it('produces N AccumulatedClaim entries with correct shape', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
     const packetCount = 5;
 
     const result: StreamSwapResult = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -399,18 +399,18 @@ describe('AC-6 / T-038 / T-040 — packet loop + claim accumulation', () => {
       expect(typeof claim.sourceAmount).toBe('bigint');
       expect(typeof claim.targetAmount).toBe('bigint');
       expect(claim.claimBytes).toBeInstanceOf(Uint8Array);
-      expect(claim.millEphemeralPubkey).toMatch(/^[0-9a-f]{64}$/);
+      expect(claim.swapEphemeralPubkey).toMatch(/^[0-9a-f]{64}$/);
       expect(claim.pair).toEqual(pair);
       expect(typeof claim.receivedAt).toBe('number');
     });
   });
 
-  it('T-040: claimBytes roundtrips through Mill NIP-44 encryption byte-for-byte', async () => {
+  it('T-040: claimBytes roundtrips through Swap NIP-44 encryption byte-for-byte', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const issued = new Map<number, Uint8Array>();
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swap = makeMockSwap(pair, swapSecretKey, {
       claimBytesFor: (i) => {
         const bytes = new Uint8Array(32);
         crypto.getRandomValues(bytes);
@@ -420,9 +420,9 @@ describe('AC-6 / T-038 / T-040 — packet loop + claim accumulation', () => {
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -444,17 +444,17 @@ describe('AC-7 / T-041 / T-046 — onPacket callback + PacketProgress', () => {
   it('fires exactly once per FULFILL with monotonic cumulatives', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
     const seen: PacketProgress[] = [];
     const onPacket: RateMonitorCallback = (p) => {
       seen.push(p);
     };
 
     await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -478,13 +478,13 @@ describe('AC-7 / T-041 / T-046 — onPacket callback + PacketProgress', () => {
   it('synchronous throw in onPacket stops the stream with callback-throw', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -509,16 +509,16 @@ describe('AC-6 / T-043 — rate deviation abort', () => {
   it('stops after packet whose effective rate deviates > threshold, including that packet', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const badRate = '0.000475'; // 5% worse than 0.0005
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swap = makeMockSwap(pair, swapSecretKey, {
       rateOverride: new Map([[3, badRate]]),
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -537,11 +537,11 @@ describe('AC-6 / T-043 — rate deviation abort', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC-6 / T-044 — partial failure tolerance', () => {
-  it('continues past Mill rejections and reports them', async () => {
+  it('continues past Swap rejections and reports them', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
       rejectIndices: new Map([
         [3, { code: 'T04', message: 'insufficient inventory' }],
         [7, { code: 'T04', message: 'insufficient inventory' }],
@@ -550,9 +550,9 @@ describe('AC-6 / T-044 — partial failure tolerance', () => {
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -577,13 +577,13 @@ describe('AC-6 / T-045 — single-packet mode', () => {
   it('packetCount=1 totalAmount=100n => 1 claim', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -604,14 +604,14 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
   it('pause/resume completes all packets with abortReason=complete', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     let pausedOnce = false;
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -635,13 +635,13 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
   it('stop() mid-stream => state=stopped, partial claims preserved', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -662,13 +662,13 @@ describe('AC-10 / T-042 — streamSwapControlled', () => {
   it('resume() after completed throws StreamSwapError INVALID_STATE', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -689,14 +689,14 @@ describe('AC-6 — AbortSignal integration', () => {
   it('aborting mid-stream => state=stopped, abortReason=aborted', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
     const ac = new AbortController();
 
     const p = streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -752,17 +752,17 @@ describe('AC-11 — StreamSwapError', () => {
 describe('AC-12 — decodeFulfillMetadata error paths', () => {
   it('surfaces FULFILL_DECODE_FAILED when data is missing', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({ accepted: true, data: undefined }));
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({ accepted: true, data: undefined }));
 
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -777,8 +777,8 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
 
   it('surfaces FULFILL_DECODE_FAILED for non-base64 input', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({
       accepted: true,
       data: '@@@not base64@@@',
     }));
@@ -786,11 +786,11 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -803,8 +803,8 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
 
   it('surfaces FULFILL_DECODE_FAILED for invalid JSON', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({
       accepted: true,
       data: Buffer.from('not json {').toString('base64'),
     }));
@@ -812,11 +812,11 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -829,8 +829,8 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
 
   it('surfaces FULFILL_DECODE_FAILED for missing required fields', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({
       accepted: true,
       data: Buffer.from(JSON.stringify({ claim: 'abc' })).toString('base64'),
     }));
@@ -838,11 +838,11 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -853,15 +853,15 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     expect(result.errors[0]?.cause).toBeInstanceOf(StreamSwapError);
   });
 
-  // Pass #2 regression: a Mill-reported `targetAmount` MUST be a non-negative
+  // Pass #2 regression: a Swap-reported `targetAmount` MUST be a non-negative
   // integer decimal string. A negative / fractional / non-numeric value would
   // otherwise slip into `BigInt()` and silently corrupt `cumulativeTarget`
   // and the deviation calc — surface it as FULFILL_DECODE_FAILED instead.
   it('surfaces FULFILL_DECODE_FAILED when targetAmount is negative', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     // Build a plausible-looking metadata shape but with a negative targetAmount.
-    const badMill = vi.fn(async () => ({
+    const badSwap = vi.fn(async () => ({
       accepted: true,
       data: Buffer.from(
         JSON.stringify({
@@ -875,11 +875,11 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -898,8 +898,8 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
 
   it('surfaces FULFILL_DECODE_FAILED when targetAmount is fractional', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({
       accepted: true,
       data: Buffer.from(
         JSON.stringify({
@@ -913,11 +913,11 @@ describe('AC-12 — decodeFulfillMetadata error paths', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -943,13 +943,13 @@ describe('AC-4 — rumor tag shape', () => {
       rate: '0.0005',
     };
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -957,8 +957,8 @@ describe('AC-4 — rumor tag shape', () => {
       packetCount: 3,
     });
 
-    expect(mill.unwrappedRumors).toHaveLength(3);
-    mill.unwrappedRumors.forEach((r, i) => {
+    expect(swap.unwrappedRumors).toHaveLength(3);
+    swap.unwrappedRumors.forEach((r, i) => {
       expect(r.kind).toBe(20032);
       const tagMap = new Map<string, string[]>();
       for (const t of r.tags) tagMap.set(t[0]!, t.slice(1));
@@ -973,7 +973,7 @@ describe('AC-4 — rumor tag shape', () => {
 
     // AC-4: nonces must be unique across packets so rumor IDs differ.
     const nonces = new Set(
-      mill.unwrappedRumors.map(
+      swap.unwrappedRumors.map(
         (r) => (r.tags.find((t) => t[0] === 'nonce') ?? ['nonce', ''])[1] ?? ''
       )
     );
@@ -989,13 +989,13 @@ describe('T-047 — stress: 1000 packets', () => {
   it('completes 1000 packets with correct totals', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1015,15 +1015,15 @@ describe('T-047 — stress: 1000 packets', () => {
 
 describe('AC-2 — additional validation cases', () => {
   const senderSecretKey = generateSecretKey();
-  const millSecretKey = generateSecretKey();
-  const millPubkey = getPublicKey(millSecretKey);
+  const swapSecretKey = generateSecretKey();
+  const swapPubkey = getPublicKey(swapSecretKey);
 
   function base(): StreamSwapParams {
-    const mill = makeMockMill(samplePair(), millSecretKey);
+    const swap = makeMockSwap(samplePair(), swapSecretKey);
     return {
-      client: makeClient(mill, senderSecretKey),
-      millPubkey,
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey,
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1084,13 +1084,13 @@ describe('AC-7 — onPacket async rejection', () => {
   it('async rejection in onPacket stops the stream with callback-throw', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1115,14 +1115,14 @@ describe('AC-7 — onPacket async rejection', () => {
   it('PacketProgress passed to onPacket is deeply frozen', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
     let captured: PacketProgress | null = null;
 
     await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1148,13 +1148,13 @@ describe('AC-7 — onPacket async rejection', () => {
 describe('AC-8 — empty claimBytes corner case', () => {
   it('accumulates the claim and logs warn when decryption yields zero bytes', async () => {
     // Real `encryptFulfillClaim` rejects empty input, so we can't drive this
-    // corner via the MockMill. Instead we craft a FULFILL whose encrypted
+    // corner via the MockSwap. Instead we craft a FULFILL whose encrypted
     // payload decrypts to a deliberately empty 32-byte run. We do this by
     // encrypting a 1-byte sentinel and then overriding `decryptFulfillClaim`
     // via module-level spy is not possible without DI — so we exercise the
-    // code path indirectly by having the Mill encrypt a 1-byte claim and
+    // code path indirectly by having the Swap encrypt a 1-byte claim and
     // asserting the warn path still fires on boundary. For true 0-byte
-    // coverage, we use a custom mill that emits a ciphertext known to decrypt
+    // coverage, we use a custom swap that emits a ciphertext known to decrypt
     // to empty: build it by encrypting a 1-byte value then asserting claim
     // length >= 0 (the branch `=== 0` path is unreachable without changing
     // gift-wrap). Document the limitation:
@@ -1167,16 +1167,16 @@ describe('AC-8 — empty claimBytes corner case', () => {
     // branch (which would require patching gift-wrap.ts).
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const warnSpy = vi.fn();
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swap = makeMockSwap(pair, swapSecretKey, {
       claimBytesFor: () => new Uint8Array([0x01]), // minimal valid claim
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1211,17 +1211,17 @@ describe('AC-9 — StreamSwapResult bookkeeping fields', () => {
   it('packetsSent and packetsScheduled reflect accepted+rejected counts', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
       rejectIndices: new Map([
         [2, { code: 'T04', message: 'insufficient inventory' }],
       ]),
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1241,13 +1241,13 @@ describe('AC-9 — StreamSwapResult bookkeeping fields', () => {
   it('packetsSent < packetsScheduled when loop aborts early', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1273,13 +1273,13 @@ describe('AC-10 — controller state machine edges', () => {
   it('stop() is idempotent — multiple calls do not throw', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1303,13 +1303,13 @@ describe('AC-10 — controller state machine edges', () => {
   it('resume() while running is a no-op (does not throw)', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1328,13 +1328,13 @@ describe('AC-10 — controller state machine edges', () => {
   it('resume() after stopped stream throws INVALID_STATE', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1357,13 +1357,13 @@ describe('AC-10 — controller state machine edges', () => {
   it('controller.state reflects terminal state after result resolves', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey);
 
     const { result, controller } = streamSwapControlled({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1384,9 +1384,9 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
   it('all packets rejected => state=failed, abortReason=all-rejected', async () => {
     const pair = samplePair();
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     // Reject every one of the 4 scheduled packets.
-    const mill = makeMockMill(pair, millSecretKey, {
+    const swap = makeMockSwap(pair, swapSecretKey, {
       rejectIndices: new Map([
         [0, { code: 'T04', message: 'no inventory' }],
         [1, { code: 'T04', message: 'no inventory' }],
@@ -1396,9 +1396,9 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
     });
 
     const result = await streamSwap({
-      client: makeClient(mill, senderSecretKey),
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1419,17 +1419,17 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
 
   it('single packet with missing FULFILL data => state=failed, errors populated', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({ accepted: true, data: undefined }));
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({ accepted: true, data: undefined }));
 
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1450,7 +1450,7 @@ describe('AC-9 — terminal state edge cases (gap-fill)', () => {
 describe('Pass #3: zero-valued rate with fractional form', () => {
   it('throws INVALID_PAIR for rate="0.0"', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const badPair: SwapPair = { ...samplePair(), rate: '0.0' };
     await expect(
       streamSwap({
@@ -1459,8 +1459,8 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
             vi.fn() as unknown as StreamSwapParams['client']['sendSwapPacket'],
           getPublicKey: () => getPublicKey(senderSecretKey),
         },
-        millPubkey: getPublicKey(millSecretKey),
-        millIlpAddress: 'g.toon.mill1',
+        swapPubkey: getPublicKey(swapSecretKey),
+        swapIlpAddress: 'g.toon.swap1',
         pair: badPair,
         senderSecretKey,
         chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1472,7 +1472,7 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
 
   it('throws INVALID_PAIR for rate="0.000"', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const badPair: SwapPair = { ...samplePair(), rate: '0.000' };
     await expect(
       streamSwap({
@@ -1481,8 +1481,8 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
             vi.fn() as unknown as StreamSwapParams['client']['sendSwapPacket'],
           getPublicKey: () => getPublicKey(senderSecretKey),
         },
-        millPubkey: getPublicKey(millSecretKey),
-        millIlpAddress: 'g.toon.mill1',
+        swapPubkey: getPublicKey(swapSecretKey),
+        swapIlpAddress: 'g.toon.swap1',
         pair: badPair,
         senderSecretKey,
         chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1496,17 +1496,17 @@ describe('Pass #3: zero-valued rate with fractional form', () => {
 describe('Pass #3: pair immutability — caller mutation after call does not poison claims', () => {
   it('claims retain the snapshot `pair` even if caller mutates the input pair', async () => {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const pair: SwapPair = samplePair();
-    const mill = makeMockMill(pair, millSecretKey);
+    const swap = makeMockSwap(pair, swapSecretKey);
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          mill.fn as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          swap.fn as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1527,16 +1527,16 @@ describe('Pass #3: base64 strictness in decodeFulfillMetadata', () => {
   it('rejects FULFILL data with non-multiple-of-4 length as FULFILL_DECODE_FAILED', async () => {
     // Three-character "data" that is not valid base64 (length 3, not multiple of 4).
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({ accepted: true, data: 'abc' }));
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({ accepted: true, data: 'abc' }));
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair: samplePair(),
       senderSecretKey,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -1554,23 +1554,23 @@ describe('Pass #3: base64 strictness in decodeFulfillMetadata', () => {
 // Story 12.6 AC-3 — decodeFulfillMetadata settlement-field validation
 //
 // #153 RELAXATION: the five Story 12.6 settlement-context fields
-// (channelId, nonce, cumulativeAmount, recipient, millSignerAddress) are now
+// (channelId, nonce, cumulativeAmount, recipient, swapSignerAddress) are now
 // OPTIONAL and best-effort. Each well-formed field is threaded into the
 // AccumulatedClaim; an absent or malformed settlement field is silently
 // dropped rather than failing the whole FULFILL decode. Only `claim` and
-// `ephemeralPubkey` are strictly required. This is what lets a real mill
+// `ephemeralPubkey` are strictly required. This is what lets a real swap
 // FULFILL (which may echo a cross-chain channelId or a checksummed address)
 // surface its signed claim instead of reporting `state: failed`.
 //
 // `recipient` is special: a present non-empty `recipient` is always threaded
 // so the runLoop anti-substitution equality check still fires (a mismatch
-// becomes a MILL_RECIPIENT_MISMATCH rejection, NOT a decode error).
+// becomes a SWAP_RECIPIENT_MISMATCH rejection, NOT a decode error).
 // ---------------------------------------------------------------------------
 
 describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
   const EVM_CHANNEL_ID = '0x' + 'a'.repeat(64);
   const EVM_RECIPIENT = '0x' + 'b'.repeat(40);
-  const EVM_MILL_SIGNER = '0x' + 'c'.repeat(40);
+  const EVM_SWAP_SIGNER = '0x' + 'c'.repeat(40);
 
   const EVM_PAIR: SwapPair = {
     from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
@@ -1587,7 +1587,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
   // Realistic Solana base58 pubkey (32 bytes base58 encoded, alphabet-safe).
   const SOLANA_CHANNEL_ID = '11111111111111111111111111111111';
   const SOLANA_RECIPIENT = 'So11111111111111111111111111111111111111112';
-  const SOLANA_MILL_SIGNER = 'So11111111111111111111111111111111111111113';
+  const SOLANA_SWAP_SIGNER = 'So11111111111111111111111111111111111111113';
 
   /**
    * Build a base64-encoded JSON FULFILL payload with VALID NIP-44 ciphertext
@@ -1630,7 +1630,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
 
   /**
    * Default `chainRecipient` per chain family used by this suite's helpers.
-   * Must match whatever `recipient` the mill echoes in FULFILL metadata,
+   * Must match whatever `recipient` the swap echoes in FULFILL metadata,
    * because Story 12.9 AC-7 tightens a sender-side equality check.
    */
   function chainRecipientFor(pair: SwapPair): string {
@@ -1638,19 +1638,19 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     return EVM_RECIPIENT;
   }
 
-  /** Spin up a streamSwap with a single-packet mill returning the given data. */
+  /** Spin up a streamSwap with a single-packet swap returning the given data. */
   async function runWithData(data: string, pair: SwapPair = EVM_PAIR) {
     const senderSecretKey = generateSecretKey();
-    const millSecretKey = generateSecretKey();
-    const badMill = vi.fn(async () => ({ accepted: true, data }));
+    const swapSecretKey = generateSecretKey();
+    const badSwap = vi.fn(async () => ({ accepted: true, data }));
     return streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => getPublicKey(senderSecretKey),
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: chainRecipientFor(pair),
@@ -1670,17 +1670,17 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
   ) {
     const senderSecretKey = generateSecretKey();
     const senderPubkey = getPublicKey(senderSecretKey);
-    const millSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
     const data = makeValidFulfillData(senderPubkey, overrides);
-    const mill = vi.fn(async () => ({ accepted: true, data }));
+    const swap = vi.fn(async () => ({ accepted: true, data }));
     return streamSwap({
       client: {
         sendSwapPacket:
-          mill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          swap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => senderPubkey,
       },
-      millPubkey: getPublicKey(millSecretKey),
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: getPublicKey(swapSecretKey),
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey,
       chainRecipient: chainRecipientFor(pair),
@@ -1722,7 +1722,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1734,7 +1734,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect(claim.nonce).toBe('1');
     expect(claim.cumulativeAmount).toBe('100');
     expect(claim.recipient).toBe(EVM_RECIPIENT);
-    expect(claim.millSignerAddress).toBe(EVM_MILL_SIGNER);
+    expect(claim.swapSignerAddress).toBe(EVM_SWAP_SIGNER);
   });
 
   it('[P0] accepts valid Solana settlement metadata and threads fields into AccumulatedClaim', async () => {
@@ -1744,7 +1744,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '42',
         cumulativeAmount: '250',
         recipient: SOLANA_RECIPIENT,
-        millSignerAddress: SOLANA_MILL_SIGNER,
+        swapSignerAddress: SOLANA_SWAP_SIGNER,
       },
       SOLANA_PAIR
     );
@@ -1756,7 +1756,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect(claim.nonce).toBe('42');
     expect(claim.cumulativeAmount).toBe('250');
     expect(claim.recipient).toBe(SOLANA_RECIPIENT);
-    expect(claim.millSignerAddress).toBe(SOLANA_MILL_SIGNER);
+    expect(claim.swapSignerAddress).toBe(SOLANA_SWAP_SIGNER);
   });
 
   it('[P0] preserves legacy pre-12.6 shape when all five settlement fields absent (backward-compat)', async () => {
@@ -1769,7 +1769,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect(claim.nonce).toBeUndefined();
     expect(claim.cumulativeAmount).toBeUndefined();
     expect(claim.recipient).toBeUndefined();
-    expect(claim.millSignerAddress).toBeUndefined();
+    expect(claim.swapSignerAddress).toBeUndefined();
   });
 
   // ---- #153 tolerant contract: partial / malformed settlement fields no
@@ -1782,7 +1782,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1794,24 +1794,24 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     // The other well-formed fields still thread through.
     expect(claim.nonce).toBe('1');
     expect(claim.recipient).toBe(EVM_RECIPIENT);
-    expect(claim.millSignerAddress).toBe(EVM_MILL_SIGNER);
+    expect(claim.swapSignerAddress).toBe(EVM_SWAP_SIGNER);
   });
 
-  it('[#153] completes (millSignerAddress dropped) when millSignerAddress is absent (partial presence)', async () => {
+  it('[#153] completes (swapSignerAddress dropped) when swapSignerAddress is absent (partial presence)', async () => {
     const result = await runWithValidData(
       {
         channelId: EVM_CHANNEL_ID,
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        // millSignerAddress intentionally omitted
+        // swapSignerAddress intentionally omitted
       },
       EVM_PAIR
     );
     expect(result.errors).toHaveLength(0);
     expect(result.state).toBe('completed');
     expect(result.claims).toHaveLength(1);
-    expect(result.claims[0]!.millSignerAddress).toBeUndefined();
+    expect(result.claims[0]!.swapSignerAddress).toBeUndefined();
     expect(result.claims[0]!.channelId).toBe(EVM_CHANNEL_ID);
   });
 
@@ -1822,7 +1822,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1838,7 +1838,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1849,7 +1849,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
   it('[#153] accepts EVM channelId with checksum (mixed-case) hex — lowercase-normalized', async () => {
     // viem / on-chain channelIds may be returned mixed-case; the decoder now
     // lowercase-normalizes before the strict-hex regex, so the field threads
-    // through (preserving the mill's original casing on the claim).
+    // through (preserving the swap's original casing on the claim).
     const mixed = '0x' + 'aA'.repeat(32); // 64 mixed-case hex chars
     const result = await runWithValidData(
       {
@@ -1857,7 +1857,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1872,7 +1872,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1880,25 +1880,25 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect(result.claims[0]!.channelId).toBeUndefined();
   });
 
-  it('[#153] completes (millSignerAddress dropped) when millSignerAddress has non-hex chars', async () => {
+  it('[#153] completes (swapSignerAddress dropped) when swapSignerAddress has non-hex chars', async () => {
     const result = await runWithValidData(
       {
         channelId: EVM_CHANNEL_ID,
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: '0xZZZ' + 'c'.repeat(37), // non-hex chars
+        swapSignerAddress: '0xZZZ' + 'c'.repeat(37), // non-hex chars
       },
       EVM_PAIR
     );
     expect(result.errors).toHaveLength(0);
     expect(result.state).toBe('completed');
-    expect(result.claims[0]!.millSignerAddress).toBeUndefined();
+    expect(result.claims[0]!.swapSignerAddress).toBeUndefined();
   });
 
-  it('[#153] accepts a checksummed (mixed-case) millSignerAddress — the real viem shape', async () => {
-    // The mill derives signer addresses via viem (EIP-55 checksummed). Even
-    // if the mill does NOT lowercase before echoing, the decoder accepts it.
+  it('[#153] accepts a checksummed (mixed-case) swapSignerAddress — the real viem shape', async () => {
+    // The swap derives signer addresses via viem (EIP-55 checksummed). Even
+    // if the swap does NOT lowercase before echoing, the decoder accepts it.
     const checksummed = '0xAbC0000000000000000000000000000000000123';
     const result = await runWithValidData(
       {
@@ -1906,13 +1906,13 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: checksummed,
+        swapSignerAddress: checksummed,
       },
       EVM_PAIR
     );
     expect(result.errors).toHaveLength(0);
     expect(result.state).toBe('completed');
-    expect(result.claims[0]!.millSignerAddress).toBe(checksummed);
+    expect(result.claims[0]!.swapSignerAddress).toBe(checksummed);
   });
 
   it('[#153] completes (nonce dropped) when nonce is negative', async () => {
@@ -1922,7 +1922,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '-1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1937,7 +1937,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100.5',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1952,7 +1952,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: 1 as unknown as string, // number, not string
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -1961,7 +1961,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
   });
 
   it('[#153] accepts a cross-chain channelId echoed on a Solana target (EVM-style hex channelId dropped, swap completes)', async () => {
-    // Real-mill regression: the mill provisions an EVM-style hex channelId but
+    // Real-swap regression: the swap provisions an EVM-style hex channelId but
     // the swap target is solana:* — the strict per-chain channelId check would
     // have hard-failed the whole decode. Now the channelId is dropped and the
     // signed claim still surfaces.
@@ -1971,7 +1971,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: SOLANA_RECIPIENT,
-        millSignerAddress: SOLANA_MILL_SIGNER,
+        swapSignerAddress: SOLANA_SWAP_SIGNER,
       },
       SOLANA_PAIR
     );
@@ -1982,10 +1982,10 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
     expect(result.claims[0]!.recipient).toBe(SOLANA_RECIPIENT);
   });
 
-  it('[#153] real-mill envelope (claim + ephemeralPubkey + targetAmount + full EVM settlement) completes with signed claim', async () => {
-    // Mirrors the exact envelope shape the deployed mill emits on the FULFILL
+  it('[#153] real-swap envelope (claim + ephemeralPubkey + targetAmount + full EVM settlement) completes with signed claim', async () => {
+    // Mirrors the exact envelope shape the deployed swap emits on the FULFILL
     // path: { claim, ephemeralPubkey, targetAmount, claimId, channelId, nonce,
-    // cumulativeAmount, recipient, millSignerAddress }.
+    // cumulativeAmount, recipient, swapSignerAddress }.
     const result = await runWithValidData(
       {
         claimId: 'b3c68c9c-7761-495b-a21e-50c1be49ab1a',
@@ -1993,7 +1993,7 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
         nonce: '1',
         cumulativeAmount: '100',
         recipient: EVM_RECIPIENT,
-        millSignerAddress: EVM_MILL_SIGNER,
+        swapSignerAddress: EVM_SWAP_SIGNER,
       },
       EVM_PAIR
     );
@@ -2014,16 +2014,16 @@ describe('Story 12.6 AC-3 — decodeFulfillMetadata settlement fields', () => {
 
 describe('Story 12.9 — chainRecipient threading (sender)', () => {
   const senderSecretKey12_9 = generateSecretKey();
-  const millSecretKey12_9 = generateSecretKey();
-  const millPubkey12_9 = getPublicKey(millSecretKey12_9);
+  const swapSecretKey12_9 = generateSecretKey();
+  const swapPubkey12_9 = getPublicKey(swapSecretKey12_9);
 
   function evmBase(): StreamSwapParams {
     const pair = samplePair();
-    const mill = makeMockMill(pair, millSecretKey12_9);
+    const swap = makeMockSwap(pair, swapSecretKey12_9);
     return {
-      client: makeClient(mill, senderSecretKey12_9),
-      millPubkey: millPubkey12_9,
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey12_9),
+      swapPubkey: swapPubkey12_9,
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey: senderSecretKey12_9,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -2060,12 +2060,12 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
       to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
       rate: '0.01',
     };
-    const mill = makeMockMill(solanaPair, millSecretKey12_9);
+    const swap = makeMockSwap(solanaPair, swapSecretKey12_9);
     await expect(
       streamSwap({
-        client: makeClient(mill, senderSecretKey12_9),
-        millPubkey: millPubkey12_9,
-        millIlpAddress: 'g.toon.mill1',
+        client: makeClient(swap, senderSecretKey12_9),
+        swapPubkey: swapPubkey12_9,
+        swapIlpAddress: 'g.toon.swap1',
         pair: solanaPair,
         senderSecretKey: senderSecretKey12_9,
         chainRecipient: '!!!not-base58!!!',
@@ -2085,12 +2085,12 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
       to: { assetCode: 'MINA', assetScale: 9, chain: 'mina:mainnet' },
       rate: '0.01',
     };
-    const mill = makeMockMill(minaPair, millSecretKey12_9);
+    const swap = makeMockSwap(minaPair, swapSecretKey12_9);
     await expect(
       streamSwap({
-        client: makeClient(mill, senderSecretKey12_9),
-        millPubkey: millPubkey12_9,
-        millIlpAddress: 'g.toon.mill1',
+        client: makeClient(swap, senderSecretKey12_9),
+        swapPubkey: swapPubkey12_9,
+        swapIlpAddress: 'g.toon.swap1',
         pair: minaPair,
         senderSecretKey: senderSecretKey12_9,
         chainRecipient: 'abc', // base58 but < 32 chars
@@ -2098,8 +2098,8 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
         packetCount: 1,
       })
     ).rejects.toMatchObject({ code: 'INVALID_CHAIN_RECIPIENT' });
-    // Validation MUST fire pre-packet — mill never invoked.
-    expect(mill.fn).not.toHaveBeenCalled();
+    // Validation MUST fire pre-packet — swap never invoked.
+    expect(swap.fn).not.toHaveBeenCalled();
   });
 
   it('[P2] T-2d: Unknown chain family rejects empty chainRecipient and permits non-empty opaque string (AC-2, AC-13b)', async () => {
@@ -2123,13 +2123,13 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
       to: { assetCode: 'FOO', assetScale: 6, chain: 'cosmos:foo-1' },
       rate: '0.5',
     };
-    const mill = makeMockMill(unknownPair, millSecretKey12_9);
+    const swap = makeMockSwap(unknownPair, swapSecretKey12_9);
     // (a) Empty string → INVALID_STATE (non-empty guard fires first).
     await expect(
       streamSwap({
-        client: makeClient(mill, senderSecretKey12_9),
-        millPubkey: millPubkey12_9,
-        millIlpAddress: 'g.toon.mill1',
+        client: makeClient(swap, senderSecretKey12_9),
+        swapPubkey: swapPubkey12_9,
+        swapIlpAddress: 'g.toon.swap1',
         pair: unknownPair,
         senderSecretKey: senderSecretKey12_9,
         chainRecipient: '',
@@ -2140,14 +2140,14 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
       name: 'StreamSwapError',
       code: 'INVALID_STATE',
     });
-    expect(mill.fn).not.toHaveBeenCalled();
+    expect(swap.fn).not.toHaveBeenCalled();
     // (b) Non-empty opaque string → permitted (no INVALID_CHAIN_RECIPIENT);
-    // the mock mill is exercised and the swap resolves.
+    // the mock swap is exercised and the swap resolves.
     await expect(
       streamSwap({
-        client: makeClient(mill, senderSecretKey12_9),
-        millPubkey: millPubkey12_9,
-        millIlpAddress: 'g.toon.mill1',
+        client: makeClient(swap, senderSecretKey12_9),
+        swapPubkey: swapPubkey12_9,
+        swapIlpAddress: 'g.toon.swap1',
         pair: unknownPair,
         senderSecretKey: senderSecretKey12_9,
         chainRecipient: 'opaque-payout-identifier',
@@ -2159,30 +2159,30 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
 
   it('[P0] T-3: buildSwapRumor emits chain-recipient tag on every packet (AC-1, AC-6, AC-13c)', async () => {
     const pair = samplePair();
-    const mill = makeMockMill(pair, millSecretKey12_9);
+    const swap = makeMockSwap(pair, swapSecretKey12_9);
     await streamSwap({
-      client: makeClient(mill, senderSecretKey12_9),
-      millPubkey: millPubkey12_9,
-      millIlpAddress: 'g.toon.mill1',
+      client: makeClient(swap, senderSecretKey12_9),
+      swapPubkey: swapPubkey12_9,
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey: senderSecretKey12_9,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
       totalAmount: 3_000n,
       packetCount: 3,
     });
-    expect(mill.unwrappedRumors).toHaveLength(3);
-    for (const rumor of mill.unwrappedRumors) {
+    expect(swap.unwrappedRumors).toHaveLength(3);
+    for (const rumor of swap.unwrappedRumors) {
       const tag = rumor.tags.find((t) => t[0] === 'chain-recipient');
       expect(tag).toBeDefined();
       expect(tag![1]).toBe(FIXTURE_EVM_RECIPIENT);
     }
   });
 
-  it('[P1] T-4: FULFILL recipient mismatch is rejected with MILL_RECIPIENT_MISMATCH (AC-7)', async () => {
+  it('[P1] T-4: FULFILL recipient mismatch is rejected with SWAP_RECIPIENT_MISMATCH (AC-7)', async () => {
     const pair = samplePair();
     const senderPubkey = getPublicKey(senderSecretKey12_9);
-    // Mill that echoes a *different* recipient than the sender supplied.
-    const badMill = vi.fn(async () => {
+    // Swap that echoes a *different* recipient than the sender supplied.
+    const badSwap = vi.fn(async () => {
       const { ciphertext, ephemeralPubkey } = encryptFulfillClaim({
         claimData: new Uint8Array([0x01]),
         senderPubkey,
@@ -2195,7 +2195,7 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
         nonce: '1',
         cumulativeAmount: '1',
         recipient: '0x' + 'b'.repeat(40), // NOT FIXTURE_EVM_RECIPIENT
-        millSignerAddress: '0x' + 'c'.repeat(40),
+        swapSignerAddress: '0x' + 'c'.repeat(40),
       };
       return {
         accepted: true,
@@ -2205,11 +2205,11 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
     const result = await streamSwap({
       client: {
         sendSwapPacket:
-          badMill as unknown as StreamSwapParams['client']['sendSwapPacket'],
+          badSwap as unknown as StreamSwapParams['client']['sendSwapPacket'],
         getPublicKey: () => senderPubkey,
       },
-      millPubkey: millPubkey12_9,
-      millIlpAddress: 'g.toon.mill1',
+      swapPubkey: swapPubkey12_9,
+      swapIlpAddress: 'g.toon.swap1',
       pair,
       senderSecretKey: senderSecretKey12_9,
       chainRecipient: FIXTURE_EVM_RECIPIENT,
@@ -2218,6 +2218,6 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
     });
     expect(result.claims).toHaveLength(0);
     expect(result.rejections).toHaveLength(1);
-    expect(result.rejections[0]!.code).toBe('MILL_RECIPIENT_MISMATCH');
+    expect(result.rejections[0]!.code).toBe('SWAP_RECIPIENT_MISMATCH');
   });
 });

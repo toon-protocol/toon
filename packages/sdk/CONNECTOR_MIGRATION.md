@@ -309,7 +309,7 @@ interface PeerRegistrationRequest {
 | `ctx.accept()` return shape       | `{ fulfillment: ... }`             | `fulfillment` field removed from application API (changed in v2.2.0)                  | Drop `fulfillment` from accept-response handling; use `ctx.accept({ data })` |
 
 > **Where these bit us.** Story 22.1 cleaned up trivial config-API drift across
-> `store`, `mill`, `town`, and `toon` packages. Stories 22.2–22.4 unblocked
+> `store`, `swap`, `town`, and `toon` packages. Stories 22.2–22.4 unblocked
 > downstream E2E flows that depended on the new shape. This canary keeps that
 > regression from recurring on the next connector bump.
 

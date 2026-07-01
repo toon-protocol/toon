@@ -2,7 +2,7 @@
  * Story 12.6 AC-6: Shared balance-proof hash helpers.
  *
  * Verifies the sdk-side helpers produce the same hash layout that
- * `packages/mill/src/payment-channel-signer.ts` signs against. This is the
+ * `packages/swap/src/payment-channel-signer.ts` signs against. This is the
  * cross-package parity safety net for the AC-6 refactor.
  */
 import { describe, it, expect } from 'vitest';
@@ -69,8 +69,8 @@ describe('hashes.ts — bigintToBytes32BE + concatBytes + hexToBytes', () => {
  *
  * Any change to `balanceProofHashEvm` / `balanceProofHashSolana` (or to
  * `bigintToBytes32BE` / `concatBytes`) that alters output will break these
- * tests. Because `packages/mill/src/payment-channel-signer.ts` imports these
- * helpers (AC-6 refactor), the same layout drift would also break the Mill's
+ * tests. Because `packages/swap/src/payment-channel-signer.ts` imports these
+ * helpers (AC-6 refactor), the same layout drift would also break the Swap's
  * signer — this is the cross-package parity net.
  *
  * @fixture
@@ -187,11 +187,11 @@ describe('balanceProofHashSolana — golden vectors (Story 12.6 AC-6)', () => {
   });
 });
 
-describe('cross-package parity with mill/payment-channel-signer.ts (Story 12.6 AC-6)', () => {
+describe('cross-package parity with swap/payment-channel-signer.ts (Story 12.6 AC-6)', () => {
   it('[P0] pinned EVM digest — signer drift detector', () => {
-    // The Mill's EvmPaymentChannelSigner imports balanceProofHashEvm from
+    // The Swap's EvmPaymentChannelSigner imports balanceProofHashEvm from
     // this module (AC-6 refactor). Any layout change here automatically
-    // flips the Mill's signature output; the pinned digest catches that.
+    // flips the Swap's signature output; the pinned digest catches that.
     const channelIdBytes = hexToBytes('0x' + '11'.repeat(32));
     const recipientBytes = hexToBytes('0x' + '22'.repeat(20));
     const h = balanceProofHashEvm(channelIdBytes, 12345n, 7n, recipientBytes);

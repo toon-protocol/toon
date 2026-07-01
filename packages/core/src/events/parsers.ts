@@ -77,7 +77,7 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
   }
 
   // btpEndpoint is optional (Story 50.3): an ILP-addressed peer reached via its
-  // `ilpAddress` through a connector — e.g. an embedded/HS-mode Mill — has no
+  // `ilpAddress` through a connector — e.g. an embedded/HS-mode Swap — has no
   // standalone BTP endpoint and advertises an empty string. `buildIlpPeerInfoEvent`
   // already accepts `''`; the parser must too, or the peer's own kind:10032
   // cannot be read back. Only a present-but-non-string value is invalid.

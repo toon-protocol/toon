@@ -1,4 +1,4 @@
-// One-shot EVM→Solana mill swap exercised through the running toon-clientd
+// One-shot EVM→Solana swap exercised through the running toon-clientd
 // daemon. Builds the NIP-59 gift-wrapped kind:20032 swap rumor here (the SDK's
 // wrapSwapPacketToToon), then sends it via the daemon /swap toonData passthrough
 // so the daemon signs the source-asset claim against the open apex EVM channel.
@@ -11,8 +11,8 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { webcrypto } from 'node:crypto';
 
 const DAEMON = 'http://127.0.0.1:8787';
-const MILL_ILP = 'g.proxy.mill';
-const MILL_PUBKEY =
+const SWAP_ILP = 'g.proxy.swap';
+const SWAP_PUBKEY =
   '7e05a33203ad3d164312239b0124d27fd670ee36560e72f6807dba0a0e33858a';
 const CHAIN_RECIPIENT = '2VVaZGFQQ4fFVnTM1AE6uCkADbgMfaBgAzLvJJ7Jsed5'; // Solana payout
 
@@ -51,14 +51,14 @@ const rumor = {
 const wrapped = wrapSwapPacketToToon({
   rumor,
   senderSecretKey: sk,
-  recipientPubkey: MILL_PUBKEY,
-  destination: MILL_ILP,
+  recipientPubkey: SWAP_PUBKEY,
+  destination: SWAP_ILP,
   amount: sourceAmount,
 });
 const toonDataB64 = wrapped.ilpPrepare.data; // already base64
 
 console.log(
-  `swap rumor kind:20032 sender ${senderPubkey.slice(0, 16)}… → mill ${MILL_PUBKEY.slice(0, 16)}…`
+  `swap rumor kind:20032 sender ${senderPubkey.slice(0, 16)}… → swap ${SWAP_PUBKEY.slice(0, 16)}…`
 );
 console.log(
   `pair USDC:evm:base:84532 → USDC:solana:devnet  amount ${sourceAmount} (micro)  recipient ${CHAIN_RECIPIENT}`
@@ -68,7 +68,7 @@ const res = await fetch(`${DAEMON}/swap`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({
-    destination: MILL_ILP,
+    destination: SWAP_ILP,
     amount: sourceAmount.toString(),
     toonData: toonDataB64,
   }),
@@ -91,7 +91,7 @@ if (body && body.accepted && body.data) {
           nonce: meta.nonce,
           cumulativeAmount: meta.cumulativeAmount,
           recipient: meta.recipient,
-          millSignerAddress: meta.millSignerAddress,
+          swapSignerAddress: meta.swapSignerAddress,
           targetAmount: meta.targetAmount,
           claimId: meta.claimId,
         },
