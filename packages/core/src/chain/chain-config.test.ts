@@ -148,7 +148,7 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       expect(config.rpcUrl).toBe('http://localhost:8545');
     });
 
-    // Regression for issue #196: published town image crashed with
+    // Regression for issue #196: published relay image crashed with
     // `Unknown chain "base-sepolia"` because its bundled core predated the
     // base-* presets. This asserts the preset resolves (does NOT throw).
     it('[P0] resolveChainConfig("base-sepolia") resolves (issue #196)', () => {
