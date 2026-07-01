@@ -1,5 +1,5 @@
 /**
- * Swap Swap Handler (Story 12.3)
+ * Swap Handler (Story 12.3)
  *
  * `createSwapHandler()` factory produces a kind:1059 `Handler` that:
  *   1. Unwraps an incoming NIP-59 gift-wrapped ILP swap packet (via Story 12.2).

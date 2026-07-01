@@ -1,5 +1,5 @@
 /**
- * ATDD Tests: Swap Swap Handler (Story 12.3)
+ * ATDD Tests: Swap Handler (Story 12.3)
  *
  * Failing acceptance tests for `createSwapHandler()` factory — the kind:1059
  * Swap inbound-swap handler that unwraps NIP-59 gift-wrapped ILP packets,

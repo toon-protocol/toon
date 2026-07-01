@@ -72,7 +72,7 @@ export class GiftWrapError extends ToonError {
 }
 
 /**
- * Error thrown when Swap swap handler orchestration fails.
+ * Error thrown when swap handler orchestration fails.
  * Used for rate-conversion errors (invalid format, zero, overflow guards),
  * unsupported pair lookups, and issuer-boundary failures that are NOT
  * gift-wrap-specific. Gift-wrap failures continue to surface as `GiftWrapError`.

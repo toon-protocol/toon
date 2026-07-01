@@ -1,4 +1,4 @@
-// One-shot EVM→Solana swap swap exercised through the running toon-clientd
+// One-shot EVM→Solana swap exercised through the running toon-clientd
 // daemon. Builds the NIP-59 gift-wrapped kind:20032 swap rumor here (the SDK's
 // wrapSwapPacketToToon), then sends it via the daemon /swap toonData passthrough
 // so the daemon signs the source-asset claim against the open apex EVM channel.
