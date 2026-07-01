@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "pubkey": "522e93098bf650f141a07f0ecfc1ace0f5d0397932afc01826e9ef46888b7bce",
+    "relayUrl": "wss://relay-ws.devnet.toonprotocol.dev",
+    "ilpAddress": "g.proxy.relay.store",
+    "btpEndpoint": "wss://proxy.store.devnet.toonprotocol.dev:443"
+  }
+]

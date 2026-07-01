@@ -64,6 +64,19 @@ vi.mock('nostr-tools/pool', () => ({
   })),
 }));
 
+// Isolate tests from genesis-peers.json content so adding real peers
+// doesn't introduce live network connections or timing-dependent failures.
+vi.mock('../discovery/index.js', () => ({
+  GenesisPeerLoader: {
+    loadAllPeers: vi.fn().mockReturnValue([]),
+    loadGenesisPeers: vi.fn().mockReturnValue([]),
+    loadAdditionalPeers: vi.fn().mockReturnValue([]),
+  },
+  ArDrivePeerRegistry: {
+    fetchPeers: vi.fn().mockResolvedValue(new Map()),
+  },
+}));
+
 // ============================================================================
 // Factories
 // ============================================================================
