@@ -9,7 +9,7 @@ These are **libraries only** — no Docker image, no end-user CLI. The node prod
 
 ## How it relates to the connector
 
-`toon` does **not** vendor the [`@toon-protocol/connector`](https://github.com/ALLiDoizCode/connector) (the ILP payment engine that validates claims, takes fees, and routes packets). `core` talks to it only through a structural interface; `sdk` loads it via an optional, dynamic import. The connector is an **optional peer dependency** — `toon` builds and runs without it present, and all payment-claim validation lives in the connector, never here.
+`toon` does **not** vendor the [`@toon-protocol/connector`](https://github.com/toon-protocol/connector) (the ILP payment engine that validates claims, takes fees, and routes packets). `core` talks to it only through a structural interface; `sdk` loads it via an optional, dynamic import. The connector is an **optional peer dependency** — `toon` builds and runs without it present, and all payment-claim validation lives in the connector, never here.
 
 ## Develop
 
