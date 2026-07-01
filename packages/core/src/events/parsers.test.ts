@@ -181,7 +181,7 @@ describe('parseIlpPeerInfo', () => {
     // btpEndpoint, with swapPairs. Regression guard for the build/parse
     // asymmetry that silently dropped Swap's swap pair in the 50.3 gate.
     const content = JSON.stringify({
-      ilpAddress: 'g.proxy.mill',
+      ilpAddress: 'g.proxy.swap',
       btpEndpoint: '',
       assetCode: 'USDC',
       assetScale: 6,

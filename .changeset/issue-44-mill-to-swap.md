@@ -1,6 +1,6 @@
 ---
-"@toon-protocol/core": minor
-"@toon-protocol/sdk": minor
+"@toon-protocol/core": major
+"@toon-protocol/sdk": major
 ---
 
 Rename all `mill` vocabulary to `swap` across public API and internals.
