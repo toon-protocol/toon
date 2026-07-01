@@ -1,5 +1,25 @@
 # @toon-protocol/core
 
+## 2.0.0
+
+### Major Changes
+
+- af4cd24: Rename all `mill` vocabulary to `swap` across public API and internals.
+  - `MillSignerConfig` → `SwapSignerConfig`
+  - `millSignerAddress` → `swapSignerAddress` (on `SettlementClaim`, `SettlementBundle`)
+  - `millEphemeralPubkey` → `swapEphemeralPubkey`
+  - `millPubkey` / `millIlpAddress` → `swapPubkey` / `swapIlpAddress` (on `StreamSwapParams`)
+  - Error codes `MILL_SIGNER_MISMATCH` / `MILL_RECIPIENT_MISMATCH` → `SWAP_SIGNER_MISMATCH` / `SWAP_RECIPIENT_MISMATCH`
+  - Scripts renamed: `mill-swap.mjs` → `swap.mjs`, `mill-swap-mina.mjs` → `swap-mina.mjs`
+
+### Minor Changes
+
+- 2a5c243: Seed genesis-peers.json with the devnet apex bootstrap peer.
+
+### Patch Changes
+
+- 35fa7d3: Remove legacy `townhouse` term from code, comments, config, and docs.
+
 ## 1.6.0
 
 ### Minor Changes
