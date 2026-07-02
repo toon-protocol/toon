@@ -7,6 +7,7 @@ import {
   isValidBtpEndpoint,
 } from './GenesisPeerLoader.js';
 import type { GenesisPeer } from './GenesisPeerLoader.js';
+import genesisPeersJson from './genesis-peers.json';
 
 function validPeer(overrides: Partial<GenesisPeer> = {}): GenesisPeer {
   return {
@@ -113,6 +114,38 @@ describe('GenesisPeerLoader', () => {
         expect(isValidIlpAddress(peer.ilpAddress)).toBe(true);
         expect(isValidBtpEndpoint(peer.btpEndpoint)).toBe(true);
       }
+    });
+  });
+
+  describe('shipped genesis seed', () => {
+    // Guard: the seed that ships in the published package must be usable.
+    // core 2.0.0 shipped a seed pointing at a rotated/dead devnet identity
+    // (and 1.6.0 shipped an empty one) with no test to catch either (toon#56).
+
+    it('is non-empty', () => {
+      expect(GenesisPeerLoader.loadGenesisPeers().length).toBeGreaterThan(0);
+    });
+
+    it('has no entries silently dropped by validation', () => {
+      // Every committed entry must pass the schema — a partially-invalid seed
+      // would load "successfully" while shipping fewer peers than intended.
+      const loaded = GenesisPeerLoader.loadGenesisPeers();
+      expect(loaded.length).toBe(genesisPeersJson.length);
+    });
+
+    it('pins the live devnet apex identity', () => {
+      // The devnet apex box identity + endpoints, verified against the live
+      // kind:10032 self-announces on wss://relay-ws.devnet.toonprotocol.dev.
+      // If the box identity rotates on a redeploy, this test forces the seed
+      // to be refreshed deliberately rather than shipping a dead peer again.
+      const peers = GenesisPeerLoader.loadGenesisPeers();
+      expect(peers).toContainEqual({
+        pubkey:
+          '2813187eb66741f9509de2055161f328a0f04e01e1fc20188610b8dbd0591ea5',
+        relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
+        ilpAddress: 'g.proxy',
+        btpEndpoint: 'wss://proxy.devnet.toonprotocol.dev:443',
+      });
     });
   });
 
