@@ -25,6 +25,12 @@ import type { RegisterPeerParams } from '@toon-protocol/core';
 
 // Prevent live relay connections
 vi.mock('nostr-tools');
+// Prevent BootstrapService from dialing the live genesis-peer relay (#59).
+// Dynamic import avoids vi.mock's hoisting TDZ on a statically-imported factory.
+vi.mock('ws', async () => {
+  const { mockWs } = await import('./test-helpers/mock-ws.js');
+  return mockWs();
+});
 
 // ============================================================================
 // Deterministic test fixtures

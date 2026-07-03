@@ -26,6 +26,25 @@ vi.mock('./discovery/index.js', () => ({
   },
 }));
 
+// createToonNode()'s BootstrapService always merges in the bundled genesis
+// peer (wss://relay-ws.devnet.toonprotocol.dev) regardless of `knownPeers`,
+// then dials it via `new WebSocket(...)` from the `ws` package -- independent
+// of the `knownPeers: []` / `ardriveEnabled: false` config below, which only
+// covers the config-provided and ArDrive peer sources (#59). Mirrors the
+// transport-boundary mock in bootstrap/BootstrapService.test.ts so these
+// tests don't depend on the live devnet relay's reachability.
+vi.mock('ws', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    send: vi.fn(),
+    close: vi.fn(),
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      if (event === 'close') {
+        queueMicrotask(() => handler());
+      }
+    }),
+  })),
+}));
+
 describe('createToonNode', () => {
   let mockConnector: EmbeddableConnectorLike;
   let mockHandlePacket: Mock;

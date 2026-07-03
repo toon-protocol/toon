@@ -23,6 +23,15 @@ import { deriveChildAddress, ILP_ROOT_PREFIX } from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 
+// Prevent BootstrapService from dialing the live genesis-peer relay (#59) --
+// this file's docstring assumes "no real bootstrap or relay", but without
+// this mock, `node.start()` still dials the bundled genesis peer for real.
+// Dynamic import avoids vi.mock's hoisting TDZ on a statically-imported factory.
+vi.mock('ws', async () => {
+  const { mockWs } = await import('./test-helpers/mock-ws.js');
+  return mockWs();
+});
+
 // ---------------------------------------------------------------------------
 // Mock Connector (minimal)
 // ---------------------------------------------------------------------------
