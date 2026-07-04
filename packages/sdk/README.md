@@ -100,12 +100,12 @@ The SDK is the framework layer. You bring handlers; it handles the protocol.
 | **Self-write bypass**                                    | Events from your own pubkey skip pricing                                                                                                                                                                                                                                       |
 | **Dev mode**                                             | Skip verification and pricing for testing                                                                                                                                                                                                                                      |
 | **[TOON](https://github.com/toon-format/toon) encoding** | Events encoded in compact text format, not JSON                                                                                                                                                                                                                                |
-| **Address assignment**                                   | ILP addresses are derived from peering topology — your upstream peer assigns your address automatically based on your pubkey. A node with multiple upstream peers has multiple addresses. See [Protocol — ILP Address Hierarchy](../../docs/protocol.md#ilp-address-hierarchy) |
+| **Address assignment**                                   | ILP addresses are derived from peering topology — your upstream peer assigns your address automatically based on your pubkey. A node with multiple upstream peers has multiple addresses. See [Protocol — ILP Address Hierarchy](https://github.com/toon-protocol/toon-meta/blob/main/docs/protocol.md#ilp-address-hierarchy) |
 | **Invisible fee calculation**                            | The SDK computes multi-hop fees internally. Each intermediary advertises a fee-per-byte; the SDK sums them along the route so `publishEvent()` callers pay one total amount                                                                                                    |
 
 ## Full Documentation
 
-See the [SDK Guide](../../docs/sdk-guide.md) for the complete API reference, handler patterns, verification pipeline details, publishing events, and error handling.
+See the [SDK Guide](https://github.com/toon-protocol/toon-meta/blob/main/docs/sdk-guide.md) for the complete API reference, handler patterns, verification pipeline details, publishing events, and error handling.
 
 ## Requirements
 
