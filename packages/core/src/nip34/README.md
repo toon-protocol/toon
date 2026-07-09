@@ -19,40 +19,18 @@ User creates NIP-34 event → Sends to TOON relay (with ILP payment)
 
 ## Setup
 
-### 1. Install Dependencies
+### Install Dependencies
 
 ```bash
 cd packages/core
 npm install simple-git
 ```
 
-### 2. Deploy Forgejo
-
-Forgejo is already configured in your `docker-compose-testnet.yml`:
-
-```bash
-docker compose -f docker-compose-testnet.yml up -d forgejo
-```
-
-Access Forgejo UI: http://localhost:3003
-
-### 3. Create API Token
-
-1. Log in to Forgejo: http://localhost:3003
-2. Go to **Settings → Applications → Generate New Token**
-3. Name: "TOON Integration"
-4. Scopes: `write:repository`, `write:issue`, `write:user`
-5. Save the token
-
-### 4. Configure Environment
-
-Add to your `.env`:
-
-```bash
-FORGEJO_URL=http://forgejo:3000
-FORGEJO_TOKEN=your-api-token-here
-FORGEJO_OWNER=toon
-```
+This module talks to a Forgejo instance over its REST and Git APIs; deploying
+and configuring that instance (and generating its API token) is out of scope
+for this library — see the repo that owns your Forgejo deployment for those
+steps. `NIP34Handler` takes the resulting `forgejoUrl`/`forgejoToken` as
+constructor config (see [API Reference](#api-reference) below).
 
 ## Usage
 
@@ -291,23 +269,6 @@ This is necessary because Forgejo (like Gitea) doesn't expose a Git Database API
    # Free, public access via standard Git protocol
    git clone http://localhost:3003/toon/my-repo.git
    ```
-
-## Deployment
-
-Your `docker-compose-testnet.yml` already includes Forgejo. Just ensure environment variables are set:
-
-```bash
-# .env
-FORGEJO_URL=http://forgejo:3000
-FORGEJO_TOKEN=<your-token>
-FORGEJO_OWNER=toon
-```
-
-Then start the stack:
-
-```bash
-docker compose -f docker-compose-testnet.yml up -d
-```
 
 ## Future Enhancements
 
