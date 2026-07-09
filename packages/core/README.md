@@ -2,7 +2,7 @@
 
 Peer discovery, bootstrap, settlement negotiation, and TOON event encoding for the TOON Protocol network.
 
-> This is an internal package. Most users should start with [`@toon-protocol/client`](../client) or [`@toon-protocol/sdk`](../sdk).
+> This is an internal package. Most users should start with [`@toon-protocol/client`](https://github.com/toon-protocol/client) or [`@toon-protocol/sdk`](../sdk).
 
 ## Install
 
