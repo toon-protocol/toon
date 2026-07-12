@@ -36,6 +36,11 @@ import { StreamSwapError } from './errors.js';
 import { wrapSwapPacketToToon, decryptFulfillClaim } from './gift-wrap.js';
 import { base58Decode } from './identity.js';
 import { applyRate } from './swap-handler.js';
+import type {
+  PacketObservation,
+  PacketResolution,
+  StreamSwapAdaptiveController,
+} from './adaptive-controller.js';
 
 // ---------------------------------------------------------------------------
 // Minimal structural shapes (avoid cross-package type imports)
@@ -117,10 +122,36 @@ export interface StreamSwapParams {
   chainRecipient: string;
   /** Total source-asset amount to swap (source micro-units). */
   totalAmount: bigint;
-  /** Even-split packet count. EXACTLY ONE of this or `packetAmounts` is required. */
+  /** Even-split packet count. EXACTLY ONE of this, `packetAmounts`, or `controller` is required. */
   packetCount?: number;
-  /** Explicit per-packet amounts. EXACTLY ONE of this or `packetCount` is required. */
+  /** Explicit per-packet amounts. EXACTLY ONE of this, `packetCount`, or `controller` is required. */
   packetAmounts?: readonly bigint[];
+  /**
+   * Adaptive δ/W controller (issue #83, rolling-swap spec §6). EXACTLY ONE
+   * of this, `packetCount`, or `packetAmounts` is required.
+   *
+   * When set, packetization is DYNAMIC: the static even split is replaced by
+   * per-packet sizing from `controller.nextDelta(remaining)` (δ, capped by
+   * the measured `ε/(v·τ)` bound), and up to `controller.window` (W) packets
+   * are kept in flight concurrently. After every packet resolves, the
+   * controller receives a {@link PacketObservation} (realized rate, tape
+   * entry, RTT, resolution class) so δ and W adapt across the stream —
+   * multiplicative shrink on stale/slip/reject, additive widen on clean
+   * streaks.
+   *
+   * Adaptive-mode contract differences (each N/A to the legacy paths):
+   * - `PacketProgress.total` is the number of packets scheduled SO FAR (the
+   *   final count is unknown upfront).
+   * - With `W > 1`, `onPacket` fires in packet COMPLETION order, not strict
+   *   index order.
+   * - On a mid-stream halt (floor breach, stop, abort), already-sent
+   *   in-flight packets are drained and their claims harvested before the
+   *   result resolves.
+   *
+   * INVARIANT: the controller only tightens/loosens δ and W. It is consulted
+   * strictly AFTER the `minExchangeRate` floor check and can never relax it.
+   */
+  controller?: StreamSwapAdaptiveController;
   /** Source-asset balance proof claim. Required unless ChannelManager is wired. */
   claim?: SignedBalanceProofLike;
   /** Rate monitoring callback (fires after each accepted FULFILL). */
@@ -199,7 +230,10 @@ export type RateMonitorCallback = (
 export interface PacketProgress {
   /** 0-indexed packet number within this streamSwap invocation. */
   index: number;
-  /** Total number of packets scheduled. */
+  /**
+   * Total number of packets scheduled. In adaptive mode (`controller` set)
+   * packet sizing is dynamic, so this is the number scheduled SO FAR.
+   */
   total: number;
   /** Source-asset amount sent for this packet (micro-units). */
   sourceAmount: bigint;
@@ -762,14 +796,30 @@ function validateParams(params: StreamSwapParams): void {
 
   const hasCount = params.packetCount !== undefined;
   const hasAmounts = params.packetAmounts !== undefined;
-  if (hasCount === hasAmounts) {
+  const hasController = params.controller !== undefined;
+  const chunkingModes = [hasCount, hasAmounts, hasController].filter(
+    Boolean
+  ).length;
+  if (chunkingModes !== 1) {
     throw new StreamSwapError(
       'INVALID_CHUNKING',
-      'Exactly one of packetCount or packetAmounts must be provided'
+      'Exactly one of packetCount, packetAmounts, or controller must be provided'
     );
   }
 
-  if (hasCount) {
+  if (hasController) {
+    const c = params.controller as StreamSwapAdaptiveController;
+    if (
+      typeof c.nextDelta !== 'function' ||
+      typeof c.observe !== 'function' ||
+      typeof c.window !== 'number'
+    ) {
+      throw new StreamSwapError(
+        'INVALID_STATE',
+        'controller must implement nextDelta(remaining), observe(observation), and window'
+      );
+    }
+  } else if (hasCount) {
     const c = params.packetCount as number;
     if (!Number.isInteger(c) || c <= 0) {
       throw new StreamSwapError(
@@ -1006,10 +1056,13 @@ export function streamSwapControlled(params: StreamSwapParams): {
 
   const logger = params.logger ?? NOOP_LOGGER;
 
-  // Derive schedule
+  // Derive schedule. In adaptive mode (`controller` set) there is no static
+  // schedule — packet sizing is decided per-packet by the controller.
   const schedule: bigint[] = params.packetAmounts
     ? [...params.packetAmounts]
-    : chunkAmount(params.totalAmount, params.packetCount as number);
+    : params.packetCount !== undefined
+      ? chunkAmount(params.totalAmount, params.packetCount)
+      : [];
 
   // Freeze a defensive copy of `pair` so callers can't mutate the stored
   // reference on every AccumulatedClaim post-call. (Story 12.5 code-review
@@ -1064,24 +1117,501 @@ export function streamSwapControlled(params: StreamSwapParams): {
     },
   };
 
-  const result = runLoop(
-    params,
-    frozenPair,
-    schedule,
-    senderPubkey,
-    logger,
-    () => streamState,
-    (v: State) => {
-      streamState = v;
-    },
-    () => {
-      if (streamState !== 'paused') return Promise.resolve('resume');
-      if (!resumeDeferred) resumeDeferred = new Deferred<'resume' | 'stop'>();
-      return resumeDeferred.promise;
-    }
-  );
+  const getState = (): State => streamState;
+  const setState = (v: State): void => {
+    streamState = v;
+  };
+  const waitForResumeOrStop = (): Promise<'resume' | 'stop'> => {
+    if (streamState !== 'paused')
+      return Promise.resolve('resume' as 'resume' | 'stop');
+    if (!resumeDeferred) resumeDeferred = new Deferred<'resume' | 'stop'>();
+    return resumeDeferred.promise;
+  };
+
+  const result = params.controller
+    ? runAdaptiveLoop(
+        params,
+        frozenPair,
+        senderPubkey,
+        logger,
+        getState,
+        setState,
+        waitForResumeOrStop
+      )
+    : runLoop(
+        params,
+        frozenPair,
+        schedule,
+        senderPubkey,
+        logger,
+        getState,
+        setState,
+        waitForResumeOrStop
+      );
 
   return { result, controller };
+}
+
+// ---------------------------------------------------------------------------
+// Shared per-packet machinery (legacy + adaptive loops)
+// ---------------------------------------------------------------------------
+
+/** Mutable accumulator context shared by the loop and per-packet processing. */
+interface PacketProcessCtx {
+  params: StreamSwapParams;
+  pair: SwapPair;
+  logger: NonNullable<StreamSwapParams['logger']>;
+  getState: () => 'running' | 'paused' | 'stopped' | 'completed' | 'failed';
+  claims: AccumulatedClaim[];
+  rejections: StreamSwapResult['rejections'];
+  errors: StreamSwapResult['errors'];
+  cumulative: { source: bigint; target: bigint };
+}
+
+/**
+ * Outcome of processing one ACCEPTED (fulfilled) packet. `'error'`,
+ * `'recipient-mismatch'`, `'below-floor'`, and `'callback-throw'` have
+ * already pushed their entry onto `ctx.errors` / `ctx.rejections`; the
+ * caller only decides continue-vs-halt.
+ */
+type ProcessedPacket =
+  | {
+      status: 'accepted';
+      targetAmount: bigint;
+      rateDeviation: number;
+      rate?: string;
+      rateTimestamp?: number;
+    }
+  | { status: 'error' }
+  | { status: 'recipient-mismatch' }
+  | { status: 'below-floor' }
+  | { status: 'callback-throw' };
+
+/**
+ * Build the swap rumor + gift wrap for one packet. Throws on wrap failure
+ * (callers record the error and skip the packet).
+ */
+function buildAndWrapPacket(input: {
+  params: StreamSwapParams;
+  pair: SwapPair;
+  senderPubkey: string;
+  sourceAmount: bigint;
+  /** 1-based sequence number for the rumor `seq` tag. */
+  seq: number;
+  /** Total packets for the `seq` tag; `0` = unknown (adaptive mode). */
+  totalPackets: number;
+}): { toonData: Uint8Array; packetExpiresAt?: Date } {
+  const { params, pair, senderPubkey, sourceAmount, seq, totalPackets } = input;
+  const nonce = new Uint8Array(16);
+  getRandomValues(nonce);
+  const rumor = buildSwapRumor({
+    senderPubkey,
+    pair,
+    sourceAmount,
+    packetIndex: seq,
+    totalPackets,
+    nonce,
+    createdAt: Math.floor(Date.now() / 1000),
+    chainRecipient: params.chainRecipient,
+  });
+
+  // Per-packet expiry (issue #81 / rolling-swap R7): computed at send
+  // time so a stalled packet expires deterministically. Undefined when
+  // packetExpiryMs is not set -> transport keeps its timeout-derived
+  // default (back-compat).
+  const packetExpiresAt =
+    params.packetExpiryMs !== undefined
+      ? new Date(Date.now() + params.packetExpiryMs)
+      : undefined;
+
+  const wrapped = wrapSwapPacketToToon({
+    rumor,
+    senderSecretKey: params.senderSecretKey,
+    recipientPubkey: params.swapPubkey,
+    destination: params.swapIlpAddress,
+    amount: sourceAmount,
+    ...(packetExpiresAt !== undefined && { expiresAt: packetExpiresAt }),
+  });
+  // `wrapped.ilpPrepare.data` is base64 per buildIlpPrepare. Decode back
+  // to raw bytes for the sender API (Uint8Array contract in AC-3).
+  const toonData = new Uint8Array(
+    Buffer.from(wrapped.ilpPrepare.data, 'base64')
+  );
+  return {
+    toonData,
+    ...(packetExpiresAt !== undefined && { packetExpiresAt }),
+  };
+}
+
+/**
+ * Process one fulfilled packet: decode metadata, run the anti-substitution
+ * recipient check, enforce the `minExchangeRate` hard floor, decrypt +
+ * accumulate the claim, and fire `onPacket`. Extracted verbatim from the
+ * Story 12.5 loop so the legacy and adaptive (issue #83) loops share ONE
+ * implementation — the floor semantics cannot drift between the two paths.
+ */
+async function processAcceptedPacket(
+  ctx: PacketProcessCtx,
+  args: {
+    packetIndex: number;
+    /** Value surfaced as `PacketProgress.total`. */
+    totalForProgress: number;
+    sourceAmount: bigint;
+    /** FULFILL response `data` (base64 metadata). */
+    data: string | undefined;
+  }
+): Promise<ProcessedPacket> {
+  const { params, pair, logger } = ctx;
+  const { packetIndex, totalForProgress, sourceAmount, data } = args;
+
+  // --- Decode FULFILL metadata ---
+  // Issue #82: when the minExchangeRate floor is armed, the quote tape is
+  // REQUIRED on every fulfilled packet — a maker that doesn't emit it (or
+  // garbles it) produces a loud per-packet FULFILL_DECODE_FAILED, never a
+  // silent drop.
+  let metadata: {
+    claim: string;
+    ephemeralPubkey: string;
+    claimId?: string;
+    targetAmount?: string;
+    rate?: string;
+    rateTimestamp?: number;
+    channelId?: string;
+    nonce?: string;
+    cumulativeAmount?: string;
+    recipient?: string;
+    swapSignerAddress?: string;
+  };
+  try {
+    metadata = decodeFulfillMetadata(data, pair.to.chain, {
+      requireQuoteTape: params.minExchangeRate !== undefined,
+    });
+  } catch (err) {
+    logger.error({
+      event: 'stream_swap.fulfill_decode_failed',
+      packetIndex,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    ctx.errors.push({
+      packetIndex,
+      cause: err instanceof Error ? err : new Error(String(err)),
+    });
+    return { status: 'error' };
+  }
+
+  // Story 12.9 AC-7: when the Swap echoes a `recipient` in FULFILL metadata
+  // (Story 12.6 settlement context), it MUST equal the sender-supplied
+  // `chainRecipient`. A mismatch indicates the Swap is substituting its own
+  // address — refuse to accumulate the claim and surface a per-packet
+  // rejection with a clear reason code. Missing recipient = legacy
+  // (pre-12.6) metadata, permitted.
+  //
+  // #153: EVM addresses are case-insensitive (EIP-55 checksum casing is
+  // purely a typo-detection hint). The swap lowercases its echoed recipient
+  // while the sender may pass a checksummed `chainRecipient` (or vice versa);
+  // compare case-insensitively on EVM targets so a casing-only difference is
+  // NOT flagged as a substitution attack. Non-EVM chains keep the exact
+  // (base58 case-sensitive) comparison.
+  const isEvmTarget = pair.to.chain.startsWith('evm:');
+  const recipientMatches =
+    metadata.recipient === undefined ||
+    (isEvmTarget
+      ? metadata.recipient.toLowerCase() === params.chainRecipient.toLowerCase()
+      : metadata.recipient === params.chainRecipient);
+  if (!recipientMatches) {
+    logger.warn({
+      event: 'stream_swap.recipient_mismatch',
+      packetIndex,
+      expected: params.chainRecipient,
+      actual: metadata.recipient,
+    });
+    ctx.rejections.push({
+      packetIndex,
+      sourceAmount,
+      code: 'SWAP_RECIPIENT_MISMATCH',
+      message: `Swap echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
+    });
+    return { status: 'recipient-mismatch' };
+  }
+
+  // --- Issue #82: minExchangeRate hard floor (rfc-0029 semantics) ---
+  // Runs BEFORE claim decryption/accumulation and BEFORE the onPacket
+  // callback, and consults NOTHING but the floor itself — not the soft
+  // deviation monitor, not the callback, not any controller signal (the
+  // issue #83 adaptive controller observes packets strictly AFTER this
+  // check and has no seam to weaken it). Two independent breach
+  // conditions, either one trips the floor:
+  //   1. the maker's tape rate `R_i` is below minExchangeRate (exact
+  //      BigInt decimal comparison), or
+  //   2. the delivered targetAmount is below ⌊sourceAmount·minRate⌋
+  //      (catches a maker painting a rosy tape while under-delivering).
+  // A breach is a hard stop: the packet is recorded as a BELOW_FLOOR
+  // rejection (never a claims[] success) and the stream halts — filling
+  // further packets against a maker quoting under the floor would keep
+  // committing source value below the sender's declared worst case.
+  if (params.minExchangeRate !== undefined) {
+    // requireQuoteTape guarantees both tape fields are present here.
+    const tapeRate = metadata.rate as string;
+    const floorTargetAmount = applyRate({
+      sourceAmount,
+      fromScale: pair.from.assetScale,
+      toScale: pair.to.assetScale,
+      rate: params.minExchangeRate,
+    });
+    const deliveredTargetAmount: bigint =
+      metadata.targetAmount !== undefined
+        ? BigInt(metadata.targetAmount)
+        : applyRate({
+            sourceAmount,
+            fromScale: pair.from.assetScale,
+            toScale: pair.to.assetScale,
+            rate: tapeRate,
+          });
+    const tapeBelowFloor =
+      compareDecimalRates(tapeRate, params.minExchangeRate) < 0;
+    if (tapeBelowFloor || deliveredTargetAmount < floorTargetAmount) {
+      logger.warn({
+        event: 'stream_swap.below_floor',
+        packetIndex,
+        rate: tapeRate,
+        rateTimestamp: metadata.rateTimestamp,
+        minExchangeRate: params.minExchangeRate,
+        targetAmount: deliveredTargetAmount.toString(),
+        floorTargetAmount: floorTargetAmount.toString(),
+      });
+      ctx.rejections.push({
+        packetIndex,
+        sourceAmount,
+        code: 'BELOW_FLOOR',
+        message: `Packet fill below minExchangeRate floor: rate ${tapeRate}, targetAmount ${deliveredTargetAmount} < floor ${params.minExchangeRate} (${floorTargetAmount})`,
+      });
+      return { status: 'below-floor' };
+    }
+  }
+
+  // --- Decrypt claim ---
+  let claimBytes: Uint8Array;
+  try {
+    const ciphertext = new Uint8Array(Buffer.from(metadata.claim, 'base64'));
+    claimBytes = decryptFulfillClaim({
+      ciphertext,
+      ephemeralPubkey: metadata.ephemeralPubkey,
+      recipientSecretKey: params.senderSecretKey,
+    });
+  } catch (err) {
+    logger.error({
+      event: 'stream_swap.decrypt_failed',
+      packetIndex,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    ctx.errors.push({
+      packetIndex,
+      cause: err instanceof Error ? err : new Error(String(err)),
+    });
+    return { status: 'error' };
+  }
+
+  if (claimBytes.length === 0) {
+    logger.warn({
+      event: 'stream_swap.empty_claim_bytes',
+      packetIndex,
+    });
+  }
+
+  // --- Compute expected + actual target + deviation ---
+  const expectedTargetAmount = applyRate({
+    sourceAmount,
+    fromScale: pair.from.assetScale,
+    toScale: pair.to.assetScale,
+    rate: pair.rate,
+  });
+
+  // If the Swap includes a `targetAmount` in the FULFILL metadata, use it
+  // (chain-specific parsing of `claimBytes` is Story 12.6's job). Otherwise
+  // fall back to the advertised-rate expected amount so settlement-time
+  // verification still has a baseline.
+  // `metadata.targetAmount`, when present, is already validated as a
+  // non-negative integer decimal string by `decodeFulfillMetadata`, so
+  // `BigInt()` is safe here (no try/catch needed).
+  const targetAmount: bigint =
+    metadata.targetAmount !== undefined
+      ? BigInt(metadata.targetAmount)
+      : expectedTargetAmount;
+
+  // BigInt-safe deviation: scale up by 1e6 before dividing so we don't lose
+  // precision on 18-decimal assets. (Epic 11 retro MAX_SAFE_INTEGER guard.)
+  let rateDeviation = 0;
+  if (expectedTargetAmount > 0n) {
+    const diff =
+      targetAmount >= expectedTargetAmount
+        ? targetAmount - expectedTargetAmount
+        : expectedTargetAmount - targetAmount;
+    const scaled = (diff * 1_000_000n) / expectedTargetAmount;
+    rateDeviation = Number(scaled) / 1_000_000;
+  }
+
+  // Display-only effectiveRate for the callback payload. Guard against
+  // non-finite results (e.g., advertisedRate=0 + any deviation -> 0;
+  // parseFloat surprises) so callback consumers never observe NaN/Infinity.
+  const advertisedRate = parseFloat(pair.rate);
+  let effectiveRate: number;
+  if (targetAmount === expectedTargetAmount) {
+    effectiveRate = advertisedRate;
+  } else {
+    const signedDeviation =
+      targetAmount >= expectedTargetAmount ? rateDeviation : -rateDeviation;
+    effectiveRate = advertisedRate * (1 + signedDeviation);
+  }
+  if (!Number.isFinite(effectiveRate)) {
+    effectiveRate = advertisedRate;
+  }
+
+  ctx.cumulative.source += sourceAmount;
+  ctx.cumulative.target += targetAmount;
+
+  const accumulated: AccumulatedClaim = {
+    packetIndex,
+    sourceAmount,
+    targetAmount,
+    claimBytes,
+    swapEphemeralPubkey: metadata.ephemeralPubkey,
+    pair,
+    receivedAt: Date.now(),
+  };
+  if (metadata.claimId !== undefined) accumulated.claimId = metadata.claimId;
+  // Story 12.6: thread settlement-context fields through when present.
+  if (metadata.channelId !== undefined)
+    accumulated.channelId = metadata.channelId;
+  if (metadata.nonce !== undefined) accumulated.nonce = metadata.nonce;
+  if (metadata.cumulativeAmount !== undefined)
+    accumulated.cumulativeAmount = metadata.cumulativeAmount;
+  if (metadata.recipient !== undefined)
+    accumulated.recipient = metadata.recipient;
+  if (metadata.swapSignerAddress !== undefined)
+    accumulated.swapSignerAddress = metadata.swapSignerAddress;
+  // Issue #82: persist the quote-tape entry on the accumulated claim so
+  // post-hoc consumers (settlement audit, controller replay) retain the
+  // per-packet `R_i` sequence. Both-or-neither is enforced by the decoder.
+  if (metadata.rate !== undefined) {
+    accumulated.rate = metadata.rate;
+    accumulated.rateTimestamp = metadata.rateTimestamp as number;
+  }
+  ctx.claims.push(accumulated);
+
+  logger.debug({
+    event: 'stream_swap.packet_accepted',
+    packetIndex,
+    sourceAmount: sourceAmount.toString(),
+    targetAmount: targetAmount.toString(),
+  });
+
+  // --- onPacket callback ---
+  if (params.onPacket) {
+    const progress: PacketProgress = Object.freeze({
+      index: packetIndex,
+      total: totalForProgress,
+      sourceAmount,
+      targetAmount,
+      advertisedRate: pair.rate,
+      effectiveRate,
+      rateDeviation,
+      cumulativeSource: ctx.cumulative.source,
+      cumulativeTarget: ctx.cumulative.target,
+      // Issue #82 quote tape: surface the maker's fresh per-packet quote
+      // to the callback (the adaptive-controller seam, toon#83).
+      ...(metadata.rate !== undefined && {
+        rate: metadata.rate,
+        rateTimestamp: metadata.rateTimestamp as number,
+      }),
+      state:
+        ctx.getState() === 'paused'
+          ? 'paused'
+          : ctx.getState() === 'stopped'
+            ? 'stopped'
+            : 'running',
+    });
+
+    try {
+      const maybePromise = params.onPacket(progress);
+      if (
+        maybePromise &&
+        typeof (maybePromise as Promise<void>).then === 'function'
+      ) {
+        await maybePromise;
+      }
+    } catch (err) {
+      logger.warn({
+        event: 'stream_swap.callback_threw',
+        packetIndex,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      ctx.errors.push({
+        packetIndex,
+        cause: err instanceof Error ? err : new Error(String(err)),
+      });
+      return { status: 'callback-throw' };
+    }
+  }
+
+  return {
+    status: 'accepted',
+    targetAmount,
+    rateDeviation,
+    ...(metadata.rate !== undefined && {
+      rate: metadata.rate,
+      rateTimestamp: metadata.rateTimestamp as number,
+    }),
+  };
+}
+
+/** Map the accumulated context + abort reason to the terminal result. */
+function finalizeResult(input: {
+  ctx: PacketProcessCtx;
+  abortReason: StreamSwapResult['abortReason'];
+  packetsSent: number;
+  packetsScheduled: number;
+  setState: (
+    v: 'running' | 'paused' | 'stopped' | 'completed' | 'failed'
+  ) => void;
+}): StreamSwapResult {
+  const { claims, rejections, errors, cumulative } = input.ctx;
+  let { abortReason } = input;
+
+  let finalState: 'completed' | 'failed' | 'stopped';
+  if (abortReason === 'aborted' || abortReason === 'stopped') {
+    finalState = 'stopped';
+  } else if (
+    claims.length === 0 &&
+    (rejections.length > 0 || errors.length > 0)
+  ) {
+    finalState = 'failed';
+    // If we drained the entire schedule without accepting any claim AND the
+    // only failures were Swap rejections, surface that explicitly so callers
+    // can distinguish "all rejected" from "loop aborted early with no claims".
+    if (
+      abortReason === 'complete' &&
+      rejections.length > 0 &&
+      errors.length === 0
+    ) {
+      abortReason = 'all-rejected';
+    }
+  } else {
+    finalState = 'completed';
+  }
+
+  input.setState(finalState);
+
+  return {
+    state: finalState,
+    claims,
+    rejections,
+    errors,
+    abortReason,
+    cumulativeSource: cumulative.source,
+    cumulativeTarget: cumulative.target,
+    packetsSent: input.packetsSent,
+    packetsScheduled: input.packetsScheduled,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,11 +1630,16 @@ async function runLoop(
   ) => void,
   waitForResumeOrStop: () => Promise<'resume' | 'stop'>
 ): Promise<StreamSwapResult> {
-  const claims: AccumulatedClaim[] = [];
-  const rejections: StreamSwapResult['rejections'] = [];
-  const errors: StreamSwapResult['errors'] = [];
-  let cumulativeSource = 0n;
-  let cumulativeTarget = 0n;
+  const ctx: PacketProcessCtx = {
+    params,
+    pair,
+    logger,
+    getState,
+    claims: [],
+    rejections: [],
+    errors: [],
+    cumulative: { source: 0n, target: 0n },
+  };
   let packetsSent = 0;
   let abortReason: StreamSwapResult['abortReason'] = 'complete';
 
@@ -1155,53 +1690,29 @@ async function runLoop(
     }
 
     // --- Build + wrap packet ---
-    const nonce = new Uint8Array(16);
-    getRandomValues(nonce);
-    const rumor = buildSwapRumor({
-      senderPubkey,
-      pair,
-      sourceAmount,
-      packetIndex: packetIndex + 1,
-      totalPackets,
-      nonce,
-      createdAt: Math.floor(Date.now() / 1000),
-      chainRecipient: params.chainRecipient,
-    });
-
-    // Per-packet expiry (issue #81 / rolling-swap R7): computed at send
-    // time so a stalled packet expires deterministically. Undefined when
-    // packetExpiryMs is not set -> transport keeps its timeout-derived
-    // default (back-compat).
-    const packetExpiresAt =
-      params.packetExpiryMs !== undefined
-        ? new Date(Date.now() + params.packetExpiryMs)
-        : undefined;
-
-    let toonData: Uint8Array;
+    let built: { toonData: Uint8Array; packetExpiresAt?: Date };
     try {
-      const wrapped = wrapSwapPacketToToon({
-        rumor,
-        senderSecretKey: params.senderSecretKey,
-        recipientPubkey: params.swapPubkey,
-        destination: params.swapIlpAddress,
-        amount: sourceAmount,
-        ...(packetExpiresAt !== undefined && { expiresAt: packetExpiresAt }),
+      built = buildAndWrapPacket({
+        params,
+        pair,
+        senderPubkey,
+        sourceAmount,
+        seq: packetIndex + 1,
+        totalPackets,
       });
-      // `wrapped.ilpPrepare.data` is base64 per buildIlpPrepare. Decode back
-      // to raw bytes for the sender API (Uint8Array contract in AC-3).
-      toonData = new Uint8Array(Buffer.from(wrapped.ilpPrepare.data, 'base64'));
     } catch (err) {
       logger.error({
         event: 'stream_swap.wrap_failed',
         packetIndex,
         error: err instanceof Error ? err.message : String(err),
       });
-      errors.push({
+      ctx.errors.push({
         packetIndex,
         cause: err instanceof Error ? err : new Error(String(err)),
       });
       continue;
     }
+    const { toonData, packetExpiresAt } = built;
 
     // --- Send packet via client ---
     let sendResult: IlpSendResultLike;
@@ -1221,7 +1732,7 @@ async function runLoop(
         packetIndex,
         error: err instanceof Error ? err.message : String(err),
       });
-      errors.push({
+      ctx.errors.push({
         packetIndex,
         cause: err instanceof Error ? err : new Error(String(err)),
       });
@@ -1238,298 +1749,29 @@ async function runLoop(
         code,
         message,
       });
-      rejections.push({ packetIndex, sourceAmount, code, message });
+      ctx.rejections.push({ packetIndex, sourceAmount, code, message });
       continue;
     }
 
-    // --- Decode FULFILL metadata ---
-    // Issue #82: when the minExchangeRate floor is armed, the quote tape is
-    // REQUIRED on every fulfilled packet — a maker that doesn't emit it (or
-    // garbles it) produces a loud per-packet FULFILL_DECODE_FAILED, never a
-    // silent drop.
-    let metadata: {
-      claim: string;
-      ephemeralPubkey: string;
-      claimId?: string;
-      targetAmount?: string;
-      rate?: string;
-      rateTimestamp?: number;
-      channelId?: string;
-      nonce?: string;
-      cumulativeAmount?: string;
-      recipient?: string;
-      swapSignerAddress?: string;
-    };
-    try {
-      metadata = decodeFulfillMetadata(sendResult.data, pair.to.chain, {
-        requireQuoteTape: params.minExchangeRate !== undefined,
-      });
-    } catch (err) {
-      logger.error({
-        event: 'stream_swap.fulfill_decode_failed',
-        packetIndex,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      errors.push({
-        packetIndex,
-        cause: err instanceof Error ? err : new Error(String(err)),
-      });
-      continue;
-    }
-
-    // Story 12.9 AC-7: when the Swap echoes a `recipient` in FULFILL metadata
-    // (Story 12.6 settlement context), it MUST equal the sender-supplied
-    // `chainRecipient`. A mismatch indicates the Swap is substituting its own
-    // address — refuse to accumulate the claim and surface a per-packet
-    // rejection with a clear reason code. Missing recipient = legacy
-    // (pre-12.6) metadata, permitted.
-    //
-    // #153: EVM addresses are case-insensitive (EIP-55 checksum casing is
-    // purely a typo-detection hint). The swap lowercases its echoed recipient
-    // while the sender may pass a checksummed `chainRecipient` (or vice versa);
-    // compare case-insensitively on EVM targets so a casing-only difference is
-    // NOT flagged as a substitution attack. Non-EVM chains keep the exact
-    // (base58 case-sensitive) comparison.
-    const isEvmTarget = pair.to.chain.startsWith('evm:');
-    const recipientMatches =
-      metadata.recipient === undefined ||
-      (isEvmTarget
-        ? metadata.recipient.toLowerCase() ===
-          params.chainRecipient.toLowerCase()
-        : metadata.recipient === params.chainRecipient);
-    if (!recipientMatches) {
-      logger.warn({
-        event: 'stream_swap.recipient_mismatch',
-        packetIndex,
-        expected: params.chainRecipient,
-        actual: metadata.recipient,
-      });
-      rejections.push({
-        packetIndex,
-        sourceAmount,
-        code: 'SWAP_RECIPIENT_MISMATCH',
-        message: `Swap echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
-      });
-      continue;
-    }
-
-    // --- Issue #82: minExchangeRate hard floor (rfc-0029 semantics) ---
-    // Runs BEFORE claim decryption/accumulation and BEFORE the onPacket
-    // callback, and consults NOTHING but the floor itself — not the soft
-    // deviation monitor, not the callback, not any controller signal. Two
-    // independent breach conditions, either one trips the floor:
-    //   1. the maker's tape rate `R_i` is below minExchangeRate (exact
-    //      BigInt decimal comparison), or
-    //   2. the delivered targetAmount is below ⌊sourceAmount·minRate⌋
-    //      (catches a maker painting a rosy tape while under-delivering).
-    // A breach is a hard stop: the packet is recorded as a BELOW_FLOOR
-    // rejection (never a claims[] success) and the stream halts — filling
-    // further packets against a maker quoting under the floor would keep
-    // committing source value below the sender's declared worst case.
-    if (params.minExchangeRate !== undefined) {
-      // requireQuoteTape guarantees both tape fields are present here.
-      const tapeRate = metadata.rate as string;
-      const floorTargetAmount = applyRate({
-        sourceAmount,
-        fromScale: pair.from.assetScale,
-        toScale: pair.to.assetScale,
-        rate: params.minExchangeRate,
-      });
-      const deliveredTargetAmount: bigint =
-        metadata.targetAmount !== undefined
-          ? BigInt(metadata.targetAmount)
-          : applyRate({
-              sourceAmount,
-              fromScale: pair.from.assetScale,
-              toScale: pair.to.assetScale,
-              rate: tapeRate,
-            });
-      const tapeBelowFloor =
-        compareDecimalRates(tapeRate, params.minExchangeRate) < 0;
-      if (tapeBelowFloor || deliveredTargetAmount < floorTargetAmount) {
-        logger.warn({
-          event: 'stream_swap.below_floor',
-          packetIndex,
-          rate: tapeRate,
-          rateTimestamp: metadata.rateTimestamp,
-          minExchangeRate: params.minExchangeRate,
-          targetAmount: deliveredTargetAmount.toString(),
-          floorTargetAmount: floorTargetAmount.toString(),
-        });
-        rejections.push({
-          packetIndex,
-          sourceAmount,
-          code: 'BELOW_FLOOR',
-          message: `Packet fill below minExchangeRate floor: rate ${tapeRate}, targetAmount ${deliveredTargetAmount} < floor ${params.minExchangeRate} (${floorTargetAmount})`,
-        });
-        abortReason = 'below-floor';
-        break packetLoop;
-      }
-    }
-
-    // --- Decrypt claim ---
-    let claimBytes: Uint8Array;
-    try {
-      const ciphertext = new Uint8Array(Buffer.from(metadata.claim, 'base64'));
-      claimBytes = decryptFulfillClaim({
-        ciphertext,
-        ephemeralPubkey: metadata.ephemeralPubkey,
-        recipientSecretKey: params.senderSecretKey,
-      });
-    } catch (err) {
-      logger.error({
-        event: 'stream_swap.decrypt_failed',
-        packetIndex,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      errors.push({
-        packetIndex,
-        cause: err instanceof Error ? err : new Error(String(err)),
-      });
-      continue;
-    }
-
-    if (claimBytes.length === 0) {
-      logger.warn({
-        event: 'stream_swap.empty_claim_bytes',
-        packetIndex,
-      });
-    }
-
-    // --- Compute expected + actual target + deviation ---
-    const expectedTargetAmount = applyRate({
-      sourceAmount,
-      fromScale: pair.from.assetScale,
-      toScale: pair.to.assetScale,
-      rate: pair.rate,
-    });
-
-    // If the Swap includes a `targetAmount` in the FULFILL metadata, use it
-    // (chain-specific parsing of `claimBytes` is Story 12.6's job). Otherwise
-    // fall back to the advertised-rate expected amount so settlement-time
-    // verification still has a baseline.
-    // `metadata.targetAmount`, when present, is already validated as a
-    // non-negative integer decimal string by `decodeFulfillMetadata`, so
-    // `BigInt()` is safe here (no try/catch needed).
-    const targetAmount: bigint =
-      metadata.targetAmount !== undefined
-        ? BigInt(metadata.targetAmount)
-        : expectedTargetAmount;
-
-    // BigInt-safe deviation: scale up by 1e6 before dividing so we don't lose
-    // precision on 18-decimal assets. (Epic 11 retro MAX_SAFE_INTEGER guard.)
-    let rateDeviation = 0;
-    if (expectedTargetAmount > 0n) {
-      const diff =
-        targetAmount >= expectedTargetAmount
-          ? targetAmount - expectedTargetAmount
-          : expectedTargetAmount - targetAmount;
-      const scaled = (diff * 1_000_000n) / expectedTargetAmount;
-      rateDeviation = Number(scaled) / 1_000_000;
-    }
-
-    // Display-only effectiveRate for the callback payload. Guard against
-    // non-finite results (e.g., advertisedRate=0 + any deviation -> 0;
-    // parseFloat surprises) so callback consumers never observe NaN/Infinity.
-    const advertisedRate = parseFloat(pair.rate);
-    let effectiveRate: number;
-    if (targetAmount === expectedTargetAmount) {
-      effectiveRate = advertisedRate;
-    } else {
-      const signedDeviation =
-        targetAmount >= expectedTargetAmount ? rateDeviation : -rateDeviation;
-      effectiveRate = advertisedRate * (1 + signedDeviation);
-    }
-    if (!Number.isFinite(effectiveRate)) {
-      effectiveRate = advertisedRate;
-    }
-
-    cumulativeSource += sourceAmount;
-    cumulativeTarget += targetAmount;
-
-    const accumulated: AccumulatedClaim = {
+    // --- Process the fulfilled packet (decode -> recipient check ->
+    //     minExchangeRate floor -> decrypt -> accumulate -> onPacket),
+    //     shared with the adaptive loop (issue #83) ---
+    const outcome = await processAcceptedPacket(ctx, {
       packetIndex,
+      totalForProgress: totalPackets,
       sourceAmount,
-      targetAmount,
-      claimBytes,
-      swapEphemeralPubkey: metadata.ephemeralPubkey,
-      pair,
-      receivedAt: Date.now(),
-    };
-    if (metadata.claimId !== undefined) accumulated.claimId = metadata.claimId;
-    // Story 12.6: thread settlement-context fields through when present.
-    if (metadata.channelId !== undefined)
-      accumulated.channelId = metadata.channelId;
-    if (metadata.nonce !== undefined) accumulated.nonce = metadata.nonce;
-    if (metadata.cumulativeAmount !== undefined)
-      accumulated.cumulativeAmount = metadata.cumulativeAmount;
-    if (metadata.recipient !== undefined)
-      accumulated.recipient = metadata.recipient;
-    if (metadata.swapSignerAddress !== undefined)
-      accumulated.swapSignerAddress = metadata.swapSignerAddress;
-    // Issue #82: persist the quote-tape entry on the accumulated claim so
-    // post-hoc consumers (settlement audit, controller replay) retain the
-    // per-packet `R_i` sequence. Both-or-neither is enforced by the decoder.
-    if (metadata.rate !== undefined) {
-      accumulated.rate = metadata.rate;
-      accumulated.rateTimestamp = metadata.rateTimestamp as number;
-    }
-    claims.push(accumulated);
-
-    logger.debug({
-      event: 'stream_swap.packet_accepted',
-      packetIndex,
-      sourceAmount: sourceAmount.toString(),
-      targetAmount: targetAmount.toString(),
+      data: sendResult.data,
     });
-
-    // --- onPacket callback ---
-    if (params.onPacket) {
-      const progress: PacketProgress = Object.freeze({
-        index: packetIndex,
-        total: totalPackets,
-        sourceAmount,
-        targetAmount,
-        advertisedRate: pair.rate,
-        effectiveRate,
-        rateDeviation,
-        cumulativeSource,
-        cumulativeTarget,
-        // Issue #82 quote tape: surface the maker's fresh per-packet quote
-        // to the callback (the adaptive-controller seam, toon#83).
-        ...(metadata.rate !== undefined && {
-          rate: metadata.rate,
-          rateTimestamp: metadata.rateTimestamp as number,
-        }),
-        state:
-          getState() === 'paused'
-            ? 'paused'
-            : getState() === 'stopped'
-              ? 'stopped'
-              : 'running',
-      });
-
-      try {
-        const maybePromise = params.onPacket(progress);
-        if (
-          maybePromise &&
-          typeof (maybePromise as Promise<void>).then === 'function'
-        ) {
-          await maybePromise;
-        }
-      } catch (err) {
-        logger.warn({
-          event: 'stream_swap.callback_threw',
-          packetIndex,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        errors.push({
-          packetIndex,
-          cause: err instanceof Error ? err : new Error(String(err)),
-        });
-        abortReason = 'callback-throw';
-        break packetLoop;
-      }
+    if (outcome.status === 'error' || outcome.status === 'recipient-mismatch') {
+      continue;
+    }
+    if (outcome.status === 'below-floor') {
+      abortReason = 'below-floor';
+      break packetLoop;
+    }
+    if (outcome.status === 'callback-throw') {
+      abortReason = 'callback-throw';
+      break packetLoop;
     }
 
     // --- Abort signal / stop check AFTER callback (so tests can abort
@@ -1548,49 +1790,359 @@ async function runLoop(
     // --- Rate deviation check (after callback, after accumulation) ---
     if (
       params.rateDeviationThreshold !== undefined &&
-      rateDeviation > params.rateDeviationThreshold
+      outcome.rateDeviation > params.rateDeviationThreshold
     ) {
       abortReason = 'rate-deviation';
       break;
     }
   }
 
-  // --- Terminal state ---
-  let finalState: 'completed' | 'failed' | 'stopped';
-  if (abortReason === 'aborted' || abortReason === 'stopped') {
-    finalState = 'stopped';
-  } else if (
-    claims.length === 0 &&
-    (rejections.length > 0 || errors.length > 0)
-  ) {
-    finalState = 'failed';
-    // If we drained the entire schedule without accepting any claim AND the
-    // only failures were Swap rejections, surface that explicitly so callers
-    // can distinguish "all rejected" from "loop aborted early with no claims".
-    if (
-      abortReason === 'complete' &&
-      rejections.length > 0 &&
-      errors.length === 0
-    ) {
-      abortReason = 'all-rejected';
-    }
-  } else {
-    finalState = 'completed';
-  }
-
-  setState(finalState);
-
-  return {
-    state: finalState,
-    claims,
-    rejections,
-    errors,
+  return finalizeResult({
+    ctx,
     abortReason,
-    cumulativeSource,
-    cumulativeTarget,
     packetsSent,
     packetsScheduled: totalPackets,
+    setState,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive loop (issue #83) — controller-driven δ sizing + W-packet window
+// ---------------------------------------------------------------------------
+
+/**
+ * Classify a transport-level send failure into a controller resolution
+ * class: timeouts/expiries are TIMING signals (shrink W), everything else
+ * is a generic error (shrink δ).
+ */
+function classifySendError(err: Error): PacketResolution {
+  return /timeout|timed out|expire/i.test(err.message) ? 'timeout' : 'error';
+}
+
+/**
+ * Classify an ILP reject into a controller resolution class (spec §4/§6):
+ * - `T99` — the maker staleness reject (`stale_rate`, swap#48) → 'reject-stale'
+ * - `R`-class (expiry) or timeout-shaped messages → 'timeout'
+ * - anything else → 'reject'
+ */
+function classifyReject(code: string, message: string): PacketResolution {
+  if (code === 'T99' || /stale[_-]?rate/i.test(message)) return 'reject-stale';
+  if (code.startsWith('R') || /timeout|timed out|expire/i.test(message)) {
+    return 'timeout';
+  }
+  return 'reject';
+}
+
+/**
+ * Controller-driven variant of {@link runLoop} (issue #83, rolling-swap spec
+ * §6). Differences from the legacy loop:
+ *
+ * - No static schedule: each packet's size δ comes from
+ *   `controller.nextDelta(remaining)` at send time (already capped by
+ *   `ε/(v·τ)` inside the controller; defensively clamped to
+ *   `[1, remaining]` here).
+ * - Up to `controller.window` (W) packets are kept in flight concurrently.
+ * - Every packet resolution is fed back via `controller.observe(...)` with
+ *   measured RTT, the quote-tape entry, realized amounts, and a resolution
+ *   class — the controller applies its one-knob-per-step ramp and persists.
+ * - On halt (floor breach, deviation, stop, abort, callback throw) no new
+ *   packets are scheduled but already-sent in-flight packets are drained so
+ *   their claims (committed value) are still harvested.
+ *
+ * The `minExchangeRate` floor is enforced inside the SHARED
+ * `processAcceptedPacket` — before the controller observes anything — so
+ * controller state can never weaken it.
+ *
+ * Failed/rejected packet slices are NOT re-scheduled (`streamSwap` does not
+ * retry packets); like the legacy loop, a failed packet reduces the filled
+ * amount.
+ */
+async function runAdaptiveLoop(
+  params: StreamSwapParams,
+  pair: SwapPair,
+  senderPubkey: string,
+  logger: NonNullable<StreamSwapParams['logger']>,
+  getState: () => 'running' | 'paused' | 'stopped' | 'completed' | 'failed',
+  setState: (
+    v: 'running' | 'paused' | 'stopped' | 'completed' | 'failed'
+  ) => void,
+  waitForResumeOrStop: () => Promise<'resume' | 'stop'>
+): Promise<StreamSwapResult> {
+  const controller = params.controller as StreamSwapAdaptiveController;
+  const ctx: PacketProcessCtx = {
+    params,
+    pair,
+    logger,
+    getState,
+    claims: [],
+    rejections: [],
+    errors: [],
+    cumulative: { source: 0n, target: 0n },
   };
+  let packetsSent = 0;
+  let abortReason: StreamSwapResult['abortReason'] = 'complete';
+  let halted = false;
+  let remaining = params.totalAmount;
+  let nextIndex = 0;
+
+  const isAborted = (): boolean => params.signal?.aborted === true;
+  const halt = (reason: StreamSwapResult['abortReason']): void => {
+    if (!halted) {
+      halted = true;
+      abortReason = reason;
+    }
+  };
+
+  /** Feed the controller; a controller/persistence failure never kills the stream. */
+  const observeSafe = async (obs: PacketObservation): Promise<void> => {
+    try {
+      await controller.observe(obs);
+    } catch (err) {
+      logger.warn({
+        event: 'stream_swap.controller_observe_failed',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  interface SettledPacket {
+    index: number;
+    sourceAmount: bigint;
+    /** Measured round-trip time, ms. */
+    rttMs: number;
+    result?: IlpSendResultLike;
+    error?: Error;
+  }
+  const inflight = new Map<number, Promise<SettledPacket>>();
+
+  for (;;) {
+    // --- Boundary checks (mirror the legacy loop) ---
+    if (!halted && isAborted()) halt('aborted');
+    if (!halted && getState() === 'stopped') halt('stopped');
+    if (!halted && getState() === 'paused' && inflight.size === 0) {
+      const resumedBy = await waitForResumeOrStop();
+      if (resumedBy === 'stop' || getState() === 'stopped') halt('stopped');
+      else if (isAborted()) halt('aborted');
+    }
+
+    // --- Schedule: fill the in-flight window ---
+    if (!halted && getState() === 'running') {
+      const rawWindow = controller.window;
+      const window =
+        Number.isFinite(rawWindow) && rawWindow >= 1
+          ? Math.floor(rawWindow)
+          : 1;
+      while (remaining > 0n && inflight.size < window) {
+        let delta: bigint;
+        try {
+          delta = controller.nextDelta(remaining);
+        } catch (err) {
+          logger.error({
+            event: 'stream_swap.controller_next_delta_failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+          ctx.errors.push({
+            packetIndex: nextIndex,
+            cause: err instanceof Error ? err : new Error(String(err)),
+          });
+          halt('callback-throw');
+          break;
+        }
+        // Defensive clamp: δ ∈ [1, remaining] regardless of controller.
+        if (typeof delta !== 'bigint' || delta < 1n) delta = 1n;
+        if (delta > remaining) delta = remaining;
+
+        const packetIndex = nextIndex;
+        nextIndex += 1;
+        remaining -= delta;
+
+        let built: { toonData: Uint8Array; packetExpiresAt?: Date };
+        try {
+          built = buildAndWrapPacket({
+            params,
+            pair,
+            senderPubkey,
+            sourceAmount: delta,
+            seq: packetIndex + 1,
+            // Adaptive mode: the final packet count is unknown upfront —
+            // `0` in the rumor's `seq` tag total position means "open".
+            totalPackets: 0,
+          });
+        } catch (err) {
+          logger.error({
+            event: 'stream_swap.wrap_failed',
+            packetIndex,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          ctx.errors.push({
+            packetIndex,
+            cause: err instanceof Error ? err : new Error(String(err)),
+          });
+          continue;
+        }
+        const { toonData, packetExpiresAt } = built;
+
+        const sentAt = Date.now();
+        const promise: Promise<SettledPacket> = (async () => {
+          try {
+            const result = await params.client.sendSwapPacket({
+              destination: params.swapIlpAddress,
+              amount: delta,
+              toonData,
+              timeout: params.packetTimeoutMs ?? 30000,
+              claim: params.claim,
+              ...(packetExpiresAt !== undefined && {
+                expiresAt: packetExpiresAt,
+              }),
+            });
+            return {
+              index: packetIndex,
+              sourceAmount: delta,
+              rttMs: Date.now() - sentAt,
+              result,
+            };
+          } catch (err) {
+            return {
+              index: packetIndex,
+              sourceAmount: delta,
+              rttMs: Date.now() - sentAt,
+              error: err instanceof Error ? err : new Error(String(err)),
+            };
+          }
+        })();
+        inflight.set(packetIndex, promise);
+      }
+    }
+
+    // --- Done? (nothing in flight and either drained or halted) ---
+    if (inflight.size === 0) {
+      if (halted || remaining <= 0n) break;
+      // Paused with an empty window: loop back to the boundary wait.
+      if (getState() === 'paused') continue;
+      // Running with remaining > 0 and nothing in flight: every slice in
+      // this round failed to wrap. Nothing can progress — finish.
+      break;
+    }
+
+    // --- Await the next completion and process it ---
+    const settled = await Promise.race(inflight.values());
+    inflight.delete(settled.index);
+
+    if (settled.error) {
+      logger.error({
+        event: 'stream_swap.send_failed',
+        packetIndex: settled.index,
+        error: settled.error.message,
+      });
+      ctx.errors.push({ packetIndex: settled.index, cause: settled.error });
+      await observeSafe({
+        resolution: classifySendError(settled.error),
+        rttMs: settled.rttMs,
+        remaining,
+      });
+      continue;
+    }
+    packetsSent += 1;
+    const sendResult = settled.result as IlpSendResultLike;
+
+    if (!sendResult.accepted) {
+      const code = sendResult.code ?? 'F00';
+      const message = sendResult.message ?? 'rejected';
+      logger.warn({
+        event: 'stream_swap.packet_rejected',
+        packetIndex: settled.index,
+        code,
+        message,
+      });
+      ctx.rejections.push({
+        packetIndex: settled.index,
+        sourceAmount: settled.sourceAmount,
+        code,
+        message,
+      });
+      await observeSafe({
+        resolution: classifyReject(code, message),
+        rttMs: settled.rttMs,
+        remaining,
+      });
+      continue;
+    }
+
+    const outcome = await processAcceptedPacket(ctx, {
+      packetIndex: settled.index,
+      totalForProgress: nextIndex,
+      sourceAmount: settled.sourceAmount,
+      data: sendResult.data,
+    });
+
+    switch (outcome.status) {
+      case 'error':
+        await observeSafe({
+          resolution: 'error',
+          rttMs: settled.rttMs,
+          remaining,
+        });
+        break;
+      case 'recipient-mismatch':
+        await observeSafe({
+          resolution: 'reject',
+          rttMs: settled.rttMs,
+          remaining,
+        });
+        break;
+      case 'below-floor':
+        // The floor already hard-stopped the packet (shared logic). Feed the
+        // shrink signal so the persisted tuple starts cautious next session,
+        // then halt the stream. The observation happens strictly AFTER the
+        // floor decision — the controller cannot influence it.
+        await observeSafe({
+          resolution: 'reject',
+          rttMs: settled.rttMs,
+          remaining,
+        });
+        halt('below-floor');
+        break;
+      case 'callback-throw':
+        // The fill itself was clean; the sender's own callback threw.
+        await observeSafe({
+          resolution: 'fulfill',
+          rttMs: settled.rttMs,
+          remaining,
+        });
+        halt('callback-throw');
+        break;
+      case 'accepted': {
+        await observeSafe({
+          resolution: 'fulfill',
+          rttMs: settled.rttMs,
+          remaining,
+          sourceAmount: settled.sourceAmount,
+          targetAmount: outcome.targetAmount,
+          ...(outcome.rate !== undefined && {
+            rate: outcome.rate,
+            rateTimestamp: outcome.rateTimestamp as number,
+          }),
+        });
+        if (isAborted()) halt('aborted');
+        else if (getState() === 'stopped') halt('stopped');
+        else if (
+          params.rateDeviationThreshold !== undefined &&
+          outcome.rateDeviation > params.rateDeviationThreshold
+        ) {
+          halt('rate-deviation');
+        }
+        break;
+      }
+    }
+  }
+
+  return finalizeResult({
+    ctx,
+    abortReason,
+    packetsSent,
+    packetsScheduled: nextIndex,
+    setState,
+  });
 }
 
 // ---------------------------------------------------------------------------

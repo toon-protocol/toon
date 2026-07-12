@@ -27,6 +27,12 @@ import {
   type RateMonitorCallback,
 } from './stream-swap';
 import { StreamSwapError } from './errors';
+import {
+  AdaptiveDeltaController,
+  InMemorySwapControllerStateStore,
+  swapControllerStateKey,
+  type SwapControllerState,
+} from './adaptive-controller';
 
 /**
  * Shared Story 12.9 fixture: 20-byte lowercased EVM payout address used as
@@ -2716,5 +2722,273 @@ describe('issue #82 — minExchangeRate hard floor', () => {
     expect(result.abortReason).toBe('complete');
     expect(result.claims).toHaveLength(4);
     expect(result.rejections).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #83 — adaptive δ/W controller wiring
+// ---------------------------------------------------------------------------
+
+describe('issue #83 — adaptive controller wiring (streamSwap)', () => {
+  const senderSecretKey = generateSecretKey();
+  const swapSecretKey = generateSecretKey();
+  const swapPubkey = getPublicKey(swapSecretKey);
+
+  function adaptiveParams(
+    swap: MockSwapHandle,
+    pair: SwapPair,
+    controller: StreamSwapParams['controller'],
+    extra: Partial<StreamSwapParams> = {}
+  ): StreamSwapParams {
+    return {
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey,
+      swapIlpAddress: 'g.toon.swap1',
+      pair,
+      senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 10_000n,
+      controller,
+      ...extra,
+    };
+  }
+
+  /** Controller with pre-seeded per-tuple persisted state (keyed by the mock maker). */
+  async function seededController(
+    pair: SwapPair,
+    stateOverrides: Partial<SwapControllerState> = {},
+    configOverrides: Record<string, unknown> = {}
+  ): Promise<AdaptiveDeltaController> {
+    const store = new InMemorySwapControllerStateStore();
+    const key = swapControllerStateKey({ makerPubkey: swapPubkey, pair });
+    await store.save(key, {
+      v: 1,
+      delta: '2500',
+      W: 1,
+      vEwma: 0,
+      tauEwma: 0,
+      cleanStreak: 0,
+      everShrunk: true,
+      lastWidened: 'window',
+      updatedAt: Date.now(),
+      ...stateOverrides,
+    });
+    return AdaptiveDeltaController.create({
+      makerPubkey: swapPubkey,
+      pair,
+      advertisedSpread: 0.004,
+      store,
+      ...configOverrides,
+    });
+  }
+
+  it('rejects controller combined with packetCount/packetAmounts (INVALID_CHUNKING)', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey);
+    const controller = await seededController(pair);
+    await expect(
+      streamSwap(adaptiveParams(swap, pair, controller, { packetCount: 4 }))
+    ).rejects.toMatchObject({ code: 'INVALID_CHUNKING' });
+    await expect(
+      streamSwap(
+        adaptiveParams(swap, pair, controller, {
+          packetAmounts: [5_000n, 5_000n],
+        })
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_CHUNKING' });
+  });
+
+  it('rejects a malformed controller object (INVALID_STATE)', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey);
+    await expect(
+      streamSwap(
+        adaptiveParams(swap, pair, {
+          window: 1,
+        } as unknown as StreamSwapParams['controller'])
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
+  });
+
+  it('drives packet sizing from the controller (no static split) and fills the notional', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+    const controller = await seededController(pair, { delta: '2500' });
+
+    const result = await streamSwap(adaptiveParams(swap, pair, controller));
+
+    expect(result.state).toBe('completed');
+    expect(result.abortReason).toBe('complete');
+    expect(result.claims.map((c) => c.sourceAmount)).toEqual([
+      2500n,
+      2500n,
+      2500n,
+      2500n,
+    ]);
+    expect(result.cumulativeSource).toBe(10_000n);
+    expect(result.packetsScheduled).toBe(4);
+    // Tape threads through to the accumulated claims in adaptive mode too.
+    expect(result.claims.every((c) => c.rate === pair.rate)).toBe(true);
+  });
+
+  it('cold start: packets are small probes (δ_0 = notional/divisor) with W = 1', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+    const controller = await AdaptiveDeltaController.create({
+      makerPubkey: swapPubkey,
+      pair,
+      advertisedSpread: 0.004,
+      coldStartDivisor: 4,
+    });
+    expect(controller.window).toBe(1);
+
+    const result = await streamSwap(adaptiveParams(swap, pair, controller));
+
+    expect(result.state).toBe('completed');
+    expect(result.claims.map((c) => c.sourceAmount)).toEqual([
+      2500n,
+      2500n,
+      2500n,
+      2500n,
+    ]);
+  });
+
+  it('a mid-stream reject halves δ for the remaining packets (multiplicative shrink)', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rejectIndices: new Map([
+        [1, { code: 'T99', message: 'stale_rate: feed too old' }],
+      ]),
+    });
+    const controller = await seededController(pair, { delta: '4000' });
+
+    const result = await streamSwap(
+      adaptiveParams(swap, pair, controller, { totalAmount: 12_000n })
+    );
+
+    // 4000 (ok), 4000 (T99 reject → δ ← 2000), 2000 (ok), 2000 (ok).
+    expect(result.rejections).toHaveLength(1);
+    expect(result.rejections[0]?.code).toBe('T99');
+    expect(controller.state.delta).toBe('2000');
+    expect(controller.state.everShrunk).toBe(true);
+    expect(result.claims.map((c) => c.sourceAmount)).toEqual([
+      4000n,
+      2000n,
+      2000n,
+    ]);
+    // The rejected slice is not re-scheduled (no packet retries).
+    expect(result.cumulativeSource).toBe(8_000n);
+    expect(result.state).toBe('completed');
+  });
+
+  it('a transport timeout halves W (the timing knob), leaving δ alone', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+    const controller = await seededController(pair, { delta: '2500', W: 2 });
+
+    const realClient = makeClient(swap, senderSecretKey);
+    let calls = 0;
+    const flaky: StreamSwapParams['client'] = {
+      getPublicKey: realClient.getPublicKey,
+      sendSwapPacket: async (p) => {
+        calls += 1;
+        if (calls === 2) throw new Error('request timed out');
+        return realClient.sendSwapPacket(p);
+      },
+    };
+
+    const result = await streamSwap({
+      ...adaptiveParams(swap, pair, controller),
+      client: flaky,
+    });
+
+    expect(result.errors).toHaveLength(1);
+    expect(controller.state.W).toBe(1);
+    // One knob per step: the timeout touched W, never δ.
+    expect(controller.state.delta).toBe('2500');
+    expect(result.cumulativeSource).toBe(7_500n);
+  });
+
+  it('keeps up to W packets in flight concurrently', async () => {
+    const pair = samplePair();
+    const controller = await seededController(pair, { delta: '1000', W: 3 });
+
+    let inflight = 0;
+    let maxInflight = 0;
+    const client: StreamSwapParams['client'] = {
+      getPublicKey: () => getPublicKey(senderSecretKey),
+      sendSwapPacket: async () => {
+        inflight += 1;
+        maxInflight = Math.max(maxInflight, inflight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inflight -= 1;
+        return { accepted: false, code: 'F00', message: 'nope' };
+      },
+    };
+
+    const result = await streamSwap({
+      client,
+      swapPubkey,
+      swapIlpAddress: 'g.toon.swap1',
+      pair,
+      senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 3_000n,
+      controller,
+    });
+
+    expect(maxInflight).toBe(3);
+    expect(result.packetsScheduled).toBe(3);
+    expect(result.state).toBe('failed');
+    expect(result.abortReason).toBe('all-rejected');
+  });
+
+  it('controller state can NEVER relax the minExchangeRate floor (floor independence)', async () => {
+    const pair = samplePair(); // advertised rate 0.0005
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rateOverride: new Map([[1, '0.0004']]), // second packet quotes below floor
+    });
+    // A deliberately "trusting" persisted state: wide δ, long clean streak.
+    const controller = await seededController(pair, {
+      delta: '2500',
+      cleanStreak: 15,
+      everShrunk: false,
+    });
+
+    const result = await streamSwap(
+      adaptiveParams(swap, pair, controller, {
+        minExchangeRate: pair.rate,
+      })
+    );
+
+    // The exact adversarial-tape shape: packet 0's clean fulfill completed
+    // the seeded streak, so the calm tape DID widen δ (slow-start 2500 → 5000)
+    // — and the floor still tripped on packet 1 and hard-stopped the stream.
+    // Controller state loosens δ only; it never touches the floor.
+    expect(result.abortReason).toBe('below-floor');
+    expect(result.rejections.map((r) => r.code)).toContain('BELOW_FLOOR');
+    expect(result.claims).toHaveLength(1);
+    expect(result.rejections[0]?.sourceAmount).toBe(5000n); // the widened packet
+    // The breach also fed the controller a shrink signal for next session:
+    // the widened 5000 halved back down.
+    expect(controller.state.delta).toBe('2500');
+    expect(controller.state.everShrunk).toBe(true);
+  });
+
+  it('legacy path is untouched: identical params without controller still use the static split', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+    const result = await streamSwap(
+      baseParams(swap, senderSecretKey, swapSecretKey, pair) // packetCount: 4
+    );
+    expect(result.state).toBe('completed');
+    expect(result.claims.map((c) => c.sourceAmount)).toEqual([
+      100n,
+      100n,
+      100n,
+      100n,
+    ]);
   });
 });

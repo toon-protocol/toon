@@ -166,6 +166,25 @@ export type {
   RateQuote,
 } from './swap-handler.js';
 
+// Adaptive δ/W controller (issue #83, rolling-swap spec §6)
+export {
+  AdaptiveDeltaController,
+  InMemorySwapControllerStateStore,
+  JsonFileSwapControllerStateStore,
+  SwapControllerError,
+  isSwapControllerState,
+  swapControllerStateKey,
+} from './adaptive-controller.js';
+
+export type {
+  AdaptiveDeltaControllerConfig,
+  PacketObservation,
+  PacketResolution,
+  StreamSwapAdaptiveController,
+  SwapControllerState,
+  SwapControllerStateStore,
+} from './adaptive-controller.js';
+
 // Stream swap sender API (Story 12.5)
 export { streamSwap, streamSwapControlled } from './stream-swap.js';
 

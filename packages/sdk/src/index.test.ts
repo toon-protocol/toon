@@ -147,6 +147,13 @@ describe('@toon-protocol/sdk public API exports', () => {
       'StreamSwapError',
       'streamSwap',
       'streamSwapControlled',
+      // Adaptive δ/W controller (issue #83)
+      'AdaptiveDeltaController',
+      'InMemorySwapControllerStateStore',
+      'JsonFileSwapControllerStateStore',
+      'SwapControllerError',
+      'isSwapControllerState',
+      'swapControllerStateKey',
       // Settlement (Story 12.6)
       'SettlementTxError',
       'buildSettlementTx',
