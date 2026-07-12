@@ -71,6 +71,14 @@ export interface StreamSwapClient {
     toonData: Uint8Array;
     timeout?: number;
     claim?: SignedBalanceProofLike;
+    /**
+     * Explicit per-packet PREPARE expiry. When set, the transport MUST use
+     * exactly this expiry on the wire instead of deriving one from the
+     * request timeout. Optional so existing `ToonClient` implementations
+     * remain structurally compatible (they ignore the extra field until
+     * the client-transport work lands).
+     */
+    expiresAt?: Date;
   }): Promise<IlpSendResultLike>;
   getPublicKey(): string;
 }
@@ -121,6 +129,14 @@ export interface StreamSwapParams {
   rateDeviationThreshold?: number;
   /** Per-packet timeout in ms. Default 30000. */
   packetTimeoutMs?: number;
+  /**
+   * Per-packet PREPARE expiry window in ms. When set, each packet is sent
+   * with `expiresAt = now + packetExpiryMs` (computed at send time) so a
+   * stalled packet expires deterministically and releases its in-flight
+   * slot (rolling-swap R7). When omitted, behavior is unchanged: the
+   * transport derives the expiry from its timeout (back-compat default).
+   */
+  packetExpiryMs?: number;
   /** Optional AbortSignal. */
   signal?: AbortSignal;
   /**
@@ -750,6 +766,18 @@ function validateParams(params: StreamSwapParams): void {
     );
   }
 
+  if (
+    params.packetExpiryMs !== undefined &&
+    (typeof params.packetExpiryMs !== 'number' ||
+      !Number.isInteger(params.packetExpiryMs) ||
+      params.packetExpiryMs <= 0)
+  ) {
+    throw new StreamSwapError(
+      'INVALID_STATE',
+      `packetExpiryMs must be a positive integer (ms), got ${params.packetExpiryMs}`
+    );
+  }
+
   // Story 12.9 AC-4 / AC-5: `chainRecipient` is REQUIRED and MUST validate
   // against `pair.to.chain`. Defense-in-depth for JS callers who bypass the
   // TS interface (the field is declared non-optional on StreamSwapParams).
@@ -992,6 +1020,15 @@ async function runLoop(
       chainRecipient: params.chainRecipient,
     });
 
+    // Per-packet expiry (issue #81 / rolling-swap R7): computed at send
+    // time so a stalled packet expires deterministically. Undefined when
+    // packetExpiryMs is not set -> transport keeps its timeout-derived
+    // default (back-compat).
+    const packetExpiresAt =
+      params.packetExpiryMs !== undefined
+        ? new Date(Date.now() + params.packetExpiryMs)
+        : undefined;
+
     let toonData: Uint8Array;
     try {
       const wrapped = wrapSwapPacketToToon({
@@ -1000,6 +1037,7 @@ async function runLoop(
         recipientPubkey: params.swapPubkey,
         destination: params.swapIlpAddress,
         amount: sourceAmount,
+        ...(packetExpiresAt !== undefined && { expiresAt: packetExpiresAt }),
       });
       // `wrapped.ilpPrepare.data` is base64 per buildIlpPrepare. Decode back
       // to raw bytes for the sender API (Uint8Array contract in AC-3).
@@ -1026,6 +1064,7 @@ async function runLoop(
         toonData,
         timeout: params.packetTimeoutMs ?? 30000,
         claim: params.claim,
+        ...(packetExpiresAt !== undefined && { expiresAt: packetExpiresAt }),
       });
       packetsSent += 1;
     } catch (err) {

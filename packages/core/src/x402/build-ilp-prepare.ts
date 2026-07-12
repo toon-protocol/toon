@@ -21,7 +21,12 @@ export interface BuildIlpPrepareParams {
   amount: bigint;
   /** TOON-encoded event as raw bytes. */
   data: Uint8Array;
-  /** Packet expiry. Default: 30 seconds from now. */
+  /**
+   * Per-packet expiry. When provided, it is propagated onto the produced
+   * PREPARE (as an ISO 8601 string) so the transport sets exactly this
+   * expiry on the wire. When omitted, the transport applies its own
+   * default (typically derived from the request timeout, ~30s).
+   */
   expiresAt?: Date;
 }
 
@@ -39,13 +44,21 @@ export interface IlpPreparePacket {
   amount: string;
   /** TOON-encoded event as base64 string. */
   data: string;
+  /**
+   * Packet expiry as an ISO 8601 string. Present only when the caller
+   * supplied `expiresAt`; absent means the transport picks its default
+   * (timeout-derived). Matches the connector's `POST /admin/ilp/send`
+   * request field.
+   */
+  expiresAt?: string;
 }
 
 /**
  * Build an ILP PREPARE packet from the given parameters.
  *
  * Converts the bigint amount to a string, encodes the TOON data to base64,
- * and passes through the destination. This is deliberately simple -- the
+ * passes through the destination, and — when supplied — serializes the
+ * per-packet expiry to ISO 8601. This is deliberately simple -- the
  * value is in having ONE function both the x402 and ILP paths call, not
  * in complex logic.
  *
@@ -59,5 +72,8 @@ export function buildIlpPrepare(
     destination: params.destination,
     amount: String(params.amount),
     data: Buffer.from(params.data).toString('base64'),
+    ...(params.expiresAt !== undefined && {
+      expiresAt: params.expiresAt.toISOString(),
+    }),
   };
 }

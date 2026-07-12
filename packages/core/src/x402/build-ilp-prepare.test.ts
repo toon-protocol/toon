@@ -135,3 +135,60 @@ describe('buildIlpPrepare() Packet Equivalence (Story 5.2)', () => {
     expect(ilpAmount).toBeGreaterThan(0n);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #81 — expiresAt plumbing (rolling-swap per-packet timeout prereq)
+// ---------------------------------------------------------------------------
+
+describe('buildIlpPrepare() expiresAt plumbing (issue #81)', () => {
+  const toonData = new Uint8Array([1, 2, 3, 4]);
+
+  it('propagates a caller-supplied expiresAt onto the packet as ISO 8601', () => {
+    const expiresAt = new Date('2026-07-12T12:34:56.789Z');
+
+    const packet = buildIlpPrepare({
+      destination: 'g.toon.swap',
+      amount: 1000n,
+      data: toonData,
+      expiresAt,
+    });
+
+    expect(packet.expiresAt).toBe('2026-07-12T12:34:56.789Z');
+    // Round-trips back to the exact same instant
+    expect(new Date(packet.expiresAt!).getTime()).toBe(expiresAt.getTime());
+    // Other fields are unaffected
+    expect(packet.destination).toBe('g.toon.swap');
+    expect(packet.amount).toBe('1000');
+    expect(packet.data).toBe(Buffer.from(toonData).toString('base64'));
+  });
+
+  it('regression: omitting expiresAt preserves the legacy packet shape (no expiresAt key)', () => {
+    const packet = buildIlpPrepare({
+      destination: 'g.toon.relay',
+      amount: 42n,
+      data: toonData,
+    });
+
+    // The key must be entirely absent (not undefined) so transports fall
+    // back to their timeout-derived default and JSON bodies are unchanged.
+    expect('expiresAt' in packet).toBe(false);
+    expect(Object.keys(packet).sort()).toEqual([
+      'amount',
+      'data',
+      'destination',
+    ]);
+  });
+
+  it('packet equivalence holds with expiresAt: both rails produce identical packets', () => {
+    const expiresAt = new Date(Date.now() + 15_000);
+    const build = () =>
+      buildIlpPrepare({
+        destination: 'g.toon.relay',
+        amount: 500n,
+        data: toonData,
+        expiresAt,
+      });
+
+    expect(build()).toEqual(build());
+  });
+});

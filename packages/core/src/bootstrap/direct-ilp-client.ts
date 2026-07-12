@@ -85,6 +85,7 @@ export function createDirectIlpClient(
       amount: string;
       data: string;
       timeout?: number;
+      expiresAt?: string;
     }): Promise<IlpSendResult> {
       try {
         // Convert string amount to BigInt
@@ -95,12 +96,21 @@ export function createDirectIlpClient(
 
         // Call connector.sendPacket()
         // expiresAt is required by ConnectorNode.sendPacket() even though the
-        // interface marks it optional. Default to 30 seconds from now.
+        // interface marks it optional. Honor a caller-supplied per-packet
+        // expiry (ISO 8601); default to 30 seconds from now otherwise.
+        const expiresAt = params.expiresAt
+          ? new Date(params.expiresAt)
+          : new Date(Date.now() + 30000);
+        if (Number.isNaN(expiresAt.getTime())) {
+          throw new BootstrapError(
+            `Invalid expiresAt: ${params.expiresAt} is not a parseable date`
+          );
+        }
         const result = await connector.sendPacket({
           destination: params.destination,
           amount,
           data,
-          expiresAt: new Date(Date.now() + 30000),
+          expiresAt,
         });
 
         // Map result to IlpSendResult

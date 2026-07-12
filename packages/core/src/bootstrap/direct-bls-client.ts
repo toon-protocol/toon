@@ -49,6 +49,7 @@ export function createDirectBlsClient(
       amount: string;
       data: string;
       timeout?: number;
+      expiresAt?: string;
     }): Promise<IlpSendResult> {
       const requestTimeout = params.timeout ?? timeout;
       const controller = new AbortController();
@@ -62,6 +63,9 @@ export function createDirectBlsClient(
             destination: params.destination,
             amount: params.amount,
             data: params.data,
+            ...(params.expiresAt !== undefined && {
+              expiresAt: params.expiresAt,
+            }),
           }),
           signal: controller.signal,
         });
