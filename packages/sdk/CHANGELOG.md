@@ -1,5 +1,93 @@
 # @toon-protocol/sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- 34d7d16: Adaptive δ/W controller for rolling swaps (issue #83, rolling-swap spec §6),
+  persisted per (chain, maker, pair).
+
+  New module `adaptive-controller`:
+  - `AdaptiveDeltaController` (built via async `AdaptiveDeltaController.create`)
+    manages the two rolling-swap knobs from measured, untrusted inputs: δ
+    (packet size, bounds per-packet pick-off risk) and W (in-flight window,
+    bounds timing risk and the worst-case exposure δ·W).
+  - The cap: `delta_cap = ε/(v·τ)` recomputed per packet — `v` is an EWMA of
+    `abs(ΔR)/R` per second read off the issue-#82 quote tape, `τ` an EWMA of
+    observed RTTs, and ε is denominated as a fraction of the maker's advertised
+    half-spread (default `0.5 × halfSpread`), never an absolute rate. An
+    absolute `maxPacketAmount` (maker maxAmount) cap binds independently.
+  - Asymmetric, one-knob-per-step ramp: multiplicative shrink on stale-rate
+    rejects / other rejects / realized slip > ε (`δ ← max(δ_min, δ/2)`) and on
+    timeouts (`W ← max(1, ⌈W/2⌉)`); additive widen after K = 16 consecutive
+    clean fulfills (`δ ← δ + δ_0` or `W ← W + 1`, alternating). Cold start is
+    small on both knobs (`δ_0 = min(delta_cap, notional/256, maxAmount)`,
+    `W_0 = 1`) with a multiplicative slow-start until the first-ever loss.
+  - State (`{delta, W, vEwma, tauEwma, cleanStreak, everShrunk, lastWidened,
+updatedAt}`) persists per `${chain}:${makerPubkey}:${from}:${to}` through a
+    pluggable `SwapControllerStateStore` (SDK stays isomorphic):
+    `InMemorySwapControllerStateStore` (default) or the Node-only
+    `JsonFileSwapControllerStateStore` (atomic JSON-file map, the
+    `ChannelStore` pattern), so ramp/trust survives across swaps.
+
+  `streamSwap` / `streamSwapControlled` wiring: new `controller` param
+  (exactly one of `packetCount`, `packetAmounts`, or `controller`). In
+  controller mode the static even split is replaced by per-packet
+  `controller.nextDelta(remaining)` sizing, up to `controller.window` packets
+  are kept in flight concurrently, and every packet resolution feeds back a
+  `PacketObservation` (resolution class, RTT, tape entry, realized amounts).
+  The `minExchangeRate` floor is enforced in shared code BEFORE the controller
+  observes anything — controller state can only tighten/loosen δ and W and can
+  never relax the floor. Legacy paths (no `controller`) are unchanged.
+
+- 7fd7fe3: Quote-tape plumbing + `minExchangeRate` hard floor in `streamSwap` (issue #82, rolling-swap spec §5/§7.1).
+
+  Maker side (`createSwapHandler`): every FULFILL accept-metadata now carries the
+  resolved per-packet rate `R_i` (`rate`, decimal string) and its quote timestamp
+  (`rateTimestamp`, unix ms) — the quote tape. `rateProvider` may now return
+  either the legacy decimal string (timestamp stamped at resolution) or a
+  `RateQuote` `{ rate, rateTimestamp }` so the rate source's own tick time
+  travels on the tape. Additive and backward compatible.
+
+  Sender side (`streamSwap` / `streamSwapControlled`):
+  - `decodeFulfillMetadata` parses the tape; a present-but-malformed or partial
+    tape entry is a loud per-packet `FULFILL_DECODE_FAILED`, never a silent drop.
+  - New `minExchangeRate` param (rfc-0029 semantics): a hard, per-packet,
+    pre-accept floor. When set, the tape becomes required, and a packet whose
+    tape rate is below the floor OR whose delivered `targetAmount` is below
+    `applyRate(sourceAmount, minExchangeRate)` is recorded as a `BELOW_FLOOR`
+    rejection (never accumulated into `claims[]`) and the stream halts with
+    `abortReason: 'below-floor'`. The floor is independent of — and never
+    relaxed by — the soft `rateDeviationThreshold` monitor or any
+    callback/controller signal.
+  - `PacketProgress` and `AccumulatedClaim` gain optional `rate`/`rateTimestamp`
+    fields so `onPacket` consumers (the adaptive controller) can read the tape
+    per fulfilled packet, in order.
+
+  When the new params are omitted and the maker emits no tape, behavior is
+  unchanged.
+
+- af3e3ef: Plumb per-packet `expiresAt` end-to-end (issue #81, rolling-swap prereq).
+
+  `buildIlpPrepare()` no longer silently drops a caller-supplied `expiresAt`: it is
+  now propagated onto the produced PREPARE as an ISO 8601 `expiresAt` string (the
+  field the connector's `POST /admin/ilp/send` already accepts). All `IlpClient`
+  transports forward it — the HTTP clients include it in the request body and the
+  direct client parses it into the `Date` handed to `ConnectorNode.sendPacket()`.
+  When omitted, behavior is unchanged (transport-derived / now+30s default).
+
+  `streamSwap()` gains `packetExpiryMs`: when set, each packet is sent with
+  `expiresAt = now + packetExpiryMs` (computed at send time) through
+  `wrapSwapPacketToToon()` and `StreamSwapClient.sendSwapPacket()`, so a stalled
+  packet expires deterministically and releases its in-flight slot. Omitted =
+  previous timeout-derived behavior.
+
+### Patch Changes
+
+- Updated dependencies [fd5c7d4]
+- Updated dependencies [af3e3ef]
+  - @toon-protocol/core@2.1.0
+
 ## 2.0.1
 
 ### Patch Changes
