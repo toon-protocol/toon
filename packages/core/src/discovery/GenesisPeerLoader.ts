@@ -57,8 +57,38 @@ function deduplicateByPubkey(peers: GenesisPeer[]): GenesisPeer[] {
   return [...map.values()];
 }
 
-/** Load and validate genesis peers from the bundled JSON file. */
+/**
+ * Load and validate genesis peers from the bundled JSON file.
+ *
+ * The `TOON_GENESIS_PEERS` environment variable, when set, REPLACES the
+ * bundled seed entirely (same JSON array format). Set it to `[]` to disable
+ * bundled genesis peers — e.g. for private networks or hermetic tests.
+ */
 function loadGenesisPeers(): GenesisPeer[] {
+  const envOverride = process.env['TOON_GENESIS_PEERS'];
+  if (envOverride !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(envOverride);
+    } catch {
+      console.warn('Failed to parse TOON_GENESIS_PEERS JSON:', envOverride);
+      return [];
+    }
+    if (!Array.isArray(parsed)) {
+      console.warn('TOON_GENESIS_PEERS JSON is not an array');
+      return [];
+    }
+    const valid: GenesisPeer[] = [];
+    for (const entry of parsed as unknown[]) {
+      if (isValidGenesisPeer(entry)) {
+        valid.push(entry);
+      } else {
+        console.warn('Skipping invalid TOON_GENESIS_PEERS entry:', entry);
+      }
+    }
+    return deduplicateByPubkey(valid);
+  }
+
   const raw: unknown[] = genesisPeersJson;
   const valid: GenesisPeer[] = [];
   for (const entry of raw) {

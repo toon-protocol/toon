@@ -3,6 +3,12 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    // Unit tests must be hermetic: disable the bundled genesis peer seed
+    // (packages/core/src/discovery/genesis-peers.json) so zero-known-peer
+    // fixtures stay zero-peer regardless of live seed content. See toon#79.
+    env: {
+      TOON_GENESIS_PEERS: '[]',
+    },
     include: ['src/**/*.test.ts'],
     exclude: [
       '**/node_modules/**',
