@@ -163,6 +163,7 @@ export type {
   IssueClaimResult,
   ApplyRateParams,
   SwapHandlerLogger,
+  RateQuote,
 } from './swap-handler.js';
 
 // Stream swap sender API (Story 12.5)

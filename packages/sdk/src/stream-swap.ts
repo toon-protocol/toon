@@ -127,6 +127,33 @@ export interface StreamSwapParams {
   onPacket?: RateMonitorCallback;
   /** Rate deviation threshold (decimal, e.g., 0.02 = 2%). */
   rateDeviationThreshold?: number;
+  /**
+   * Hard floor on the per-packet exchange rate (issue #82, rfc-0029
+   * `minExchangeRate` semantics; rolling-swap spec §5). Decimal string in
+   * `SwapPair.rate` format (target whole-units per source whole-unit),
+   * strictly positive.
+   *
+   * When set:
+   * - The quote tape (`rate` + `rateTimestamp` on each FULFILL's metadata)
+   *   becomes REQUIRED: a fulfilled packet whose metadata is missing the
+   *   tape is a loud per-packet `FULFILL_DECODE_FAILED` error, never a
+   *   silent drop.
+   * - Each fulfilled packet is checked BEFORE its claim is decrypted or
+   *   accumulated: if the maker's tape rate `R_i` is below the floor, OR
+   *   the delivered `targetAmount` is below `applyRate(sourceAmount,
+   *   minExchangeRate)`, the packet is recorded as a rejection with code
+   *   `BELOW_FLOOR` and the stream halts with `abortReason: 'below-floor'`.
+   *   A violating packet NEVER accumulates into `claims[]`.
+   *
+   * This is the safety mechanism, deliberately independent of (and never
+   * relaxed by) the soft `rateDeviationThreshold` monitor, the `onPacket`
+   * callback, or any future adaptive-controller signal: a calm tape must
+   * not be able to talk the sender into a worse worst case.
+   *
+   * When omitted, behavior is unchanged (legacy back-compat): the tape is
+   * optional and only the soft deviation monitor applies.
+   */
+  minExchangeRate?: string;
   /** Per-packet timeout in ms. Default 30000. */
   packetTimeoutMs?: number;
   /**
@@ -188,6 +215,16 @@ export interface PacketProgress {
   cumulativeSource: bigint;
   /** Cumulative target received so far (including this one). */
   cumulativeTarget: bigint;
+  /**
+   * Quote-tape entry (issue #82, rolling-swap spec §7.1): the maker's fresh
+   * rate `R_i` actually applied to THIS packet, as reported on the FULFILL
+   * metadata. Present iff the maker emitted the tape. The sequence of these
+   * values across packets, in `index` order, IS the price tape the adaptive
+   * controller (toon#83) consumes.
+   */
+  rate?: string;
+  /** Unix ms timestamp when the maker's rate source produced {@link rate}. Present iff `rate` is. */
+  rateTimestamp?: number;
   /** Controller state at callback time. */
   state: 'running' | 'paused' | 'stopped';
 }
@@ -240,6 +277,11 @@ export interface AccumulatedClaim {
   recipient?: string;
   /** Swap's on-chain signer address. */
   swapSignerAddress?: string;
+  // --- Issue #82 quote-tape fields (additive) ---
+  /** Maker's fresh rate `R_i` applied to this packet (decimal string), from the FULFILL quote tape. */
+  rate?: string;
+  /** Unix ms timestamp when the maker's rate source produced `rate`. Present iff `rate` is. */
+  rateTimestamp?: number;
 }
 
 /**
@@ -264,6 +306,7 @@ export interface StreamSwapResult {
     | 'callback-stop'
     | 'callback-throw'
     | 'rate-deviation'
+    | 'below-floor'
     | 'all-rejected';
   cumulativeSource: bigint;
   cumulativeTarget: bigint;
@@ -428,19 +471,36 @@ export function validateChainAddress(
  * so a fulfilled swap still surfaces its signed `claim` + `ephemeralPubkey`.
  * Only `claim` and `ephemeralPubkey` are strictly required.
  *
+ * Issue #82 extension (quote tape, rolling-swap spec §7.1): parses the
+ * per-packet quote-tape fields `rate` (decimal string, the maker's fresh
+ * `R_i`) and `rateTimestamp` (unix ms). Unlike the best-effort settlement
+ * fields, a MALFORMED tape is always a loud `FULFILL_DECODE_FAILED` — a
+ * present-but-garbled `rate`/`rateTimestamp`, or one field without the
+ * other, fails the decode rather than silently dropping, so a rolling
+ * sender can never run blind on a corrupt tape. A wholly ABSENT tape is
+ * permitted for legacy makers unless `opts.requireQuoteTape` is set (which
+ * `runLoop` does whenever `minExchangeRate` is armed).
+ *
  * @param chain Optional `pair.to.chain` string for per-chain format validation
  *   of channelId / recipient / swapSignerAddress. When omitted, format checks
  *   fall back to a length-only sanity check.
+ * @param opts.requireQuoteTape When true, a missing `rate`/`rateTimestamp`
+ *   pair is a `FULFILL_DECODE_FAILED` error instead of being tolerated.
  */
 function decodeFulfillMetadata(
   data: string | undefined,
-  chain?: string
+  chain?: string,
+  opts?: { requireQuoteTape?: boolean }
 ): {
   claim: string;
   ephemeralPubkey: string;
   claimId?: string;
   /** Optional Swap-reported actual target amount (decimal string). Used for rate deviation when present. */
   targetAmount?: string;
+  /** Quote-tape rate `R_i` (decimal string). Present iff the maker emitted the tape. */
+  rate?: string;
+  /** Quote-tape timestamp (unix ms). Present iff `rate` is. */
+  rateTimestamp?: number;
   channelId?: string;
   nonce?: string;
   cumulativeAmount?: string;
@@ -507,6 +567,8 @@ function decodeFulfillMetadata(
     ephemeralPubkey: string;
     claimId?: string;
     targetAmount?: string;
+    rate?: string;
+    rateTimestamp?: number;
     channelId?: string;
     nonce?: string;
     cumulativeAmount?: string;
@@ -534,6 +596,51 @@ function decodeFulfillMetadata(
       );
     }
     result.targetAmount = ta;
+  }
+  // Issue #82 quote tape — `rate` + `rateTimestamp` travel together.
+  // Malformed-tape handling is deliberately LOUD (unlike the best-effort
+  // settlement fields below): a rolling sender that silently dropped a
+  // garbled tape entry would keep streaming blind, starving the floor and
+  // the adaptive controller. Absence of BOTH fields is legacy-maker
+  // territory and tolerated unless the caller requires the tape.
+  const tapeRate = obj['rate'];
+  const tapeTimestamp = obj['rateTimestamp'];
+  const hasRate = tapeRate !== undefined;
+  const hasTimestamp = tapeTimestamp !== undefined;
+  if (hasRate !== hasTimestamp) {
+    throw new StreamSwapError(
+      'FULFILL_DECODE_FAILED',
+      'FULFILL metadata quote tape is malformed: rate and rateTimestamp must travel together'
+    );
+  }
+  if (hasRate) {
+    if (
+      typeof tapeRate !== 'string' ||
+      !RATE_REGEX.test(tapeRate) ||
+      /^0(\.0+)?$/.test(tapeRate)
+    ) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.rate must be a positive decimal string'
+      );
+    }
+    if (
+      typeof tapeTimestamp !== 'number' ||
+      !Number.isInteger(tapeTimestamp) ||
+      tapeTimestamp <= 0
+    ) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        'FULFILL metadata.rateTimestamp must be a positive integer (unix ms)'
+      );
+    }
+    result.rate = tapeRate;
+    result.rateTimestamp = tapeTimestamp;
+  } else if (opts?.requireQuoteTape === true) {
+    throw new StreamSwapError(
+      'FULFILL_DECODE_FAILED',
+      'FULFILL metadata is missing the quote tape (rate + rateTimestamp) required when minExchangeRate is set'
+    );
   }
   // Story 12.6 settlement-context fields — OPTIONAL, best-effort (#153).
   //
@@ -595,6 +702,28 @@ function decodeFulfillMetadata(
     result.swapSignerAddress = swapSignerAddress;
   }
   return result;
+}
+
+/**
+ * Compare two decimal-string rates (RATE_REGEX format) exactly, in BigInt —
+ * no float coercion. Returns -1 if `a < b`, 0 if equal, 1 if `a > b`.
+ *
+ * Used by the issue #82 `minExchangeRate` floor to compare the maker's tape
+ * rate `R_i` against the floor without precision loss on long fractions.
+ */
+function compareDecimalRates(a: string, b: string): -1 | 0 | 1 {
+  const split = (s: string): { int: string; frac: string } => {
+    const dot = s.indexOf('.');
+    return dot === -1
+      ? { int: s, frac: '' }
+      : { int: s.slice(0, dot), frac: s.slice(dot + 1) };
+  };
+  const pa = split(a);
+  const pb = split(b);
+  const scale = Math.max(pa.frac.length, pb.frac.length);
+  const av = BigInt(pa.int + pa.frac.padEnd(scale, '0'));
+  const bv = BigInt(pb.int + pb.frac.padEnd(scale, '0'));
+  return av < bv ? -1 : av > bv ? 1 : 0;
 }
 
 /** Simple Deferred for pause/resume gating. */
@@ -764,6 +893,25 @@ function validateParams(params: StreamSwapParams): void {
       'INVALID_STATE',
       `rateDeviationThreshold must be a non-negative finite number, got ${params.rateDeviationThreshold}`
     );
+  }
+
+  // Issue #82: minExchangeRate is a hard floor — decimal string, strictly
+  // positive (a zero floor is "no floor"; omit the param instead). The
+  // format + non-zero constraints here are exactly applyRate's throw
+  // conditions, so the per-packet floor computation cannot throw mid-stream.
+  if (params.minExchangeRate !== undefined) {
+    if (
+      typeof params.minExchangeRate !== 'string' ||
+      !RATE_REGEX.test(params.minExchangeRate) ||
+      /^0(\.0+)?$/.test(params.minExchangeRate)
+    ) {
+      throw new StreamSwapError(
+        'INVALID_STATE',
+        `minExchangeRate must be a positive decimal string matching ${RATE_REGEX}, got ${String(
+          params.minExchangeRate
+        )}`
+      );
+    }
   }
 
   if (
@@ -1095,11 +1243,17 @@ async function runLoop(
     }
 
     // --- Decode FULFILL metadata ---
+    // Issue #82: when the minExchangeRate floor is armed, the quote tape is
+    // REQUIRED on every fulfilled packet — a maker that doesn't emit it (or
+    // garbles it) produces a loud per-packet FULFILL_DECODE_FAILED, never a
+    // silent drop.
     let metadata: {
       claim: string;
       ephemeralPubkey: string;
       claimId?: string;
       targetAmount?: string;
+      rate?: string;
+      rateTimestamp?: number;
       channelId?: string;
       nonce?: string;
       cumulativeAmount?: string;
@@ -1107,7 +1261,9 @@ async function runLoop(
       swapSignerAddress?: string;
     };
     try {
-      metadata = decodeFulfillMetadata(sendResult.data, pair.to.chain);
+      metadata = decodeFulfillMetadata(sendResult.data, pair.to.chain, {
+        requireQuoteTape: params.minExchangeRate !== undefined,
+      });
     } catch (err) {
       logger.error({
         event: 'stream_swap.fulfill_decode_failed',
@@ -1155,6 +1311,60 @@ async function runLoop(
         message: `Swap echoed recipient ${metadata.recipient} but sender expected ${params.chainRecipient}`,
       });
       continue;
+    }
+
+    // --- Issue #82: minExchangeRate hard floor (rfc-0029 semantics) ---
+    // Runs BEFORE claim decryption/accumulation and BEFORE the onPacket
+    // callback, and consults NOTHING but the floor itself — not the soft
+    // deviation monitor, not the callback, not any controller signal. Two
+    // independent breach conditions, either one trips the floor:
+    //   1. the maker's tape rate `R_i` is below minExchangeRate (exact
+    //      BigInt decimal comparison), or
+    //   2. the delivered targetAmount is below ⌊sourceAmount·minRate⌋
+    //      (catches a maker painting a rosy tape while under-delivering).
+    // A breach is a hard stop: the packet is recorded as a BELOW_FLOOR
+    // rejection (never a claims[] success) and the stream halts — filling
+    // further packets against a maker quoting under the floor would keep
+    // committing source value below the sender's declared worst case.
+    if (params.minExchangeRate !== undefined) {
+      // requireQuoteTape guarantees both tape fields are present here.
+      const tapeRate = metadata.rate as string;
+      const floorTargetAmount = applyRate({
+        sourceAmount,
+        fromScale: pair.from.assetScale,
+        toScale: pair.to.assetScale,
+        rate: params.minExchangeRate,
+      });
+      const deliveredTargetAmount: bigint =
+        metadata.targetAmount !== undefined
+          ? BigInt(metadata.targetAmount)
+          : applyRate({
+              sourceAmount,
+              fromScale: pair.from.assetScale,
+              toScale: pair.to.assetScale,
+              rate: tapeRate,
+            });
+      const tapeBelowFloor =
+        compareDecimalRates(tapeRate, params.minExchangeRate) < 0;
+      if (tapeBelowFloor || deliveredTargetAmount < floorTargetAmount) {
+        logger.warn({
+          event: 'stream_swap.below_floor',
+          packetIndex,
+          rate: tapeRate,
+          rateTimestamp: metadata.rateTimestamp,
+          minExchangeRate: params.minExchangeRate,
+          targetAmount: deliveredTargetAmount.toString(),
+          floorTargetAmount: floorTargetAmount.toString(),
+        });
+        rejections.push({
+          packetIndex,
+          sourceAmount,
+          code: 'BELOW_FLOOR',
+          message: `Packet fill below minExchangeRate floor: rate ${tapeRate}, targetAmount ${deliveredTargetAmount} < floor ${params.minExchangeRate} (${floorTargetAmount})`,
+        });
+        abortReason = 'below-floor';
+        break packetLoop;
+      }
     }
 
     // --- Decrypt claim ---
@@ -1257,6 +1467,13 @@ async function runLoop(
       accumulated.recipient = metadata.recipient;
     if (metadata.swapSignerAddress !== undefined)
       accumulated.swapSignerAddress = metadata.swapSignerAddress;
+    // Issue #82: persist the quote-tape entry on the accumulated claim so
+    // post-hoc consumers (settlement audit, controller replay) retain the
+    // per-packet `R_i` sequence. Both-or-neither is enforced by the decoder.
+    if (metadata.rate !== undefined) {
+      accumulated.rate = metadata.rate;
+      accumulated.rateTimestamp = metadata.rateTimestamp as number;
+    }
     claims.push(accumulated);
 
     logger.debug({
@@ -1278,6 +1495,12 @@ async function runLoop(
         rateDeviation,
         cumulativeSource,
         cumulativeTarget,
+        // Issue #82 quote tape: surface the maker's fresh per-packet quote
+        // to the callback (the adaptive-controller seam, toon#83).
+        ...(metadata.rate !== undefined && {
+          rate: metadata.rate,
+          rateTimestamp: metadata.rateTimestamp as number,
+        }),
         state:
           getState() === 'paused'
             ? 'paused'
@@ -1409,4 +1632,5 @@ export const __testing = {
   chunkAmount,
   decodeFulfillMetadata,
   buildSwapRumor,
+  compareDecimalRates,
 };
