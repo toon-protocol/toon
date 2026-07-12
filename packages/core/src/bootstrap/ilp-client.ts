@@ -29,6 +29,7 @@ export function createHttpIlpClient(baseUrl: string): IlpClient {
       amount: string;
       data: string;
       timeout?: number;
+      expiresAt?: string;
     }): Promise<IlpSendResult> {
       let response: Response;
       try {
@@ -40,6 +41,9 @@ export function createHttpIlpClient(baseUrl: string): IlpClient {
             amount: params.amount,
             data: params.data,
             ...(params.timeout !== undefined && { timeout: params.timeout }),
+            ...(params.expiresAt !== undefined && {
+              expiresAt: params.expiresAt,
+            }),
           }),
         });
       } catch (error) {

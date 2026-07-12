@@ -81,7 +81,11 @@ export interface WrapSwapPacketToToonParams {
   destination: string;
   /** Payment amount in ILP units (bigint). */
   amount: bigint;
-  /** Packet expiry. Default: 30s from now (inside buildIlpPrepare). */
+  /**
+   * Per-packet expiry. Propagated onto the produced PREPARE as an ISO 8601
+   * `expiresAt` string (rolling-swap R7 leg ordering). When omitted, the
+   * transport applies its default (timeout-derived, ~30s).
+   */
   expiresAt?: Date;
 }
 

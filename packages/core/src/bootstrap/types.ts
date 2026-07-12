@@ -168,6 +168,12 @@ export interface IlpClient {
     amount: string;
     data: string; // base64-encoded TOON
     timeout?: number;
+    /**
+     * Per-packet expiry as an ISO 8601 string. When set, the transport
+     * MUST use exactly this expiry for the outgoing PREPARE. When absent,
+     * the transport applies its default (timeout-derived).
+     */
+    expiresAt?: string;
   }): Promise<IlpSendResult>;
 
   /**
@@ -180,6 +186,8 @@ export interface IlpClient {
       amount: string;
       data: string;
       timeout?: number;
+      /** Per-packet expiry as an ISO 8601 string (see sendIlpPacket). */
+      expiresAt?: string;
     },
     claim: unknown // EVMClaimMessage type from client package
   ): Promise<IlpSendResult>;

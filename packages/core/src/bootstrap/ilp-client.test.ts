@@ -244,6 +244,43 @@ describe('createHttpIlpClient', () => {
       expect(body.timeout).toBe(5000);
     });
 
+    // Issue #81 — expiresAt plumbing (rolling-swap per-packet timeout prereq)
+    it('should include expiresAt in request body when provided', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValue(createFetchResponse({ accepted: true }));
+      vi.stubGlobal('fetch', mockFetch);
+
+      const iso = new Date(Date.now() + 12_000).toISOString();
+      const client = createHttpIlpClient('http://localhost:3000');
+      await client.sendIlpPacket({
+        destination: 'g.test',
+        amount: '0',
+        data: '',
+        expiresAt: iso,
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+      expect(body.expiresAt).toBe(iso);
+    });
+
+    it('regression: should omit expiresAt from request body when not provided', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValue(createFetchResponse({ accepted: true }));
+      vi.stubGlobal('fetch', mockFetch);
+
+      const client = createHttpIlpClient('http://localhost:3000');
+      await client.sendIlpPacket({
+        destination: 'g.test',
+        amount: '0',
+        data: '',
+      });
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+      expect('expiresAt' in body).toBe(false);
+    });
+
     it('should strip trailing slash from baseUrl', async () => {
       const mockFetch = vi
         .fn()

@@ -789,6 +789,10 @@ describe('wrapSwapPacketToToon() — expiresAt parameter', () => {
     expect(ilpPrepare.destination).toBe('g.toon.swap.swap');
     expect(ephemeralPubkey).toHaveLength(64);
 
+    // Issue #81: the supplied expiry must survive onto the produced PREPARE
+    // (previously buildIlpPrepare silently dropped it).
+    expect(ilpPrepare.expiresAt).toBe(futureDate.toISOString());
+
     // Verify the data still roundtrips
     const toonData = new Uint8Array(Buffer.from(ilpPrepare.data, 'base64'));
     const unwrapped = unwrapSwapPacketFromToon({
@@ -797,6 +801,22 @@ describe('wrapSwapPacketToToon() — expiresAt parameter', () => {
     });
     expect(unwrapped.senderPubkey).toBe(senderPubkey);
     expect(unwrapped.rumor.content).toBe(rumor.content);
+  });
+
+  it('regression: omitting expiresAt leaves the PREPARE without an expiresAt field', () => {
+    const rumor = createTestRumor();
+
+    const { ilpPrepare } = wrapSwapPacketToToon({
+      rumor,
+      senderSecretKey,
+      recipientPubkey,
+      destination: 'g.toon.swap.swap',
+      amount: 1000n,
+    });
+
+    // Absent (not undefined-valued) so the transport keeps applying its
+    // timeout-derived default expiry.
+    expect('expiresAt' in ilpPrepare).toBe(false);
   });
 });
 

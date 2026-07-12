@@ -251,5 +251,61 @@ describe('createDirectIlpClient', () => {
         .calls[0]![0] as SendPacketParams;
       expect(callArgs).not.toHaveProperty('executionCondition');
     });
+
+    // Issue #81 — expiresAt plumbing (rolling-swap per-packet timeout prereq)
+    describe('expiresAt plumbing (issue #81)', () => {
+      it('honors a caller-supplied ISO expiresAt exactly', async () => {
+        const connector = mockConnector({ type: 'fulfill' });
+        const client = createDirectIlpClient(connector);
+
+        const iso = new Date(Date.now() + 12_345).toISOString();
+        await client.sendIlpPacket({
+          destination: 'g.peer1',
+          amount: '100',
+          data: Buffer.from('x').toString('base64'),
+          expiresAt: iso,
+        });
+
+        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+          .calls[0]![0] as SendPacketParams;
+        expect(callArgs.expiresAt).toBeInstanceOf(Date);
+        expect(callArgs.expiresAt!.toISOString()).toBe(iso);
+      });
+
+      it('regression: defaults to ~30s from now when expiresAt is omitted', async () => {
+        const connector = mockConnector({ type: 'fulfill' });
+        const client = createDirectIlpClient(connector);
+
+        const before = Date.now();
+        await client.sendIlpPacket({
+          destination: 'g.peer1',
+          amount: '100',
+          data: Buffer.from('x').toString('base64'),
+        });
+        const after = Date.now();
+
+        const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+          .calls[0]![0] as SendPacketParams;
+        expect(callArgs.expiresAt).toBeInstanceOf(Date);
+        const expiryMs = callArgs.expiresAt!.getTime();
+        expect(expiryMs).toBeGreaterThanOrEqual(before + 30_000);
+        expect(expiryMs).toBeLessThanOrEqual(after + 30_000);
+      });
+
+      it('rejects an unparseable expiresAt with BootstrapError before sending', async () => {
+        const connector = mockConnector({ type: 'fulfill' });
+        const client = createDirectIlpClient(connector);
+
+        await expect(
+          client.sendIlpPacket({
+            destination: 'g.peer1',
+            amount: '100',
+            data: Buffer.from('x').toString('base64'),
+            expiresAt: 'not-a-date',
+          })
+        ).rejects.toBeInstanceOf(BootstrapError);
+        expect(connector.sendPacket).not.toHaveBeenCalled();
+      });
+    });
   });
 });

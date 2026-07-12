@@ -2221,3 +2221,75 @@ describe('Story 12.9 — chainRecipient threading (sender)', () => {
     expect(result.rejections[0]!.code).toBe('SWAP_RECIPIENT_MISMATCH');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #81 — per-packet expiry plumbing (rolling-swap R7 prereq)
+// ---------------------------------------------------------------------------
+
+describe('issue #81 — packetExpiryMs per-packet expiry', () => {
+  const senderSecretKey81 = generateSecretKey();
+  const swapSecretKey81 = generateSecretKey();
+  const swapPubkey81 = getPublicKey(swapSecretKey81);
+
+  function baseParams81(swap: MockSwapHandle): StreamSwapParams {
+    return {
+      client: makeClient(swap, senderSecretKey81),
+      swapPubkey: swapPubkey81,
+      swapIlpAddress: 'g.toon.swap1',
+      pair: samplePair(),
+      senderSecretKey: senderSecretKey81,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 1000n,
+      packetCount: 4,
+    };
+  }
+
+  it('passes expiresAt = now + packetExpiryMs to sendSwapPacket for every packet', async () => {
+    const swap = makeMockSwap(samplePair(), swapSecretKey81);
+    const expiryMs = 12_000;
+
+    const before = Date.now();
+    const result = await streamSwap({
+      ...baseParams81(swap),
+      packetExpiryMs: expiryMs,
+    });
+    const after = Date.now();
+
+    expect(result.packetsSent).toBe(4);
+    expect(swap.fn).toHaveBeenCalledTimes(4);
+    for (const call of swap.fn.mock.calls) {
+      const params = call[0] as { expiresAt?: Date };
+      expect(params.expiresAt).toBeInstanceOf(Date);
+      const t = params.expiresAt!.getTime();
+      // Computed at send time: bounded by the stream's wall-clock window.
+      expect(t).toBeGreaterThanOrEqual(before + expiryMs);
+      expect(t).toBeLessThanOrEqual(after + expiryMs);
+    }
+  });
+
+  it('regression: omitting packetExpiryMs sends packets WITHOUT an expiresAt field (transport default preserved)', async () => {
+    const swap = makeMockSwap(samplePair(), swapSecretKey81);
+
+    const result = await streamSwap(baseParams81(swap));
+
+    expect(result.packetsSent).toBe(4);
+    for (const call of swap.fn.mock.calls) {
+      const params = call[0] as Record<string, unknown>;
+      expect('expiresAt' in params).toBe(false);
+    }
+  });
+
+  it.each([0, -5, 1.5, Number.NaN])(
+    'throws INVALID_STATE for packetExpiryMs = %s',
+    async (bad) => {
+      const swap = makeMockSwap(samplePair(), swapSecretKey81);
+      await expect(
+        streamSwap({ ...baseParams81(swap), packetExpiryMs: bad })
+      ).rejects.toMatchObject({
+        name: 'StreamSwapError',
+        code: 'INVALID_STATE',
+      });
+      expect(swap.fn).not.toHaveBeenCalled();
+    }
+  );
+});
