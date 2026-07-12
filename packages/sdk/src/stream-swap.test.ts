@@ -28,6 +28,13 @@ import {
 } from './stream-swap';
 import { StreamSwapError } from './errors';
 import {
+  signStreamReceipt,
+  verifyStreamReceipt,
+  serializeReceiptChain,
+  STREAM_RECEIPT_VERSION,
+  type StreamReceiptFields,
+} from './stream-receipts';
+import {
   AdaptiveDeltaController,
   InMemorySwapControllerStateStore,
   swapControllerStateKey,
@@ -69,6 +76,23 @@ interface MockSwapOptions {
     packetIndex: number,
     metadata: Record<string, unknown>
   ) => Record<string, unknown>;
+  /**
+   * Issue #84: emit a per-fulfill signed stream receipt, mirroring a
+   * receipt-capable maker. Reads the rumor's `stream-nonce` tag and keeps
+   * per-session `{seq, cumulativeDelivered}` state like the real handler.
+   */
+  emitReceipts?: boolean;
+  /** Issue #84: sign receipts with this key instead of the swap identity key. */
+  receiptKey?: Uint8Array;
+  /**
+   * Issue #84: mutate the receipt FIELDS before signing — produces
+   * validly-signed but semantically hostile receipts (non-monotone totals,
+   * duplicate/skipped seqs, foreign nonces).
+   */
+  receiptFieldsOverride?: (
+    packetIndex: number,
+    fields: StreamReceiptFields
+  ) => StreamReceiptFields;
 }
 
 /** Deterministic tape timestamp base used when `emitTape` is set. */
@@ -79,6 +103,8 @@ interface MockSwapHandle {
   unwrappedRumors: UnsignedEvent[];
   issuedClaimBytes: Map<number, Uint8Array>;
   senderPubkeysSeen: string[];
+  /** Issue #84: mock maker's per-streamNonce receipt session state. */
+  receiptSessions: Map<string, { seq: number; cumulativeDelivered: bigint }>;
 }
 
 /**
@@ -101,6 +127,7 @@ function makeMockSwap(
     unwrappedRumors: [],
     issuedClaimBytes: new Map(),
     senderPubkeysSeen: [],
+    receiptSessions: new Map(),
   };
 
   handle.fn.mockImplementation(
@@ -168,6 +195,42 @@ function makeMockSwap(
       if (opts.emitTape) {
         metadata['rate'] = rate;
         metadata['rateTimestamp'] = MOCK_TAPE_TS_BASE + packetIndex;
+      }
+      // Issue #84: per-fulfill signed receipt, session-scoped like the real
+      // swap handler (only when the sender advertised a stream-nonce).
+      if (opts.emitReceipts) {
+        const streamNonceTag = rumor.tags.find(
+          (t) => t[0] === 'stream-nonce'
+        )?.[1];
+        if (typeof streamNonceTag === 'string') {
+          const prev = handle.receiptSessions.get(streamNonceTag) ?? {
+            seq: 0,
+            cumulativeDelivered: 0n,
+          };
+          const next = {
+            seq: prev.seq + 1,
+            cumulativeDelivered: prev.cumulativeDelivered + targetAmount,
+          };
+          handle.receiptSessions.set(streamNonceTag, next);
+          let receiptFields: StreamReceiptFields = {
+            v: STREAM_RECEIPT_VERSION,
+            streamNonce: streamNonceTag,
+            seq: next.seq,
+            cumulativeDelivered: next.cumulativeDelivered.toString(),
+            rate,
+            rateTimestamp: MOCK_TAPE_TS_BASE + packetIndex,
+          };
+          if (opts.receiptFieldsOverride) {
+            receiptFields = opts.receiptFieldsOverride(
+              packetIndex,
+              receiptFields
+            );
+          }
+          metadata['receipt'] = signStreamReceipt(
+            receiptFields,
+            opts.receiptKey ?? swapSecretKey
+          );
+        }
       }
       if (opts.metadataOverride) {
         metadata = opts.metadataOverride(packetIndex, metadata);
@@ -2990,5 +3053,386 @@ describe('issue #83 — adaptive controller wiring (streamSwap)', () => {
       100n,
       100n,
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #84 — rfc-0039 stream receipts (sender side)
+// ---------------------------------------------------------------------------
+
+describe('issue #84 — stream receipts (sender side)', () => {
+  const senderSecretKey = generateSecretKey();
+  const swapSecretKey = generateSecretKey();
+  const swapPubkey = getPublicKey(swapSecretKey);
+
+  function receiptParams(
+    swap: MockSwapHandle,
+    pair: SwapPair,
+    extra: Partial<StreamSwapParams> = {}
+  ): StreamSwapParams {
+    return {
+      client: makeClient(swap, senderSecretKey),
+      swapPubkey,
+      swapIlpAddress: 'g.toon.swap1',
+      pair,
+      senderSecretKey,
+      chainRecipient: FIXTURE_EVM_RECIPIENT,
+      totalAmount: 3000n,
+      packetCount: 3,
+      ...extra,
+    };
+  }
+
+  it('accumulates one verified receipt per fulfilled packet with monotone totals', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+    });
+
+    const progressReceipts: (unknown | undefined)[] = [];
+    const result = await streamSwap(
+      receiptParams(swap, pair, {
+        onPacket: (p) => {
+          progressReceipts.push(p.receipt);
+        },
+      })
+    );
+
+    expect(result.state).toBe('completed');
+    expect(result.claims).toHaveLength(3);
+    // Every claim persists its receipt; the chain is complete and monotone.
+    const chain = result.receipts;
+    expect(chain.receipts.map((r) => r.seq)).toEqual([1, 2, 3]);
+    expect(chain.holes).toEqual([]);
+    expect(chain.latest?.seq).toBe(3);
+    expect(chain.totalDelivered).toBe(result.cumulativeTarget.toString());
+    let prev = -1n;
+    for (const [i, claim] of result.claims.entries()) {
+      expect(claim.receipt).toBeDefined();
+      expect(claim.receipt!.seq).toBe(i + 1);
+      const cum = BigInt(claim.receipt!.cumulativeDelivered);
+      expect(cum > prev).toBe(true);
+      prev = cum;
+      expect(verifyStreamReceipt(claim.receipt!, swapPubkey)).toBe(true);
+    }
+    // onPacket surfaced the receipt per packet (the tape/receipt callback seam).
+    expect(progressReceipts).toHaveLength(3);
+    for (const r of progressReceipts) expect(r).toBeDefined();
+    // Every rumor advertised the session nonce the receipts came back under.
+    for (const rumor of swap.unwrappedRumors) {
+      const tag = rumor.tags.find((t) => t[0] === 'stream-nonce');
+      expect(tag?.[1]).toBe(chain.streamNonce);
+    }
+  });
+
+  it('serializes the receipt chain into a re-verifiable audit artifact', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+    const artifact = serializeReceiptChain(result.receipts);
+    const parsed = JSON.parse(artifact) as {
+      kind: string;
+      streamNonce: string;
+      receipts: { sig: string }[];
+    };
+    expect(parsed.kind).toBe('toon.stream-receipt-chain');
+    expect(parsed.streamNonce).toBe(result.receipts.streamNonce);
+    expect(parsed.receipts).toHaveLength(3);
+  });
+
+  it('legacy maker without receipt support degrades gracefully', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.state).toBe('completed');
+    expect(result.claims).toHaveLength(3);
+    expect(result.rejections).toEqual([]);
+    expect(result.receipts.receipts).toEqual([]);
+    expect(result.receipts.totalDelivered).toBe('0');
+    for (const claim of result.claims) expect(claim.receipt).toBeUndefined();
+  });
+
+  it('requireReceipts halts loudly against a receipt-less maker', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+
+    const result = await streamSwap(
+      receiptParams(swap, pair, { requireReceipts: true })
+    );
+
+    expect(result.state).toBe('failed');
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.claims).toEqual([]);
+    expect(result.rejections[0]).toMatchObject({
+      packetIndex: 0,
+      code: 'RECEIPT_MISSING',
+    });
+  });
+
+  it('tampered receipt (mutated total, stale signature) rejects RECEIPT_INVALID and halts', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      metadataOverride: (packetIndex, metadata) => {
+        if (packetIndex === 1) {
+          const receipt = metadata['receipt'] as Record<string, unknown>;
+          metadata['receipt'] = {
+            ...receipt,
+            cumulativeDelivered: '999999999999',
+          };
+        }
+        return metadata;
+      },
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.state).toBe('completed'); // packet 0's claim still harvested
+    expect(result.claims).toHaveLength(1);
+    expect(result.rejections[0]).toMatchObject({
+      packetIndex: 1,
+      code: 'RECEIPT_INVALID',
+    });
+    // The artifact covers exactly what filled before the halt.
+    expect(result.receipts.receipts).toHaveLength(1);
+    expect(result.receipts.latest?.seq).toBe(1);
+  });
+
+  it('wrong-key receipt fails verification against the maker identity', async () => {
+    const pair = samplePair();
+    const mallory = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptKey: mallory,
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.state).toBe('failed');
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.rejections[0]).toMatchObject({ code: 'RECEIPT_INVALID' });
+    expect(result.receipts.receipts).toEqual([]);
+  });
+
+  it('receiptPubkey param verifies against a dedicated maker receipt key', async () => {
+    const pair = samplePair();
+    const dedicated = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptKey: dedicated,
+    });
+
+    const result = await streamSwap(
+      receiptParams(swap, pair, { receiptPubkey: getPublicKey(dedicated) })
+    );
+
+    expect(result.state).toBe('completed');
+    expect(result.claims).toHaveLength(3);
+    expect(result.receipts.receipts).toHaveLength(3);
+  });
+
+  it('non-monotone cumulative total (validly signed) rejects RECEIPT_INVALID', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptFieldsOverride: (packetIndex, fields) =>
+        packetIndex === 2 ? { ...fields, cumulativeDelivered: '1' } : fields,
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.claims).toHaveLength(2);
+    expect(result.rejections[0]).toMatchObject({
+      packetIndex: 2,
+      code: 'RECEIPT_INVALID',
+    });
+    expect(result.rejections[0]!.message).toMatch(/NON_MONOTONIC/);
+  });
+
+  it('duplicate seq (maker session fork/reset) rejects RECEIPT_INVALID', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptFieldsOverride: (packetIndex, fields) =>
+        packetIndex === 1
+          ? {
+              ...fields,
+              seq: 1,
+              cumulativeDelivered: fields.cumulativeDelivered,
+            }
+          : fields,
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.rejections[0]!.message).toMatch(
+      /DUPLICATE_SEQ|NON_MONOTONIC/
+    );
+  });
+
+  it('receipt from a foreign session (wrong streamNonce, validly signed) rejects RECEIPT_INVALID', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptFieldsOverride: (_packetIndex, fields) => ({
+        ...fields,
+        streamNonce: 'ee'.repeat(16),
+      }),
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.state).toBe('failed');
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.rejections[0]!.message).toMatch(/WRONG_STREAM_NONCE/);
+  });
+
+  it('receipt whose attested rate disagrees with the tape rejects RECEIPT_INVALID', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      receiptFieldsOverride: (_packetIndex, fields) => ({
+        ...fields,
+        rate: '9999',
+      }),
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    expect(result.abortReason).toBe('receipt-invalid');
+    expect(result.rejections[0]!.message).toMatch(/does not match tape rate/);
+  });
+
+  it('structurally malformed receipt surfaces as a loud FULFILL_DECODE_FAILED', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      metadataOverride: (packetIndex, metadata) => {
+        if (packetIndex === 0) metadata['receipt'] = 'garbage';
+        return metadata;
+      },
+    });
+
+    const result = await streamSwap(receiptParams(swap, pair));
+
+    // Loud per-packet error (never a silent drop); packet 0 not accumulated.
+    expect(result.errors[0]).toMatchObject({ packetIndex: 0 });
+    expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
+      'FULFILL_DECODE_FAILED'
+    );
+    expect(result.claims.map((c) => c.packetIndex)).toEqual([1, 2]);
+  });
+
+  it('a below-floor packet is rejected BEFORE its receipt joins the chain (floor interplay)', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+      // Packet 1 fills below the floor while packets 0/2 quote at par.
+      rateOverride: new Map([[1, '0.0004']]),
+    });
+
+    const result = await streamSwap(
+      receiptParams(swap, pair, { minExchangeRate: pair.rate })
+    );
+
+    expect(result.abortReason).toBe('below-floor');
+    expect(result.rejections[0]).toMatchObject({
+      packetIndex: 1,
+      code: 'BELOW_FLOOR',
+    });
+    // Only the packet that filled cleanly contributed a receipt: the
+    // sender-rejected packet gets NO receipt in the chain.
+    expect(result.claims).toHaveLength(1);
+    expect(result.receipts.receipts).toHaveLength(1);
+    expect(result.receipts.latest?.seq).toBe(1);
+    expect(result.receipts.totalDelivered).toBe(
+      result.cumulativeTarget.toString()
+    );
+  });
+
+  it('adaptive-controller mode accumulates receipts identically', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      emitReceipts: true,
+    });
+    const store = new InMemorySwapControllerStateStore();
+    const key = swapControllerStateKey({ makerPubkey: swapPubkey, pair });
+    await store.save(key, {
+      v: 1,
+      delta: '1000',
+      W: 1,
+      vEwma: 0,
+      tauEwma: 0,
+      cleanStreak: 0,
+      everShrunk: true,
+      lastWidened: 'window',
+      updatedAt: Date.now(),
+    });
+    const controller = await AdaptiveDeltaController.create({
+      makerPubkey: swapPubkey,
+      pair,
+      advertisedSpread: 0.004,
+      store,
+    });
+
+    const result = await streamSwap(
+      receiptParams(swap, pair, {
+        totalAmount: 3000n,
+        packetCount: undefined,
+        controller,
+      })
+    );
+
+    expect(result.state).toBe('completed');
+    expect(result.claims.length).toBeGreaterThan(0);
+    expect(result.receipts.receipts).toHaveLength(result.claims.length);
+    expect(result.receipts.holes).toEqual([]);
+    expect(result.receipts.totalDelivered).toBe(
+      result.cumulativeTarget.toString()
+    );
+    for (const claim of result.claims) {
+      expect(claim.receipt).toBeDefined();
+      expect(verifyStreamReceipt(claim.receipt!, swapPubkey)).toBe(true);
+    }
+  });
+
+  it('throws INVALID_STATE for a malformed receiptPubkey', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {});
+    await expect(
+      streamSwap(receiptParams(swap, pair, { receiptPubkey: 'nothex' }))
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
+  });
+
+  it('throws INVALID_STATE for a non-boolean requireReceipts', async () => {
+    const pair = samplePair();
+    const swap = makeMockSwap(pair, swapSecretKey, {});
+    await expect(
+      streamSwap(
+        receiptParams(swap, pair, {
+          requireReceipts: 'yes' as unknown as boolean,
+        })
+      )
+    ).rejects.toMatchObject({ code: 'INVALID_STATE' });
   });
 });

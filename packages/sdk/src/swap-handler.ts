@@ -28,6 +28,13 @@ import { GiftWrapError, SwapHandlerError } from './errors.js';
 import { unwrapSwapPacketFromToon, encryptFulfillClaim } from './gift-wrap.js';
 import type { Handler } from './handler-registry.js';
 import { base58Decode } from './identity.js';
+import {
+  BoundedReceiptSessions,
+  isValidStreamNonce,
+  issueSessionReceipt,
+  type ReceiptSessionStoreLike,
+  type StreamReceipt,
+} from './stream-receipts.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -192,6 +199,27 @@ export interface CreateSwapHandlerConfig {
    * satisfies the contract.
    */
   seenPacketIds?: SeenPacketIdsLike;
+  /**
+   * Optional dedicated receipt signing key (issue #84, rfc-0039 stream
+   * receipts; rolling-swap spec §7.2). 32-byte secp256k1 secret key used to
+   * BIP-340-sign the per-fulfill {@link StreamReceipt}. When OMITTED,
+   * receipts are signed with `recipientSecretKey` — the maker's Nostr
+   * identity key — so senders verify against the `swapPubkey` they already
+   * discovered via kind:10032. Provide a separate key when the receipt
+   * signer should be provisioned independently of the identity key (e.g.
+   * the swap#47 coupled engine binding receipts to the chain-B claim
+   * signer); senders then verify via `StreamSwapParams.receiptPubkey`.
+   */
+  receiptSecretKey?: Uint8Array;
+  /**
+   * Optional receipt session store (issue #84). Tracks per-`streamNonce`
+   * `{seq, cumulativeDelivered}` so receipt totals are monotone within a
+   * session. Defaults to a {@link BoundedReceiptSessions} in-memory LRU.
+   * Operators that persist claims should back this with the same storage so
+   * receipt state survives restarts alongside the claim stream (a lost
+   * session restarts at seq 1, which senders reject as a forked chain).
+   */
+  receiptSessions?: ReceiptSessionStoreLike;
   /** Optional pino-compatible logger. Defaults to a no-op logger. */
   logger?: SwapHandlerLogger;
 }
@@ -568,7 +596,21 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     );
   }
 
+  if (
+    config.receiptSecretKey !== undefined &&
+    (!(config.receiptSecretKey instanceof Uint8Array) ||
+      config.receiptSecretKey.length !== 32)
+  ) {
+    throw new SwapHandlerError('receiptSecretKey must be a 32-byte Uint8Array');
+  }
+
   const logger = config.logger ?? NOOP_LOGGER;
+
+  // Issue #84: receipt signing key + per-streamNonce session state. Default
+  // signer is the maker identity key (verifiable against `swapPubkey`).
+  const receiptSecretKey = config.receiptSecretKey ?? config.recipientSecretKey;
+  const receiptSessions: ReceiptSessionStoreLike =
+    config.receiptSessions ?? new BoundedReceiptSessions();
 
   // Story 12.8 AC-14: when the operator does not supply a custom set,
   // default to a bounded access-order-LRU set. Operator-supplied sets are
@@ -818,6 +860,44 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     // AC-11: packetId was reserved pre-issuance to close the concurrent
     // check-then-add race; it remains committed on this success path.
 
+    // Issue #84 (rfc-0039 stream receipts, spec §7.2): when the sender
+    // advertised a session via the rumor's `stream-nonce` tag, issue the
+    // per-fulfill signed receipt. This runs strictly on the ACCEPT path —
+    // every reject above returns before this point, so a rejected packet
+    // never advances the session (no receipt, no seq, no cumulative).
+    // The read-increment-write inside issueSessionReceipt is synchronous,
+    // so concurrent packets in one session get gapless distinct seqs.
+    // Legacy senders (no tag) get the pre-#84 metadata shape verbatim.
+    let receipt: StreamReceipt | undefined;
+    const streamNonceTag = findTagValue(rumor, 'stream-nonce');
+    if (streamNonceTag !== undefined) {
+      if (!isValidStreamNonce(streamNonceTag)) {
+        logger.warn({
+          event: 'swap_handler.invalid_stream_nonce',
+          destination: ctx.destination,
+        });
+      } else {
+        try {
+          receipt = issueSessionReceipt({
+            sessions: receiptSessions,
+            streamNonce: streamNonceTag,
+            deliveredAmount: targetAmount,
+            rate,
+            rateTimestamp,
+            secretKey: receiptSecretKey,
+          });
+        } catch (err) {
+          // Value is already committed (claim issued + encrypted): accept
+          // WITHOUT a receipt rather than failing the packet. A sender that
+          // requires receipts will surface this loudly on its side.
+          logger.error({
+            event: 'swap_handler.receipt_issue_failed',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
     const claimBase64 = Buffer.from(ciphertext).toString('base64');
     logger.info({
       event: 'swap_handler.claim_issued',
@@ -843,6 +923,9 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       rateTimestamp,
     };
     if (claimId !== undefined) metadata['claimId'] = claimId;
+    // Issue #84: per-fulfill signed receipt (additive; only present when the
+    // sender advertised a `stream-nonce` and signing succeeded).
+    if (receipt !== undefined) metadata['receipt'] = receipt;
     // Story 12.6: thread settlement-context fields through when the claim
     // issuer emits them. All-or-nothing: a Swap that supplies settlement
     // fields MUST supply all five, since the sender's FULFILL decoder

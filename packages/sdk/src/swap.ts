@@ -21,3 +21,25 @@ export type {
   RateMonitorCallback,
 } from './stream-swap.js';
 export { wrapSwapPacketToToon, decryptFulfillClaim } from './gift-wrap.js';
+// rfc-0039 stream receipts (issue #84): sender-side verification + the
+// serialized audit artifact, plus the maker-side issuance helpers.
+export {
+  signStreamReceipt,
+  verifyStreamReceipt,
+  parseStreamReceipt,
+  encodeReceiptSigningPayload,
+  serializeReceiptChain,
+  isValidStreamNonce,
+  issueSessionReceipt,
+  ReceiptChainTracker,
+  BoundedReceiptSessions,
+  STREAM_RECEIPT_VERSION,
+} from './stream-receipts.js';
+export type {
+  StreamReceipt,
+  StreamReceiptFields,
+  StreamReceiptChain,
+  ReceiptAddResult,
+  ReceiptSessionState,
+  ReceiptSessionStoreLike,
+} from './stream-receipts.js';

@@ -185,6 +185,31 @@ export type {
   SwapControllerStateStore,
 } from './adaptive-controller.js';
 
+// rfc-0039 stream receipts (issue #84, rolling-swap spec §7.2)
+export {
+  signStreamReceipt,
+  verifyStreamReceipt,
+  parseStreamReceipt,
+  encodeReceiptSigningPayload,
+  serializeReceiptChain,
+  isValidStreamNonce,
+  issueSessionReceipt,
+  ReceiptChainTracker,
+  BoundedReceiptSessions,
+  STREAM_RECEIPT_VERSION,
+  STREAM_RECEIPT_SIGNING_TAG,
+  DEFAULT_RECEIPT_SESSIONS_CAP,
+} from './stream-receipts.js';
+
+export type {
+  StreamReceipt,
+  StreamReceiptFields,
+  StreamReceiptChain,
+  ReceiptAddResult,
+  ReceiptSessionState,
+  ReceiptSessionStoreLike,
+} from './stream-receipts.js';
+
 // Stream swap sender API (Story 12.5)
 export { streamSwap, streamSwapControlled } from './stream-swap.js';
 

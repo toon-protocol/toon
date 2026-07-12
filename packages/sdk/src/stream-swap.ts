@@ -36,6 +36,12 @@ import { StreamSwapError } from './errors.js';
 import { wrapSwapPacketToToon, decryptFulfillClaim } from './gift-wrap.js';
 import { base58Decode } from './identity.js';
 import { applyRate } from './swap-handler.js';
+import {
+  parseStreamReceipt,
+  ReceiptChainTracker,
+  type StreamReceipt,
+  type StreamReceiptChain,
+} from './stream-receipts.js';
 import type {
   PacketObservation,
   PacketResolution,
@@ -185,6 +191,29 @@ export interface StreamSwapParams {
    * optional and only the soft deviation monitor applies.
    */
   minExchangeRate?: string;
+  /**
+   * Maker receipt verification key (issue #84, rfc-0039 stream receipts;
+   * rolling-swap spec §7.2): 64-char lowercase hex x-only pubkey each
+   * per-fulfill receipt's BIP-340 signature is verified against. Defaults
+   * to `swapPubkey` (the maker identity key — the swap handler's default
+   * receipt signer). Set when the maker provisioned a dedicated receipt key
+   * (`CreateSwapHandlerConfig.receiptSecretKey`, e.g. the swap#47 coupled
+   * engine's chain-B claim signer key).
+   */
+  receiptPubkey?: string;
+  /**
+   * When true, every fulfilled packet MUST carry a verifiable receipt: a
+   * receipt-less FULFILL is recorded as a `RECEIPT_MISSING` rejection and
+   * the stream halts with `abortReason: 'receipt-invalid'` (a maker that
+   * doesn't attest deliveries cannot be audited, so keep the exposure at
+   * zero). When omitted/false, receipt-less fulfills from legacy makers
+   * degrade gracefully: the claim still accumulates, `result.receipts`
+   * is simply empty. A receipt that is PRESENT but fails verification
+   * (tampered, wrong key, wrong session, non-monotone, duplicate seq) is
+   * ALWAYS a loud `RECEIPT_INVALID` rejection + halt, regardless of this
+   * flag — the packet's claim is never accumulated.
+   */
+  requireReceipts?: boolean;
   /** Per-packet timeout in ms. Default 30000. */
   packetTimeoutMs?: number;
   /**
@@ -259,6 +288,13 @@ export interface PacketProgress {
   rate?: string;
   /** Unix ms timestamp when the maker's rate source produced {@link rate}. Present iff `rate` is. */
   rateTimestamp?: number;
+  /**
+   * Verified per-fulfill stream receipt (issue #84, rolling-swap spec §7.2).
+   * Present iff the maker emitted a receipt AND it verified (signature,
+   * session nonce, monotonicity) — an invalid receipt halts the stream
+   * before the callback ever fires for that packet.
+   */
+  receipt?: StreamReceipt;
   /** Controller state at callback time. */
   state: 'running' | 'paused' | 'stopped';
 }
@@ -316,6 +352,13 @@ export interface AccumulatedClaim {
   rate?: string;
   /** Unix ms timestamp when the maker's rate source produced `rate`. Present iff `rate` is. */
   rateTimestamp?: number;
+  // --- Issue #84 stream-receipt field (additive) ---
+  /**
+   * The VERIFIED signed receipt that rode on this packet's FULFILL
+   * (issue #84, rolling-swap spec §7.2) — receipts persist wherever the
+   * claim does. Present iff the maker emitted receipts for this session.
+   */
+  receipt?: StreamReceipt;
 }
 
 /**
@@ -341,11 +384,22 @@ export interface StreamSwapResult {
     | 'callback-throw'
     | 'rate-deviation'
     | 'below-floor'
+    | 'receipt-invalid'
     | 'all-rejected';
   cumulativeSource: bigint;
   cumulativeTarget: bigint;
   packetsSent: number;
   packetsScheduled: number;
+  /**
+   * The verified receipt chain for this stream (issue #84, rolling-swap
+   * spec §7.2): every receipt that verified against the maker receipt key,
+   * sorted by `seq`, plus the superseding `latest`, the signed
+   * `totalDelivered`, and any `seq` holes. ALWAYS present — on abort it
+   * covers exactly what filled before the halt; against a legacy maker
+   * (no receipt support) it is simply empty. Feed to
+   * `serializeReceiptChain()` for the portable audit/dispute artifact.
+   */
+  receipts: StreamReceiptChain;
 }
 
 /** External controller returned by {@link streamSwapControlled}. */
@@ -409,6 +463,12 @@ function chunkAmount(total: bigint, count: number): bigint[] {
  * `pair.to.chain`. The value is echoed verbatim per packet — no case-folding
  * or transformation beyond what the sender-side `validateChainAddress`
  * accepts.
+ *
+ * Issue #84 (rfc-0039 stream receipts): when `streamNonce` is provided, the
+ * rumor also carries a `stream-nonce` tag — the sender-generated session
+ * identifier a receipt-capable maker echoes on every per-fulfill receipt.
+ * This is the TOON analogue of rfc-0039's Verifier→Receiver Receipt-Nonce
+ * provisioning (in-band, per stream). Legacy makers ignore the unknown tag.
  */
 function buildSwapRumor(input: {
   senderPubkey: string;
@@ -419,6 +479,8 @@ function buildSwapRumor(input: {
   nonce: Uint8Array;
   createdAt: number;
   chainRecipient: string;
+  /** 32-char lowercase hex session nonce (issue #84 stream receipts). */
+  streamNonce?: string;
 }): UnsignedEvent {
   const {
     senderPubkey,
@@ -429,20 +491,23 @@ function buildSwapRumor(input: {
     nonce,
     createdAt,
     chainRecipient,
+    streamNonce,
   } = input;
+  const tags: string[][] = [
+    ['swap-from', `${pair.from.assetCode}:${pair.from.chain}`],
+    ['swap-to', `${pair.to.assetCode}:${pair.to.chain}`],
+    ['amount', sourceAmount.toString()],
+    ['seq', String(packetIndex), String(totalPackets)],
+    ['nonce', Buffer.from(nonce).toString('hex')],
+    ['chain-recipient', chainRecipient],
+  ];
+  if (streamNonce !== undefined) tags.push(['stream-nonce', streamNonce]);
   return {
     kind: 20032,
     pubkey: senderPubkey,
     content: '',
     created_at: createdAt,
-    tags: [
-      ['swap-from', `${pair.from.assetCode}:${pair.from.chain}`],
-      ['swap-to', `${pair.to.assetCode}:${pair.to.chain}`],
-      ['amount', sourceAmount.toString()],
-      ['seq', String(packetIndex), String(totalPackets)],
-      ['nonce', Buffer.from(nonce).toString('hex')],
-      ['chain-recipient', chainRecipient],
-    ],
+    tags,
   };
 }
 
@@ -515,6 +580,16 @@ export function validateChainAddress(
  * permitted for legacy makers unless `opts.requireQuoteTape` is set (which
  * `runLoop` does whenever `minExchangeRate` is armed).
  *
+ * Issue #84 extension (rfc-0039 stream receipts, spec §7.2): parses the
+ * optional `receipt` object into a structurally-validated {@link StreamReceipt}.
+ * Like the tape, a PRESENT-but-malformed receipt is a loud
+ * `FULFILL_DECODE_FAILED` (a garbled proof must never be silently dropped —
+ * the sender would keep streaming while its audit artifact rots); a wholly
+ * absent receipt is legacy-maker territory and tolerated here (the
+ * `requireReceipts` policy is enforced by the caller, which has the halt
+ * machinery). Signature/monotonicity verification is NOT done here — that is
+ * `processAcceptedPacket`'s ReceiptChainTracker.
+ *
  * @param chain Optional `pair.to.chain` string for per-chain format validation
  *   of channelId / recipient / swapSignerAddress. When omitted, format checks
  *   fall back to a length-only sanity check.
@@ -535,6 +610,8 @@ function decodeFulfillMetadata(
   rate?: string;
   /** Quote-tape timestamp (unix ms). Present iff `rate` is. */
   rateTimestamp?: number;
+  /** Per-fulfill stream receipt (issue #84) — structurally validated, NOT yet signature-verified. */
+  receipt?: StreamReceipt;
   channelId?: string;
   nonce?: string;
   cumulativeAmount?: string;
@@ -603,6 +680,7 @@ function decodeFulfillMetadata(
     targetAmount?: string;
     rate?: string;
     rateTimestamp?: number;
+    receipt?: StreamReceipt;
     channelId?: string;
     nonce?: string;
     cumulativeAmount?: string;
@@ -675,6 +753,20 @@ function decodeFulfillMetadata(
       'FULFILL_DECODE_FAILED',
       'FULFILL metadata is missing the quote tape (rate + rateTimestamp) required when minExchangeRate is set'
     );
+  }
+  // Issue #84 stream receipt — structural validation only (loud on garble,
+  // tolerant on absence; see the function doc). Signature verification and
+  // monotonicity are enforced downstream against the session tracker.
+  if (obj['receipt'] !== undefined) {
+    try {
+      result.receipt = parseStreamReceipt(obj['receipt']);
+    } catch (err) {
+      throw new StreamSwapError(
+        'FULFILL_DECODE_FAILED',
+        `FULFILL metadata.receipt is malformed: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err }
+      );
+    }
   }
   // Story 12.6 settlement-context fields — OPTIONAL, best-effort (#153).
   //
@@ -964,6 +1056,27 @@ function validateParams(params: StreamSwapParams): void {
     }
   }
 
+  // Issue #84: receipt verification key — same shape as swapPubkey.
+  if (
+    params.receiptPubkey !== undefined &&
+    (typeof params.receiptPubkey !== 'string' ||
+      !HEX64_REGEX.test(params.receiptPubkey))
+  ) {
+    throw new StreamSwapError(
+      'INVALID_STATE',
+      'receiptPubkey must be a 64-char lowercase hex string'
+    );
+  }
+  if (
+    params.requireReceipts !== undefined &&
+    typeof params.requireReceipts !== 'boolean'
+  ) {
+    throw new StreamSwapError(
+      'INVALID_STATE',
+      `requireReceipts must be a boolean, got ${String(params.requireReceipts)}`
+    );
+  }
+
   if (
     params.packetExpiryMs !== undefined &&
     (typeof params.packetExpiryMs !== 'number' ||
@@ -1075,6 +1188,14 @@ export function streamSwapControlled(params: StreamSwapParams): {
 
   const senderPubkey = getPublicKey(params.senderSecretKey);
 
+  // Issue #84 (rfc-0039 stream receipts): one 16-byte session nonce per
+  // streamSwap invocation, advertised on every rumor's `stream-nonce` tag.
+  // The sender plays rfc-0039's Verifier role — it generates the nonce and
+  // verifies each per-fulfill receipt the maker signs against it.
+  const streamNonceBytes = new Uint8Array(16);
+  getRandomValues(streamNonceBytes);
+  const streamNonce = Buffer.from(streamNonceBytes).toString('hex');
+
   // Controller state machine
   type State = 'running' | 'paused' | 'stopped' | 'completed' | 'failed';
   let streamState: State = 'running';
@@ -1133,6 +1254,7 @@ export function streamSwapControlled(params: StreamSwapParams): {
         params,
         frozenPair,
         senderPubkey,
+        streamNonce,
         logger,
         getState,
         setState,
@@ -1143,6 +1265,7 @@ export function streamSwapControlled(params: StreamSwapParams): {
         frozenPair,
         schedule,
         senderPubkey,
+        streamNonce,
         logger,
         getState,
         setState,
@@ -1166,6 +1289,8 @@ interface PacketProcessCtx {
   rejections: StreamSwapResult['rejections'];
   errors: StreamSwapResult['errors'];
   cumulative: { source: bigint; target: bigint };
+  /** Issue #84: session receipt accumulator/verifier (one per stream). */
+  receiptTracker: ReceiptChainTracker;
 }
 
 /**
@@ -1185,6 +1310,7 @@ type ProcessedPacket =
   | { status: 'error' }
   | { status: 'recipient-mismatch' }
   | { status: 'below-floor' }
+  | { status: 'receipt-invalid' }
   | { status: 'callback-throw' };
 
 /**
@@ -1200,8 +1326,18 @@ function buildAndWrapPacket(input: {
   seq: number;
   /** Total packets for the `seq` tag; `0` = unknown (adaptive mode). */
   totalPackets: number;
+  /** Issue #84: session nonce advertised as the rumor `stream-nonce` tag. */
+  streamNonce: string;
 }): { toonData: Uint8Array; packetExpiresAt?: Date } {
-  const { params, pair, senderPubkey, sourceAmount, seq, totalPackets } = input;
+  const {
+    params,
+    pair,
+    senderPubkey,
+    sourceAmount,
+    seq,
+    totalPackets,
+    streamNonce,
+  } = input;
   const nonce = new Uint8Array(16);
   getRandomValues(nonce);
   const rumor = buildSwapRumor({
@@ -1213,6 +1349,7 @@ function buildAndWrapPacket(input: {
     nonce,
     createdAt: Math.floor(Date.now() / 1000),
     chainRecipient: params.chainRecipient,
+    streamNonce,
   });
 
   // Per-packet expiry (issue #81 / rolling-swap R7): computed at send
@@ -1276,6 +1413,7 @@ async function processAcceptedPacket(
     targetAmount?: string;
     rate?: string;
     rateTimestamp?: number;
+    receipt?: StreamReceipt;
     channelId?: string;
     nonce?: string;
     cumulativeAmount?: string;
@@ -1389,6 +1527,66 @@ async function processAcceptedPacket(
     }
   }
 
+  // --- Issue #84: stream-receipt verification (rfc-0039 semantics) ---
+  // Runs AFTER the floor (a below-floor packet is rejected before its
+  // receipt is ever considered — a sender-rejected packet contributes NO
+  // receipt to the chain) and BEFORE claim decryption/accumulation: a
+  // packet whose proof-of-delivery is forged, replayed from another
+  // session, or breaks the monotone cumulative MUST NOT accumulate, and
+  // the stream halts — continuing would commit more source value while
+  // the audit/dispute artifact is already known-corrupt.
+  //   - present + verifies      → accumulate receipt alongside the claim
+  //   - absent + !requireReceipts → legacy maker, degrade gracefully
+  //   - absent + requireReceipts  → RECEIPT_MISSING rejection + halt
+  //   - present + fails verification → RECEIPT_INVALID rejection + halt
+  // The receipt's attested tape entry must also match the metadata tape —
+  // a maker signing one rate while quoting another is equivocating.
+  let verifiedReceipt: StreamReceipt | undefined;
+  if (metadata.receipt !== undefined) {
+    const receipt = metadata.receipt;
+    let failure: string | undefined;
+    if (metadata.rate !== undefined && receipt.rate !== metadata.rate) {
+      failure = `receipt.rate ${receipt.rate} does not match tape rate ${metadata.rate}`;
+    } else if (
+      metadata.rateTimestamp !== undefined &&
+      receipt.rateTimestamp !== metadata.rateTimestamp
+    ) {
+      failure = `receipt.rateTimestamp ${receipt.rateTimestamp} does not match tape rateTimestamp ${metadata.rateTimestamp}`;
+    } else {
+      const added = ctx.receiptTracker.add(receipt);
+      if (!added.ok) failure = `${added.code}: ${added.message}`;
+    }
+    if (failure !== undefined) {
+      logger.warn({
+        event: 'stream_swap.receipt_invalid',
+        packetIndex,
+        seq: receipt.seq,
+        error: failure,
+      });
+      ctx.rejections.push({
+        packetIndex,
+        sourceAmount,
+        code: 'RECEIPT_INVALID',
+        message: `Stream receipt failed verification: ${failure}`,
+      });
+      return { status: 'receipt-invalid' };
+    }
+    verifiedReceipt = receipt;
+  } else if (params.requireReceipts === true) {
+    logger.warn({
+      event: 'stream_swap.receipt_missing',
+      packetIndex,
+    });
+    ctx.rejections.push({
+      packetIndex,
+      sourceAmount,
+      code: 'RECEIPT_MISSING',
+      message:
+        'FULFILL carried no stream receipt but requireReceipts is set (legacy maker without rfc-0039 receipt support?)',
+    });
+    return { status: 'receipt-invalid' };
+  }
+
   // --- Decrypt claim ---
   let claimBytes: Uint8Array;
   try {
@@ -1496,6 +1694,8 @@ async function processAcceptedPacket(
     accumulated.rate = metadata.rate;
     accumulated.rateTimestamp = metadata.rateTimestamp as number;
   }
+  // Issue #84: the verified receipt persists alongside its claim.
+  if (verifiedReceipt !== undefined) accumulated.receipt = verifiedReceipt;
   ctx.claims.push(accumulated);
 
   logger.debug({
@@ -1523,6 +1723,8 @@ async function processAcceptedPacket(
         rate: metadata.rate,
         rateTimestamp: metadata.rateTimestamp as number,
       }),
+      // Issue #84: surface the verified per-fulfill receipt to the callback.
+      ...(verifiedReceipt !== undefined && { receipt: verifiedReceipt }),
       state:
         ctx.getState() === 'paused'
           ? 'paused'
@@ -1611,6 +1813,9 @@ function finalizeResult(input: {
     cumulativeTarget: cumulative.target,
     packetsSent: input.packetsSent,
     packetsScheduled: input.packetsScheduled,
+    // Issue #84: the verified receipt chain — present on abort too,
+    // covering exactly the packets that filled before the halt.
+    receipts: input.ctx.receiptTracker.chain(),
   };
 }
 
@@ -1623,6 +1828,7 @@ async function runLoop(
   pair: SwapPair,
   schedule: bigint[],
   senderPubkey: string,
+  streamNonce: string,
   logger: NonNullable<StreamSwapParams['logger']>,
   getState: () => 'running' | 'paused' | 'stopped' | 'completed' | 'failed',
   setState: (
@@ -1639,6 +1845,10 @@ async function runLoop(
     rejections: [],
     errors: [],
     cumulative: { source: 0n, target: 0n },
+    receiptTracker: new ReceiptChainTracker({
+      streamNonce,
+      makerPubkey: params.receiptPubkey ?? params.swapPubkey,
+    }),
   };
   let packetsSent = 0;
   let abortReason: StreamSwapResult['abortReason'] = 'complete';
@@ -1699,6 +1909,7 @@ async function runLoop(
         sourceAmount,
         seq: packetIndex + 1,
         totalPackets,
+        streamNonce,
       });
     } catch (err) {
       logger.error({
@@ -1767,6 +1978,10 @@ async function runLoop(
     }
     if (outcome.status === 'below-floor') {
       abortReason = 'below-floor';
+      break packetLoop;
+    }
+    if (outcome.status === 'receipt-invalid') {
+      abortReason = 'receipt-invalid';
       break packetLoop;
     }
     if (outcome.status === 'callback-throw') {
@@ -1861,6 +2076,7 @@ async function runAdaptiveLoop(
   params: StreamSwapParams,
   pair: SwapPair,
   senderPubkey: string,
+  streamNonce: string,
   logger: NonNullable<StreamSwapParams['logger']>,
   getState: () => 'running' | 'paused' | 'stopped' | 'completed' | 'failed',
   setState: (
@@ -1878,6 +2094,10 @@ async function runAdaptiveLoop(
     rejections: [],
     errors: [],
     cumulative: { source: 0n, target: 0n },
+    receiptTracker: new ReceiptChainTracker({
+      streamNonce,
+      makerPubkey: params.receiptPubkey ?? params.swapPubkey,
+    }),
   };
   let packetsSent = 0;
   let abortReason: StreamSwapResult['abortReason'] = 'complete';
@@ -1967,6 +2187,7 @@ async function runAdaptiveLoop(
             // Adaptive mode: the final packet count is unknown upfront —
             // `0` in the rumor's `seq` tag total position means "open".
             totalPackets: 0,
+            streamNonce,
           });
         } catch (err) {
           logger.error({
@@ -2101,6 +2322,19 @@ async function runAdaptiveLoop(
           remaining,
         });
         halt('below-floor');
+        break;
+      case 'receipt-invalid':
+        // Forged/missing proof-of-delivery (issue #84). Shared logic already
+        // recorded the rejection; feed a shrink signal so the persisted
+        // tuple starts cautious against this maker, then halt. In-flight
+        // packets drain (their claims/receipts are still harvested) but
+        // nothing new is scheduled.
+        await observeSafe({
+          resolution: 'reject',
+          rttMs: settled.rttMs,
+          remaining,
+        });
+        halt('receipt-invalid');
         break;
       case 'callback-throw':
         // The fill itself was clean; the sender's own callback threw.
