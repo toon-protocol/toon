@@ -44,6 +44,10 @@ import {
   SwapHandlerError,
   wrapSwapPacketToToon,
   decryptFulfillClaim,
+  parseStreamReceipt,
+  verifyStreamReceipt,
+  BoundedReceiptSessions,
+  type StreamReceipt,
 } from './index.js';
 import type {
   ClaimIssuer,
@@ -1461,5 +1465,223 @@ describe('issue #82 — quote tape (rate + rateTimestamp) in FULFILL metadata', 
     // Same rumor retried MUST NOT be F04 duplicate — reservation released.
     const second = await handler(makeGiftWrappedCtx({ rumor }));
     expect(second.accept).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #84 — rfc-0039 stream receipts: maker-side issuance on the accept path
+// ---------------------------------------------------------------------------
+
+describe('Issue #84 — per-fulfill stream receipts (maker side)', () => {
+  const STREAM_NONCE = 'ab'.repeat(16);
+
+  let packetCounter = 0;
+
+  function makeReceiptRumor(
+    streamNonce: string | undefined = STREAM_NONCE
+  ): UnsignedEvent {
+    // Unique per-packet nonce tag (as real streamSwap rumors carry) so the
+    // handler's replay protection doesn't collapse identical test rumors
+    // into one packetId.
+    const extraTags: string[][] = [['nonce', `packet-${packetCounter++}`]];
+    if (streamNonce !== undefined) {
+      extraTags.push(['stream-nonce', streamNonce]);
+    }
+    return makeRumor({ extraTags });
+  }
+
+  function getReceipt(
+    res: Awaited<ReturnType<ReturnType<typeof createSwapHandler>>>
+  ): StreamReceipt {
+    expect(res.accept).toBe(true);
+    if (!res.accept) throw new Error('unreachable');
+    const raw = res.metadata!['receipt'];
+    expect(raw).toBeDefined();
+    return parseStreamReceipt(raw);
+  }
+
+  it('[P0] attaches a receipt signed by the maker identity when the rumor carries stream-nonce', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const res = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+    );
+    const receipt = getReceipt(res);
+
+    expect(receipt.v).toBe(1);
+    expect(receipt.streamNonce).toBe(STREAM_NONCE);
+    expect(receipt.seq).toBe(1);
+    // cumulativeDelivered on the first fulfill == this packet's targetAmount,
+    // and the receipt's attested tape entry matches the metadata tape.
+    if (res.accept) {
+      expect(receipt.cumulativeDelivered).toBe(res.metadata!['targetAmount']);
+      expect(receipt.rate).toBe(res.metadata!['rate']);
+      expect(receipt.rateTimestamp).toBe(res.metadata!['rateTimestamp']);
+    }
+    // Default receipt signer is the maker identity key (recipientSecretKey).
+    expect(verifyStreamReceipt(receipt, recipientPubkey)).toBe(true);
+  });
+
+  it('[P0] cumulativeDelivered and seq increase monotonically across fulfills in one session', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    let cumulative = 0n;
+    for (let i = 1; i <= 3; i++) {
+      const res = await handler(
+        makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+      );
+      const receipt = getReceipt(res);
+      expect(receipt.seq).toBe(i);
+      if (res.accept) {
+        cumulative += BigInt(res.metadata!['targetAmount'] as string);
+      }
+      expect(receipt.cumulativeDelivered).toBe(cumulative.toString());
+      expect(verifyStreamReceipt(receipt, recipientPubkey)).toBe(true);
+    }
+  });
+
+  it('[P0] legacy sender (no stream-nonce tag) gets NO receipt — metadata shape unchanged', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+    expect(res.accept).toBe(true);
+    if (res.accept) {
+      expect(res.metadata!['receipt']).toBeUndefined();
+    }
+  });
+
+  it('[P1] malformed stream-nonce tag is tolerated: accept, but no receipt', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const res = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor('NOT-hex') })
+    );
+    expect(res.accept).toBe(true);
+    if (res.accept) {
+      expect(res.metadata!['receipt']).toBeUndefined();
+    }
+  });
+
+  it('[P1] dedicated receiptSecretKey signs receipts (verifies against ITS pubkey, not the identity key)', async () => {
+    const receiptSecretKey = generateSecretKey();
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      receiptSecretKey,
+    });
+
+    const res = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+    );
+    const receipt = getReceipt(res);
+    expect(verifyStreamReceipt(receipt, getPublicKey(receiptSecretKey))).toBe(
+      true
+    );
+    expect(verifyStreamReceipt(receipt, recipientPubkey)).toBe(false);
+  });
+
+  it('[P1] a REJECTED packet gets no receipt and does not advance the session', async () => {
+    let fail = true;
+    const issuer: ClaimIssuer = {
+      issueClaim: async (_p: IssueClaimParams): Promise<IssueClaimResult> => {
+        if (fail) {
+          fail = false;
+          const err = new Error('insufficient inventory') as Error & {
+            code: string;
+          };
+          err.code = 'INSUFFICIENT_INVENTORY';
+          throw err;
+        }
+        return { claim: new Uint8Array([9, 9, 9]) };
+      },
+    };
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const rejected = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+    );
+    expect(rejected.accept).toBe(false);
+
+    // Next accepted packet in the SAME session starts at seq 1 — the reject
+    // never touched the session accumulator.
+    const accepted = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+    );
+    const receipt = getReceipt(accepted);
+    expect(receipt.seq).toBe(1);
+  });
+
+  it('[P1] distinct stream nonces are tracked as independent sessions', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const first = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor() })
+    );
+    expect(getReceipt(first).seq).toBe(1);
+
+    const otherNonce = 'cd'.repeat(16);
+    const other = await handler(
+      makeGiftWrappedCtx({ rumor: makeReceiptRumor(otherNonce) })
+    );
+    const otherReceipt = getReceipt(other);
+    expect(otherReceipt.seq).toBe(1);
+    expect(otherReceipt.streamNonce).toBe(otherNonce);
+  });
+
+  it('[P2] construction-time validation rejects a malformed receiptSecretKey', () => {
+    const { issuer } = makeMockIssuer();
+    expect(() =>
+      createSwapHandler({
+        recipientSecretKey,
+        swapPairs: [USDC_BASE_PAIR],
+        claimIssuer: issuer,
+        receiptSecretKey: new Uint8Array(31),
+      })
+    ).toThrow(SwapHandlerError);
+  });
+
+  it('[P2] operator-supplied receiptSessions store is used verbatim', async () => {
+    const { issuer } = makeMockIssuer();
+    const store = new BoundedReceiptSessions();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      receiptSessions: store,
+    });
+
+    await handler(makeGiftWrappedCtx({ rumor: makeReceiptRumor() }));
+    expect(store.get(STREAM_NONCE)).toMatchObject({ seq: 1 });
   });
 });
