@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   GenesisPeerLoader,
   isValidPubkey,
@@ -146,6 +146,74 @@ describe('GenesisPeerLoader', () => {
         ilpAddress: 'g.proxy',
         btpEndpoint: 'wss://proxy.devnet.toonprotocol.dev:443',
       });
+    });
+  });
+
+  describe('TOON_GENESIS_PEERS env override', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('replaces the bundled seed entirely when set', () => {
+      const override = validPeer({ pubkey: 'b'.repeat(64) });
+      vi.stubEnv('TOON_GENESIS_PEERS', JSON.stringify([override]));
+
+      const peers = GenesisPeerLoader.loadGenesisPeers();
+      expect(peers).toEqual([override]);
+    });
+
+    it('disables the bundled seed when set to an empty array', () => {
+      vi.stubEnv('TOON_GENESIS_PEERS', '[]');
+
+      expect(GenesisPeerLoader.loadGenesisPeers()).toEqual([]);
+      expect(GenesisPeerLoader.loadAllPeers()).toEqual([]);
+    });
+
+    it('still merges additionalPeersJson on top of the override', () => {
+      vi.stubEnv('TOON_GENESIS_PEERS', '[]');
+      const additional = validPeer({ pubkey: 'c'.repeat(64) });
+
+      const peers = GenesisPeerLoader.loadAllPeers(
+        JSON.stringify([additional])
+      );
+      expect(peers).toEqual([additional]);
+    });
+
+    it('returns empty array and warns on malformed JSON', () => {
+      const warnSpy = suppressWarnings();
+      vi.stubEnv('TOON_GENESIS_PEERS', 'not json');
+
+      expect(GenesisPeerLoader.loadGenesisPeers()).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('returns empty array and warns on non-array JSON', () => {
+      const warnSpy = suppressWarnings();
+      vi.stubEnv('TOON_GENESIS_PEERS', '{"pubkey":"nope"}');
+
+      expect(GenesisPeerLoader.loadGenesisPeers()).toEqual([]);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('skips invalid entries in the override with a warning', () => {
+      const warnSpy = suppressWarnings();
+      const good = validPeer({ pubkey: 'd'.repeat(64) });
+      const bad = { pubkey: 'not-hex', relayUrl: 'wss://x' };
+      vi.stubEnv('TOON_GENESIS_PEERS', JSON.stringify([good, bad]));
+
+      expect(GenesisPeerLoader.loadGenesisPeers()).toEqual([good]);
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    it('deduplicates override entries by pubkey', () => {
+      const first = validPeer({ pubkey: 'e'.repeat(64) });
+      const second = validPeer({
+        pubkey: 'e'.repeat(64),
+        ilpAddress: 'g.override.wins',
+      });
+      vi.stubEnv('TOON_GENESIS_PEERS', JSON.stringify([first, second]));
+
+      expect(GenesisPeerLoader.loadGenesisPeers()).toEqual([second]);
     });
   });
 
