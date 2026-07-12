@@ -1339,3 +1339,127 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     expect(typeof shape.senderPubkey).toBe('string');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #82 — quote tape in FULFILL accept-metadata (rolling-swap spec §7.1)
+// ---------------------------------------------------------------------------
+
+describe('issue #82 — quote tape (rate + rateTimestamp) in FULFILL metadata', () => {
+  it('[P0] emits rate + rateTimestamp on every accept, defaulting to pair.rate + resolution time', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+
+    const before = Date.now();
+    const res = await handler(makeGiftWrappedCtx({}));
+    const after = Date.now();
+
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+    // R_i == pair.rate when no rateProvider is wired (config-frozen quote).
+    expect(res.metadata!['rate']).toBe(USDC_BASE_PAIR.rate);
+    const ts = res.metadata!['rateTimestamp'];
+    expect(typeof ts).toBe('number');
+    expect(Number.isInteger(ts)).toBe(true);
+    expect(ts as number).toBeGreaterThanOrEqual(before);
+    expect(ts as number).toBeLessThanOrEqual(after);
+  });
+
+  it('[P0] string-returning rateProvider: tape carries the fresh rate, timestamp stamped at resolution', async () => {
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      rateProvider: async () => '0.0004',
+    });
+
+    const before = Date.now();
+    const res = await handler(makeGiftWrappedCtx({}));
+    const after = Date.now();
+
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+    expect(res.metadata!['rate']).toBe('0.0004');
+    const ts = res.metadata!['rateTimestamp'] as number;
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThanOrEqual(after);
+  });
+
+  it('[P0] RateQuote-returning rateProvider: rate AND rate-source tick time echoed verbatim', async () => {
+    const { issuer, calls } = makeMockIssuer();
+    const TICK = 1_700_000_000_123;
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      rateProvider: async () => ({ rate: '0.0005', rateTimestamp: TICK }),
+    });
+
+    const res = await handler(makeGiftWrappedCtx({ amount: 1_000_000n }));
+    expect(res.accept).toBe(true);
+    if (!res.accept) return;
+    expect(res.metadata!['rate']).toBe('0.0005');
+    expect(res.metadata!['rateTimestamp']).toBe(TICK);
+    // The quoted rate is the rate actually applied to the packet.
+    expect(calls[0]!.targetAmount).toBe(500_000_000_000_000n);
+    expect(res.metadata!['targetAmount']).toBe('500000000000000');
+  });
+
+  it('[P1] rejects T00 Rate provider error when RateQuote shape is malformed (no silent fallback)', async () => {
+    const cases: unknown[] = [
+      { rate: '0.0005' }, // missing rateTimestamp
+      { rateTimestamp: Date.now() }, // missing rate
+      { rate: '0.0005', rateTimestamp: 1.5 }, // non-integer ts
+      { rate: '0.0005', rateTimestamp: 0 }, // non-positive ts
+      { rate: 42, rateTimestamp: Date.now() }, // non-string rate
+      null,
+      42,
+    ];
+    for (const malformed of cases) {
+      const { issuer, issueClaim } = makeMockIssuer();
+      const handler = createSwapHandler({
+        recipientSecretKey,
+        swapPairs: [USDC_BASE_PAIR],
+        claimIssuer: issuer,
+        rateProvider: async () =>
+          malformed as unknown as { rate: string; rateTimestamp: number },
+      });
+      const res = await handler(makeGiftWrappedCtx({}));
+      expect(res.accept).toBe(false);
+      if (!res.accept) {
+        expect(res.code).toBe('T00');
+        expect(res.message).toBe('Rate provider error');
+      }
+      expect(issueClaim).not.toHaveBeenCalled();
+    }
+  });
+
+  it('[P1] replay reservation is released on malformed RateQuote so the sender can retry', async () => {
+    let firstCall = true;
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      rateProvider: async () => {
+        if (firstCall) {
+          firstCall = false;
+          return null as unknown as string; // malformed on first attempt
+        }
+        return '0.0004';
+      },
+    });
+
+    const rumor = makeRumor({});
+    const first = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(first.accept).toBe(false);
+
+    // Same rumor retried MUST NOT be F04 duplicate — reservation released.
+    const second = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(second.accept).toBe(true);
+  });
+});

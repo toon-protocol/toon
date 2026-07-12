@@ -122,6 +122,22 @@ export interface ApplyRateParams {
   rate: string;
 }
 
+/**
+ * A fresh quote returned by a {@link CreateSwapHandlerConfig.rateProvider}
+ * hook (issue #82, rolling-swap quote tape).
+ *
+ * `rateTimestamp` is the unix-ms time at which the maker's rate SOURCE
+ * produced this quote (its feed tick), not the time the handler resolved it.
+ * Both fields are echoed verbatim into the FULFILL accept-metadata so the
+ * sender can read the quote tape `(R_1, t_1), (R_2, t_2), …` off the fills.
+ */
+export interface RateQuote {
+  /** Decimal-string rate matching `SwapPair.rate` format: /^(0|[1-9]\d*)(\.\d+)?$/. */
+  rate: string;
+  /** Unix ms timestamp when the rate source produced this quote. Positive integer. */
+  rateTimestamp: number;
+}
+
 /** Minimal pino-compatible logger interface. */
 export interface SwapHandlerLogger {
   debug: (...args: unknown[]) => void;
@@ -152,10 +168,20 @@ export interface CreateSwapHandlerConfig {
   claimIssuer: ClaimIssuer;
   /**
    * Optional live-rate override hook. When provided, the handler calls this per
-   * packet instead of reading `pair.rate`. MUST return a decimal string matching
-   * `SwapPair.rate` format: /^(0|[1-9]\d*)(\.\d+)?$/.
+   * packet instead of reading `pair.rate`. This is the rolling-swap fresh-quote
+   * seam (issue #82): the resolved rate `R_i` and its quote timestamp are
+   * emitted on every FULFILL's accept-metadata as the quote tape.
+   *
+   * MAY return either:
+   * - a decimal string matching `SwapPair.rate` format
+   *   /^(0|[1-9]\d*)(\.\d+)?$/ (legacy shape; the handler stamps
+   *   `rateTimestamp` with its own resolution time), or
+   * - a {@link RateQuote} `{ rate, rateTimestamp }` so the rate source's own
+   *   tick time travels on the tape.
    */
-  rateProvider?: (pair: SwapPair) => string | Promise<string>;
+  rateProvider?: (
+    pair: SwapPair
+  ) => string | RateQuote | Promise<string | RateQuote>;
   /**
    * Optional replay-protection set. When provided, the handler uses it
    * VERBATIM (operator-owned — bounding/persistence is the operator's
@@ -665,9 +691,35 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     };
 
     // AC-9 rate resolution (optional live hook per D12-006).
+    //
+    // Issue #82 (rolling-swap quote tape): the resolved rate `R_i` and its
+    // quote timestamp are captured here and emitted on the accept-metadata.
+    // A provider may return the legacy string shape (timestamp = resolution
+    // time) or a `RateQuote` carrying its rate source's own tick time.
     let rate: string;
+    let rateTimestamp: number;
     try {
-      rate = config.rateProvider ? await config.rateProvider(pair) : pair.rate;
+      const provided = config.rateProvider
+        ? await config.rateProvider(pair)
+        : pair.rate;
+      if (typeof provided === 'string') {
+        rate = provided;
+        rateTimestamp = Date.now();
+      } else if (
+        provided !== null &&
+        typeof provided === 'object' &&
+        typeof provided.rate === 'string' &&
+        typeof provided.rateTimestamp === 'number' &&
+        Number.isInteger(provided.rateTimestamp) &&
+        provided.rateTimestamp > 0
+      ) {
+        rate = provided.rate;
+        rateTimestamp = provided.rateTimestamp;
+      } else {
+        throw new SwapHandlerError(
+          'rateProvider must return a decimal-string rate or { rate, rateTimestamp }'
+        );
+      }
     } catch (err) {
       logger.error({
         event: 'swap_handler.rate_provider_failed',
@@ -778,10 +830,17 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     // parse the opaque chain-specific `claimBytes`. This is additive and
     // backward compatible — legacy senders that ignore the field get the
     // same {claim, ephemeralPubkey, claimId?} shape they always did.
+    // Issue #82 (rolling-swap quote tape, spec §7.1): every FULFILL carries
+    // the rate `R_i` actually applied to this packet plus its quote
+    // timestamp. Additive and backward compatible — legacy senders ignore
+    // the extra fields; rolling senders read the sequence
+    // `(R_1, t_1), (R_2, t_2), …` as the price tape.
     const metadata: Record<string, unknown> = {
       claim: claimBase64,
       ephemeralPubkey,
       targetAmount: targetAmount.toString(),
+      rate,
+      rateTimestamp,
     };
     if (claimId !== undefined) metadata['claimId'] = claimId;
     // Story 12.6: thread settlement-context fields through when the claim

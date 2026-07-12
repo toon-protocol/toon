@@ -48,7 +48,25 @@ interface MockSwapOptions {
   claimBytesFor?: (packetIndex: number) => Uint8Array;
   /** Starting index counter (allows chained swaps). */
   startIndex?: number;
+  /**
+   * Issue #82: emit the quote tape (`rate` + `rateTimestamp`) on each
+   * FULFILL's metadata, mirroring a rolling-swap-capable maker. The
+   * timestamp is deterministic (`1_700_000_000_000 + packetIndex`) so
+   * ordering tests are stable.
+   */
+  emitTape?: boolean;
+  /**
+   * Issue #82: last-chance metadata mutator, applied after assembly (and
+   * after tape emission). Lets tests garble/omit specific fields.
+   */
+  metadataOverride?: (
+    packetIndex: number,
+    metadata: Record<string, unknown>
+  ) => Record<string, unknown>;
 }
+
+/** Deterministic tape timestamp base used when `emitTape` is set. */
+const MOCK_TAPE_TS_BASE = 1_700_000_000_000;
 
 interface MockSwapHandle {
   fn: ReturnType<typeof vi.fn>;
@@ -135,12 +153,19 @@ function makeMockSwap(
       });
 
       const claimBase64 = Buffer.from(ciphertext).toString('base64');
-      const metadata: Record<string, unknown> = {
+      let metadata: Record<string, unknown> = {
         claim: claimBase64,
         ephemeralPubkey,
         targetAmount: targetAmount.toString(),
         claimId: `mock-claim-${packetIndex}`,
       };
+      if (opts.emitTape) {
+        metadata['rate'] = rate;
+        metadata['rateTimestamp'] = MOCK_TAPE_TS_BASE + packetIndex;
+      }
+      if (opts.metadataOverride) {
+        metadata = opts.metadataOverride(packetIndex, metadata);
+      }
 
       const dataB64 = Buffer.from(JSON.stringify(metadata)).toString('base64');
       return { accepted: true, data: dataB64 };
@@ -2292,4 +2317,404 @@ describe('issue #81 — packetExpiryMs per-packet expiry', () => {
       expect(swap.fn).not.toHaveBeenCalled();
     }
   );
+});
+
+// ---------------------------------------------------------------------------
+// Issue #82 — quote-tape plumbing + minExchangeRate hard floor
+// ---------------------------------------------------------------------------
+
+import { __testing as streamSwapTesting } from './stream-swap';
+
+/** Minimal valid FULFILL metadata for direct decoder tests. */
+function makeTapeFulfillData(overrides: Record<string, unknown>): string {
+  const base: Record<string, unknown> = {
+    claim: Buffer.from('claim-bytes').toString('base64'),
+    ephemeralPubkey: 'a'.repeat(64),
+    ...overrides,
+  };
+  return Buffer.from(JSON.stringify(base)).toString('base64');
+}
+
+function baseParams(
+  swap: MockSwapHandle,
+  senderSecretKey: Uint8Array,
+  swapSecretKey: Uint8Array,
+  pair: SwapPair
+): StreamSwapParams {
+  return {
+    client: makeClient(swap, senderSecretKey),
+    swapPubkey: getPublicKey(swapSecretKey),
+    swapIlpAddress: 'g.toon.swap1',
+    pair,
+    senderSecretKey,
+    chainRecipient: FIXTURE_EVM_RECIPIENT,
+    totalAmount: 400n,
+    packetCount: 4,
+  };
+}
+
+describe('issue #82 — decodeFulfillMetadata quote-tape parsing', () => {
+  const decode = streamSwapTesting.decodeFulfillMetadata;
+
+  it('parses a well-formed tape entry (rate + rateTimestamp)', () => {
+    const out = decode(
+      makeTapeFulfillData({ rate: '4.0007', rateTimestamp: 1_783_936_201_437 })
+    );
+    expect(out.rate).toBe('4.0007');
+    expect(out.rateTimestamp).toBe(1_783_936_201_437);
+  });
+
+  it('tolerates a wholly absent tape when not required (legacy maker)', () => {
+    const out = decode(makeTapeFulfillData({}));
+    expect(out.rate).toBeUndefined();
+    expect(out.rateTimestamp).toBeUndefined();
+  });
+
+  it('throws FULFILL_DECODE_FAILED when the tape is required but absent', () => {
+    expect(() =>
+      decode(makeTapeFulfillData({}), undefined, { requireQuoteTape: true })
+    ).toThrowError(StreamSwapError);
+    try {
+      decode(makeTapeFulfillData({}), undefined, { requireQuoteTape: true });
+    } catch (err) {
+      expect((err as StreamSwapError).code).toBe('FULFILL_DECODE_FAILED');
+      expect((err as StreamSwapError).message).toMatch(/quote tape/i);
+    }
+  });
+
+  it('throws on a partial tape — rate without rateTimestamp, and vice versa', () => {
+    expect(() => decode(makeTapeFulfillData({ rate: '4.0' }))).toThrowError(
+      StreamSwapError
+    );
+    expect(() =>
+      decode(makeTapeFulfillData({ rateTimestamp: Date.now() }))
+    ).toThrowError(StreamSwapError);
+  });
+
+  it('throws on malformed rate values — loud, never a silent drop', () => {
+    const badRates = ['abc', '-1', '1e5', '.5', '00.5', '0', '0.000', 42, null];
+    for (const bad of badRates) {
+      expect(() =>
+        decode(makeTapeFulfillData({ rate: bad, rateTimestamp: Date.now() }))
+      ).toThrowError(StreamSwapError);
+    }
+  });
+
+  it('throws on malformed rateTimestamp values', () => {
+    const badTs = [0, -5, 1.5, '1700000000000', null, NaN];
+    for (const bad of badTs) {
+      expect(() =>
+        decode(makeTapeFulfillData({ rate: '4.0', rateTimestamp: bad }))
+      ).toThrowError(StreamSwapError);
+    }
+  });
+});
+
+describe('issue #82 — compareDecimalRates', () => {
+  const cmp = streamSwapTesting.compareDecimalRates;
+
+  it('compares decimal strings exactly in BigInt space', () => {
+    expect(cmp('0.0005', '0.0005')).toBe(0);
+    expect(cmp('0.0005', '0.00050000')).toBe(0);
+    expect(cmp('0.00049999999999', '0.0005')).toBe(-1);
+    expect(cmp('2800', '2800.0001')).toBe(-1);
+    expect(cmp('3', '2.9999')).toBe(1);
+    expect(cmp('4.0007', '3.98')).toBe(1);
+  });
+});
+
+describe('issue #82 — quote tape surfaced per packet via onPacket + claims', () => {
+  it('delivers fresh R_i + rateTimestamp per fulfilled packet, in packet order', async () => {
+    const pair = samplePair(); // rate '0.0005'
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const rates = new Map<number, string>([
+      [0, '0.0005'],
+      [1, '0.0006'],
+      [2, '0.00055'],
+      [3, '0.0007'],
+    ]);
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rateOverride: rates,
+    });
+
+    const seen: PacketProgress[] = [];
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      onPacket: (p) => {
+        seen.push(p);
+      },
+    });
+
+    expect(result.state).toBe('completed');
+    expect(seen).toHaveLength(4);
+    seen.forEach((p, i) => {
+      expect(p.index).toBe(i);
+      expect(p.rate).toBe(rates.get(i));
+      expect(p.rateTimestamp).toBe(1_700_000_000_000 + i);
+    });
+    // The tape is also persisted on the accumulated claims.
+    result.claims.forEach((c, i) => {
+      expect(c.rate).toBe(rates.get(i));
+      expect(c.rateTimestamp).toBe(1_700_000_000_000 + i);
+    });
+  });
+
+  it('legacy maker without tape: progress and claims carry no tape fields (behavior unchanged)', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey); // no emitTape
+
+    const seen: PacketProgress[] = [];
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      onPacket: (p) => {
+        seen.push(p);
+      },
+    });
+
+    expect(result.state).toBe('completed');
+    expect(result.claims).toHaveLength(4);
+    seen.forEach((p) => {
+      expect(p.rate).toBeUndefined();
+      expect(p.rateTimestamp).toBeUndefined();
+    });
+    result.claims.forEach((c) => {
+      expect(c.rate).toBeUndefined();
+      expect(c.rateTimestamp).toBeUndefined();
+    });
+  });
+
+  it('malformed tape on a fulfilled packet is a per-packet error even WITHOUT minExchangeRate', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      metadataOverride: (i, m) => {
+        if (i === 1) return { ...m, rate: 'not-a-rate' };
+        return m;
+      },
+    });
+
+    const result = await streamSwap(
+      baseParams(swap, senderSecretKey, swapSecretKey, pair)
+    );
+
+    // Packet 1 surfaces as a loud decode error; the rest complete.
+    expect(result.claims.map((c) => c.packetIndex)).toEqual([0, 2, 3]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]!.packetIndex).toBe(1);
+    expect((result.errors[0]!.cause as StreamSwapError).code).toBe(
+      'FULFILL_DECODE_FAILED'
+    );
+  });
+});
+
+describe('issue #82 — minExchangeRate hard floor', () => {
+  // samplePair: USDC(6) -> ETH(18) at '0.0005'; 100n per packet.
+  // applyRate(100n, 6->18, '0.0005') = 50_000_000_000n.
+  const FLOOR_TARGET_PER_PACKET = 50_000_000_000n;
+
+  it('construction-time validation: rejects malformed/zero minExchangeRate synchronously', () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, { emitTape: true });
+
+    for (const bad of [
+      '0',
+      '0.00',
+      'abc',
+      '',
+      '-1',
+      0.0005 as unknown as string,
+    ]) {
+      expect(() =>
+        streamSwapControlled({
+          ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+          minExchangeRate: bad,
+        })
+      ).toThrowError(StreamSwapError);
+      try {
+        streamSwapControlled({
+          ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+          minExchangeRate: bad,
+        });
+      } catch (err) {
+        expect((err as StreamSwapError).code).toBe('INVALID_STATE');
+      }
+    }
+  });
+
+  it('a fill exactly AT the floor passes; a sub-floor fill is rejected and halts the stream', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      // Packet 0 at the floor exactly; packet 1 below it.
+      rateOverride: new Map([
+        [0, '0.0005'],
+        [1, '0.0004'],
+      ]),
+    });
+
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0005',
+    });
+
+    // Packet 0 accumulated (at-floor is a pass), packet 1 rejected, stream halted.
+    expect(result.claims).toHaveLength(1);
+    expect(result.claims[0]!.packetIndex).toBe(0);
+    expect(result.claims[0]!.targetAmount).toBe(FLOOR_TARGET_PER_PACKET);
+    expect(result.rejections).toHaveLength(1);
+    expect(result.rejections[0]!.packetIndex).toBe(1);
+    expect(result.rejections[0]!.code).toBe('BELOW_FLOOR');
+    expect(result.abortReason).toBe('below-floor');
+    // Packets 2 and 3 were never sent — hard stop.
+    expect(result.packetsSent).toBe(2);
+    expect(result.state).toBe('completed'); // prior claims exist (parity with 'rate-deviation')
+  });
+
+  it('floor breach on the FIRST packet yields state failed with zero claims', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rateOverride: new Map([[0, '0.0001']]),
+    });
+
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0005',
+    });
+
+    expect(result.claims).toHaveLength(0);
+    expect(result.state).toBe('failed');
+    expect(result.abortReason).toBe('below-floor');
+    expect(result.rejections[0]!.code).toBe('BELOW_FLOOR');
+    expect(result.packetsSent).toBe(1);
+  });
+
+  it('floor is enforced from delivered targetAmount even when the tape paints a rosy rate', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true, // tape reports '0.0005' — at the floor, looks fine
+      metadataOverride: (i, m) => {
+        if (i === 1) {
+          // Maker under-delivers: below ⌊δ·minRate⌋ despite the rosy tape.
+          return { ...m, targetAmount: '39999999999' };
+        }
+        return m;
+      },
+    });
+
+    const onPacket = vi.fn();
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0005',
+      onPacket,
+    });
+
+    expect(result.rejections).toHaveLength(1);
+    expect(result.rejections[0]!.code).toBe('BELOW_FLOOR');
+    expect(result.abortReason).toBe('below-floor');
+    expect(result.claims).toHaveLength(1); // only packet 0
+    // The violating packet never reaches the callback — the floor does not
+    // consult (or feed) tape/controller signals.
+    expect(onPacket).toHaveBeenCalledTimes(1);
+  });
+
+  it('floor is independent of the soft monitor: a permissive rateDeviationThreshold cannot relax it', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rateOverride: new Map([[1, '0.0004']]),
+    });
+
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0005',
+      // Soft monitor would tolerate a 20% deviation — the hard floor must not.
+      rateDeviationThreshold: 10,
+    });
+
+    expect(result.rejections).toHaveLength(1);
+    expect(result.rejections[0]!.code).toBe('BELOW_FLOOR');
+    expect(result.abortReason).toBe('below-floor');
+    expect(result.claims.map((c) => c.packetIndex)).toEqual([0]);
+  });
+
+  it('soft monitor behavior unchanged: above-floor deviation still accumulates then aborts rate-deviation', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      // 10% down from advertised — above the (low) floor, beyond the 5% monitor.
+      rateOverride: new Map([[1, '0.00045']]),
+    });
+
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0001',
+      rateDeviationThreshold: 0.05,
+    });
+
+    // Soft semantics: the deviating packet IS accumulated (post-hoc monitor),
+    // then the stream aborts. This is the documented distinction from the
+    // pre-accept hard floor.
+    expect(result.abortReason).toBe('rate-deviation');
+    expect(result.claims.map((c) => c.packetIndex)).toEqual([0, 1]);
+    expect(result.rejections).toHaveLength(0);
+  });
+
+  it('minExchangeRate REQUIRES the tape: a tapeless maker is a loud per-packet decode error', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey); // legacy maker — no tape
+
+    const result = await streamSwap({
+      ...baseParams(swap, senderSecretKey, swapSecretKey, pair),
+      minExchangeRate: '0.0005',
+    });
+
+    expect(result.claims).toHaveLength(0);
+    expect(result.state).toBe('failed');
+    expect(result.errors).toHaveLength(4);
+    result.errors.forEach((e) => {
+      expect((e.cause as StreamSwapError).code).toBe('FULFILL_DECODE_FAILED');
+      expect((e.cause as StreamSwapError).message).toMatch(/quote tape/i);
+    });
+  });
+
+  it('legacy path fully unchanged when minExchangeRate omitted: sub-floor rates flow through', async () => {
+    const pair = samplePair();
+    const senderSecretKey = generateSecretKey();
+    const swapSecretKey = generateSecretKey();
+    const swap = makeMockSwap(pair, swapSecretKey, {
+      emitTape: true,
+      rateOverride: new Map([[1, '0.0001']]), // would breach any sane floor
+    });
+
+    const result = await streamSwap(
+      baseParams(swap, senderSecretKey, swapSecretKey, pair)
+    );
+
+    // No floor armed -> nothing rejected, all four accumulate.
+    expect(result.state).toBe('completed');
+    expect(result.abortReason).toBe('complete');
+    expect(result.claims).toHaveLength(4);
+    expect(result.rejections).toHaveLength(0);
+  });
 });
