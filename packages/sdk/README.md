@@ -60,7 +60,7 @@ const result = await node.start();
 console.log(`Connected to ${result.peerCount} peers`);
 ```
 
-> **Easier path:** If you just want to run a relay, use [`@toon-protocol/town`](../town) — it wraps the SDK with sensible defaults and runs out of the box. The SDK is for building custom services where you control the full pipeline.
+> **Easier path:** If you just want to run a relay, use [`@toon-protocol/relay`](https://github.com/toon-protocol/relay) — it wraps the SDK with sensible defaults and runs out of the box. The SDK is for building custom services where you control the full pipeline.
 
 ## Where It Sits
 
@@ -109,8 +109,8 @@ See the [SDK Guide](https://github.com/toon-protocol/toon-meta/blob/main/docs/sd
 
 ## Requirements
 
-- Node.js >= 20
-- `@toon-protocol/connector` >= 1.6.0 (peer dependency, optional)
+- Node.js >= 22
+- `@toon-protocol/connector` >= 3.3.3 (peer dependency, optional)
 
 ## License
 
