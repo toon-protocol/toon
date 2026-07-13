@@ -7,11 +7,7 @@ export default defineConfig({
       '@toon-protocol/core/toon': resolve(__dirname, 'packages/core/src/toon/index.ts'),
       '@toon-protocol/core/nip34': resolve(__dirname, 'packages/core/src/nip34/index.ts'),
       '@toon-protocol/core': resolve(__dirname, 'packages/core/src/index.ts'),
-      '@toon-protocol/relay': resolve(__dirname, 'packages/relay/src/index.ts'),
-      '@toon-protocol/bls': resolve(__dirname, 'packages/bls/src/index.ts'),
       '@toon-protocol/sdk': resolve(__dirname, 'packages/sdk/src/index.ts'),
-      '@toon-protocol/client': resolve(__dirname, 'packages/client/src/index.ts'),
-      '@toon-protocol/town': resolve(__dirname, 'packages/town/src/index.ts'),
     },
   },
   test: {
@@ -25,8 +21,8 @@ export default defineConfig({
     // Canonical test count: `pnpm test` at the repo root is the single source
     // of truth for total test count. All workspace members with tests must be
     // listed here so counts are consistent across pipeline steps.
-    include: ['packages/*/src/**/*.test.ts', 'packages/memvid-node/tests/**/*.test.ts', 'docker/src/**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/__integration__/**', 'packages/mina-zkapp/**', 'packages/pet-circuit/**', 'packages/pet-dvm/**', 'packages/memvid-node/**'],
+    include: ['packages/*/src/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/__integration__/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
