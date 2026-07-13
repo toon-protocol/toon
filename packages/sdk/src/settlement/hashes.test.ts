@@ -10,6 +10,8 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 
 import {
   balanceProofHashEvm,
+  coopCloseHashEvm,
+  eip712DomainSeparatorEvm,
   balanceProofHashSolana,
   bigintToBytes32BE,
   concatBytes,
@@ -75,44 +77,34 @@ describe('hashes.ts — bigintToBytes32BE + concatBytes + hexToBytes', () => {
  *
  * @fixture
  */
-const EVM_GOLDEN_VECTORS = [
-  {
-    label: 'zero inputs',
-    channelId: '0x' + '00'.repeat(32),
-    cumulative: 0n,
-    nonce: 0n,
-    recipient: '0x' + '00'.repeat(20),
-    expected:
-      '3bdd562417b2b6c29b6c37a0fbf5c08139fe63f7baf013194f112d8319bf8b32',
-  },
-  {
-    label: 'realistic inputs',
-    channelId: '0x' + 'aa'.repeat(32),
-    cumulative: 1_000_000n,
-    nonce: 1n,
-    recipient: '0x' + 'bb'.repeat(20),
-    expected:
-      '0056cde05486191be9f521b19ad24a200980924d8ac406c4ade22ce73199e7e2',
-  },
-  {
-    label: 'near-max cumulativeAmount, high nonce',
-    channelId: '0x' + '00'.repeat(32),
-    cumulative: 2n ** 255n - 1n,
-    nonce: 1_000_000n,
-    recipient: '0x' + '00'.repeat(20),
-    expected:
-      '967ae7fa9e4a533cebe224f514f025746351ad2e7fdb25f11627fe6ef5f10bbe',
-  },
-  {
-    label: 'cross-package parity sample',
-    channelId: '0x' + '11'.repeat(32),
-    cumulative: 12345n,
-    nonce: 7n,
-    recipient: '0x' + '22'.repeat(20),
-    expected:
-      '579ce58caed50ebbc8bb942a5ab7ff01297c4709cc49c61d44f8f7c8e441885f',
-  },
-] as const;
+/**
+ * v2 EIP-712 CONFORMANCE FIXTURE — the single canonical golden vector pinned by
+ * the cross-repo spec `docs/rolling-swap-v2-digest-spec.md` §4 (connector#325,
+ * refs connector#324 finding #1). All four repos (connector contract, this
+ * toon core/sdk, swap signer, toon-client) MUST reproduce these EXACT bytes.
+ *
+ * Changing `balanceProofHashEvm` / `coopCloseHashEvm` /
+ * `eip712DomainSeparatorEvm` (or the underlying `bigintToBytes32BE` /
+ * `concatBytes`) in a way that alters output breaks these — and would break the
+ * on-chain verifier + the swap signer that import the same helper.
+ *
+ * @fixture
+ */
+const V2_GOLDEN = {
+  chainId: 8453n,
+  verifyingContract: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
+  channelId:
+    '0x000000000000000000000000000000000000000000000000000000000000005b',
+  cumulativeAmount: 24_000_000n,
+  nonce: 24n,
+  recipient: '0x00000000000000000000000000000000DEADBEEF',
+  domainSeparator:
+    'b94d6e9c9c28083295de906f48c4db4110392800177aad52c3f99f2afbce594f',
+  claimDigest:
+    '8e0b1e0baf4cb5490d8d8ebcad0c51feec55adff992680c21cbf137a4434fede',
+  coopDigest:
+    '8b748bdfc330a591164551d4b536d64b963aff1059b594acc1dc5a24297e25c0',
+} as const;
 
 const SOLANA_GOLDEN_VECTORS = [
   {
@@ -135,34 +127,155 @@ const SOLANA_GOLDEN_VECTORS = [
   },
 ] as const;
 
-describe('balanceProofHashEvm — golden vectors (Story 12.6 AC-6)', () => {
-  for (const v of EVM_GOLDEN_VECTORS) {
-    it(`[P0] pinned digest: ${v.label}`, () => {
-      const h = balanceProofHashEvm(
-        hexToBytes(v.channelId),
-        v.cumulative,
-        v.nonce,
-        hexToBytes(v.recipient)
-      );
-      expect(h.length).toBe(32);
-      expect(bytesToHex(h)).toBe(v.expected);
-    });
-  }
+describe('EVM v2 EIP-712 digest — golden vectors (connector#324 finding #1 / connector#325 spec)', () => {
+  const channelId = hexToBytes(V2_GOLDEN.channelId);
+  const recipient = hexToBytes(V2_GOLDEN.recipient);
+  const verifyingContract = hexToBytes(V2_GOLDEN.verifyingContract);
+
+  it('[P0] eip712DomainSeparatorEvm reproduces the pinned domain separator', () => {
+    const ds = eip712DomainSeparatorEvm(
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    expect(ds.length).toBe(32);
+    expect(bytesToHex(ds)).toBe(V2_GOLDEN.domainSeparator);
+  });
+
+  it('[P0] balanceProofHashEvm reproduces the pinned CLAIM digest', () => {
+    const h = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    expect(h.length).toBe(32);
+    expect(bytesToHex(h)).toBe(V2_GOLDEN.claimDigest);
+  });
+
+  it('[P0] coopCloseHashEvm reproduces the pinned COOP-CLOSE digest', () => {
+    const h = coopCloseHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    expect(h.length).toBe(32);
+    expect(bytesToHex(h)).toBe(V2_GOLDEN.coopDigest);
+  });
+
+  it('[P0] claim and coop-close digests differ (distinct type hashes)', () => {
+    const claim = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    const coop = coopCloseHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    expect(bytesToHex(claim)).not.toBe(bytesToHex(coop));
+  });
+
+  it('[P0] a different chainId produces a different digest (cross-chain replay closed)', () => {
+    const base = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    const other = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      10n, // Optimism, same everything else
+      verifyingContract
+    );
+    expect(bytesToHex(base)).not.toBe(bytesToHex(other));
+  });
+
+  it('[P0] a different verifyingContract produces a different digest (cross-deployment replay closed)', () => {
+    const base = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    const other = balanceProofHashEvm(
+      channelId,
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      recipient,
+      V2_GOLDEN.chainId,
+      hexToBytes('0x' + '11'.repeat(20))
+    );
+    expect(bytesToHex(base)).not.toBe(bytesToHex(other));
+  });
 
   it('[P0] different nonce produces a different hash (collision avoidance)', () => {
-    const channelId = hexToBytes('0x' + 'aa'.repeat(32));
-    const recipient = hexToBytes('0x' + 'bb'.repeat(20));
-    const h1 = balanceProofHashEvm(channelId, 1_000n, 1n, recipient);
-    const h2 = balanceProofHashEvm(channelId, 1_000n, 2n, recipient);
+    const h1 = balanceProofHashEvm(
+      channelId,
+      1_000n,
+      1n,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    const h2 = balanceProofHashEvm(
+      channelId,
+      1_000n,
+      2n,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
     expect(bytesToHex(h1)).not.toBe(bytesToHex(h2));
   });
 
   it('[P0] different cumulativeAmount produces a different hash', () => {
-    const channelId = hexToBytes('0x' + 'aa'.repeat(32));
-    const recipient = hexToBytes('0x' + 'bb'.repeat(20));
-    const h1 = balanceProofHashEvm(channelId, 100n, 1n, recipient);
-    const h2 = balanceProofHashEvm(channelId, 200n, 1n, recipient);
+    const h1 = balanceProofHashEvm(
+      channelId,
+      100n,
+      1n,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
+    const h2 = balanceProofHashEvm(
+      channelId,
+      200n,
+      1n,
+      recipient,
+      V2_GOLDEN.chainId,
+      verifyingContract
+    );
     expect(bytesToHex(h1)).not.toBe(bytesToHex(h2));
+  });
+
+  it('[P0] rejects a non-20-byte verifyingContract', () => {
+    expect(() =>
+      balanceProofHashEvm(
+        channelId,
+        V2_GOLDEN.cumulativeAmount,
+        V2_GOLDEN.nonce,
+        recipient,
+        V2_GOLDEN.chainId,
+        hexToBytes('0x1234')
+      )
+    ).toThrow(/verifyingContract must be 20 bytes/);
   });
 });
 
@@ -187,16 +300,19 @@ describe('balanceProofHashSolana — golden vectors (Story 12.6 AC-6)', () => {
   });
 });
 
-describe('cross-package parity with swap/payment-channel-signer.ts (Story 12.6 AC-6)', () => {
-  it('[P0] pinned EVM digest — signer drift detector', () => {
+describe('cross-package parity with swap/payment-channel-signer.ts (v2 EIP-712)', () => {
+  it('[P0] pinned EVM v2 digest — signer drift detector', () => {
     // The Swap's EvmPaymentChannelSigner imports balanceProofHashEvm from
-    // this module (AC-6 refactor). Any layout change here automatically
-    // flips the Swap's signature output; the pinned digest catches that.
-    const channelIdBytes = hexToBytes('0x' + '11'.repeat(32));
-    const recipientBytes = hexToBytes('0x' + '22'.repeat(20));
-    const h = balanceProofHashEvm(channelIdBytes, 12345n, 7n, recipientBytes);
-    expect(bytesToHex(h)).toBe(
-      '579ce58caed50ebbc8bb942a5ab7ff01297c4709cc49c61d44f8f7c8e441885f'
+    // this module. Any layout change here automatically flips the Swap's
+    // signature output; the pinned spec golden digest catches that.
+    const h = balanceProofHashEvm(
+      hexToBytes(V2_GOLDEN.channelId),
+      V2_GOLDEN.cumulativeAmount,
+      V2_GOLDEN.nonce,
+      hexToBytes(V2_GOLDEN.recipient),
+      V2_GOLDEN.chainId,
+      hexToBytes(V2_GOLDEN.verifyingContract)
     );
+    expect(bytesToHex(h)).toBe(V2_GOLDEN.claimDigest);
   });
 });

@@ -76,7 +76,10 @@ export interface SwapSignerConfig {
    */
   address: string;
   /**
-   * On-chain payment-channel contract address (EVM-only).
+   * On-chain payment-channel contract address (EVM-only). Required for EVM
+   * claims: it is the RLP `to` field AND the EIP-712 `verifyingContract` of the
+   * v2 balance-proof digest (connector#324 finding #1), so it now binds the
+   * signature to this exact deployment.
    */
   contractAddress?: string;
   /**
@@ -84,7 +87,9 @@ export interface SwapSignerConfig {
    */
   programId?: string;
   /**
-   * EVM chain-id (decimal). Required for EVM claims — baked into RLP per EIP-155.
+   * EVM chain-id (decimal). Required for EVM claims — baked into RLP per EIP-155
+   * AND into the EIP-712 domain `chainId` of the v2 balance-proof digest
+   * (connector#324 finding #1), so the signature is valid on this chain only.
    */
   chainId?: number;
 }

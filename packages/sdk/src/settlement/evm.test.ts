@@ -29,6 +29,11 @@ const PAIR: SwapPair = {
   rate: '0.0005',
 };
 
+// v2 EIP-712 domain inputs used across the round-trip tests. `contractAddress`
+// below (`0xdd..dd`) is the `verifyingContract`; chainId matches the pair.
+const TEST_CHAIN_ID = 8453;
+const TEST_VERIFYING_CONTRACT = '0x' + 'dd'.repeat(20);
+
 function signBalanceProofEvm(
   privateKey: Uint8Array,
   channelId: string,
@@ -40,7 +45,9 @@ function signBalanceProofEvm(
     hexToBytes(channelId),
     cumulativeAmount,
     nonce,
-    hexToBytes(recipient)
+    hexToBytes(recipient),
+    BigInt(TEST_CHAIN_ID),
+    hexToBytes(TEST_VERIFYING_CONTRACT)
   );
   const recoveredBytes = secp256k1.sign(msgHash, privateKey, {
     prehash: false,
@@ -108,17 +115,17 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
       nonce: nonce.toString(),
     });
 
-    const recovered = recoverEvmSignerAddress(claim);
+    const recovered = recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
     expect(recovered).toBe(expectedAddr);
   });
 
   it('[P0] throws INVALID_SIGNATURE_LENGTH on wrong-length claimBytes', () => {
     const claim = makeClaim({ claimBytes: new Uint8Array(64) });
-    expect(() => recoverEvmSignerAddress(claim)).toThrowError(
+    expect(() => recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT)).toThrowError(
       SettlementTxError
     );
     try {
-      recoverEvmSignerAddress(claim);
+      recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
     } catch (err) {
       expect((err as SettlementTxError).code).toBe('INVALID_SIGNATURE_LENGTH');
     }
@@ -129,7 +136,7 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
     sig[64] = 26; // not 27 or 28
     const claim = makeClaim({ claimBytes: sig });
     try {
-      recoverEvmSignerAddress(claim);
+      recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
       throw new Error('should have thrown');
     } catch (err) {
       expect((err as SettlementTxError).code).toBe('INVALID_SIGNATURE_V');
@@ -139,7 +146,7 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
   it('[P0] throws MISSING_SETTLEMENT_METADATA when settlement fields absent', () => {
     const claim = makeClaim({ channelId: undefined });
     try {
-      recoverEvmSignerAddress(claim);
+      recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
       throw new Error('should have thrown');
     } catch (err) {
       expect((err as SettlementTxError).code).toBe(
@@ -176,7 +183,7 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
 
     // May throw or return a non-matching address; either is a reject path.
     try {
-      const recovered = recoverEvmSignerAddress(claim);
+      const recovered = recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
       expect(recovered).not.toBe(expectedAddr);
     } catch (err) {
       expect(err).toBeInstanceOf(SettlementTxError);
@@ -201,7 +208,7 @@ describe('verifyEvmClaimSignature (AC-7)', () => {
       nonce: '2',
     });
 
-    const res = verifyEvmClaimSignature(claim, expectedAddr);
+    const res = verifyEvmClaimSignature(claim, expectedAddr, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
     expect(res.valid).toBe(true);
     expect(res.recovered).toBe(expectedAddr);
   });
@@ -222,7 +229,7 @@ describe('verifyEvmClaimSignature (AC-7)', () => {
     });
 
     // Wrong expected address
-    const res = verifyEvmClaimSignature(claim, '0x' + '00'.repeat(20));
+    const res = verifyEvmClaimSignature(claim, '0x' + '00'.repeat(20), TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
     expect(res.valid).toBe(false);
   });
 });

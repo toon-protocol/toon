@@ -46,7 +46,9 @@ function signBalanceProofEvm(
     hexToBytes(channelId),
     cumulativeAmount,
     nonce,
-    hexToBytes(recipient)
+    hexToBytes(recipient),
+    BigInt(EVM_CHAIN_ID),
+    hexToBytes(CONTRACT)
   );
   const recoveredBytes = secp256k1.sign(msgHash, privateKey, {
     prehash: false,
@@ -74,12 +76,13 @@ const CHANNEL_A = '0x' + 'aa'.repeat(32);
 const CHANNEL_B = '0x' + 'bb'.repeat(32);
 const RECIPIENT = '0x' + 'cc'.repeat(20);
 const CONTRACT = '0x' + 'dd'.repeat(20);
+const EVM_CHAIN_ID = 8453;
 
 function makeSignerCfg(): SwapSignerConfig {
   return {
     address: SWAP_ADDR,
     contractAddress: CONTRACT,
-    chainId: 8453,
+    chainId: EVM_CHAIN_ID,
   };
 }
 

@@ -52,15 +52,40 @@ const EVM_SETTLEMENT_EVENT_TOPIC: string =
  * Recover the EVM signer address from an `AccumulatedClaim`'s 65-byte
  * `r||s||v` signature. Returns lowercase `0x`-prefixed 40-hex-char address.
  *
- * Reconstructs the balance-proof message hash via `balanceProofHashEvm` using
- * the claim's settlement-context fields (channelId, cumulativeAmount, nonce,
- * recipient) and recovers the secp256k1 public key.
+ * Reconstructs the v2 EIP-712 balance-proof digest via `balanceProofHashEvm`
+ * using the claim's settlement-context fields (channelId, cumulativeAmount,
+ * nonce, recipient) PLUS the EIP-712 domain inputs (`chainId`,
+ * `verifyingContract`) and recovers the secp256k1 public key. `chainId` +
+ * `verifyingContract` are REQUIRED by the v2 digest (refs connector#324
+ * finding #1) — a signature is valid on exactly one (chain, contract) pair.
  *
+ * @param chainId settlement chain id (e.g. `8453` for Base).
+ * @param verifyingContract deployed `RollingSwapChannel` address (0x + 40 hex).
  * @throws {SettlementTxError} INVALID_SIGNATURE_LENGTH / INVALID_SIGNATURE_V /
- *   MISSING_SETTLEMENT_METADATA.
+ *   MISSING_SETTLEMENT_METADATA / INVALID_INPUT.
  * @since 12.6
  */
-export function recoverEvmSignerAddress(claim: AccumulatedClaim): string {
+export function recoverEvmSignerAddress(
+  claim: AccumulatedClaim,
+  chainId: number,
+  verifyingContract: string
+): string {
+  if (
+    typeof chainId !== 'number' ||
+    !Number.isInteger(chainId) ||
+    chainId <= 0
+  ) {
+    throw new SettlementTxError(
+      'INVALID_INPUT',
+      `EVM v2 digest requires a positive integer chainId, got ${chainId}`
+    );
+  }
+  if (!verifyingContract) {
+    throw new SettlementTxError(
+      'INVALID_INPUT',
+      'EVM v2 digest requires verifyingContract (RollingSwapChannel address)'
+    );
+  }
   if (
     claim.channelId === undefined ||
     claim.cumulativeAmount === undefined ||
@@ -93,6 +118,7 @@ export function recoverEvmSignerAddress(claim: AccumulatedClaim): string {
   try {
     const channelIdBytes = hexToBytes(claim.channelId);
     const recipientBytes = hexToBytes(claim.recipient);
+    const verifyingContractBytes = hexToBytes(verifyingContract);
     if (channelIdBytes.length !== 32) {
       throw new Error(
         `channelId must be 32 bytes (got ${channelIdBytes.length})`
@@ -103,11 +129,18 @@ export function recoverEvmSignerAddress(claim: AccumulatedClaim): string {
         `recipient must be 20 bytes (got ${recipientBytes.length})`
       );
     }
+    if (verifyingContractBytes.length !== 20) {
+      throw new Error(
+        `verifyingContract must be 20 bytes (got ${verifyingContractBytes.length})`
+      );
+    }
     msgHash = balanceProofHashEvm(
       channelIdBytes,
       BigInt(claim.cumulativeAmount),
       BigInt(claim.nonce),
-      recipientBytes
+      recipientBytes,
+      BigInt(chainId),
+      verifyingContractBytes
     );
     const sig = secp256k1.Signature.fromBytes(
       compactRS,
@@ -530,15 +563,19 @@ function rlpDecodeList(buf: Uint8Array): Uint8Array[] {
 
 /**
  * Verify an EVM claim's signature by recovering the signer and comparing to
- * `expectedAddress`. Returns `{ valid, recovered }`.
+ * `expectedAddress`. Returns `{ valid, recovered }`. The v2 EIP-712 digest
+ * binds `chainId` + `verifyingContract`, so both must be supplied (refs
+ * connector#324 finding #1).
  *
  * @since 12.6
  */
 export function verifyEvmClaimSignature(
   claim: AccumulatedClaim,
-  expectedAddress: string
+  expectedAddress: string,
+  chainId: number,
+  verifyingContract: string
 ): { valid: boolean; recovered: string } {
-  const recovered = recoverEvmSignerAddress(claim);
+  const recovered = recoverEvmSignerAddress(claim, chainId, verifyingContract);
   const expected = expectedAddress.toLowerCase();
   return {
     valid: recovered.toLowerCase() === expected,
