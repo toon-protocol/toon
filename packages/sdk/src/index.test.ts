@@ -174,6 +174,8 @@ describe('@toon-protocol/sdk public API exports', () => {
       'verifyEd25519Signature',
       'fillEvmSettlementTxGas',
       'balanceProofHashEvm',
+      'coopCloseHashEvm',
+      'eip712DomainSeparatorEvm',
       'balanceProofHashSolana',
       'bigintToBytes32BE',
       'concatBytes',

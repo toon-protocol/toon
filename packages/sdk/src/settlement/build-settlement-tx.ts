@@ -196,9 +196,14 @@ export function buildSettlementTx(
     const kind = chainKindOf(chain);
     if (kind === 'evm') {
       try {
+        // EVM signer config validated above to carry chainId + contractAddress;
+        // both are REQUIRED for the v2 EIP-712 balance-proof digest
+        // (connector#324 finding #1).
         const { valid, recovered } = verifyEvmClaimSignature(
           claim,
-          signer.address
+          signer.address,
+          signer.chainId as number,
+          signer.contractAddress as string
         );
         if (!valid) {
           rejected.push({
@@ -499,10 +504,24 @@ export function verifyAccumulatedClaim(
 ): { valid: true } | { valid: false; reason: string } {
   const kind = chainKindOf(claim.pair.to.chain);
   if (kind === 'evm') {
+    if (
+      typeof signer.chainId !== 'number' ||
+      !Number.isInteger(signer.chainId) ||
+      signer.chainId <= 0 ||
+      !signer.contractAddress
+    ) {
+      return {
+        valid: false,
+        reason:
+          'INVALID_INPUT: EVM signer requires chainId (positive integer) + contractAddress for the v2 EIP-712 digest (connector#324 finding #1)',
+      };
+    }
     try {
       const { valid, recovered } = verifyEvmClaimSignature(
         claim,
-        signer.address
+        signer.address,
+        signer.chainId,
+        signer.contractAddress
       );
       if (valid) return { valid: true };
       return {

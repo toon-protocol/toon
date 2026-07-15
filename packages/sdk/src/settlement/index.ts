@@ -21,6 +21,8 @@ export { verifyEd25519Signature } from './solana.js';
 
 export {
   balanceProofHashEvm,
+  coopCloseHashEvm,
+  eip712DomainSeparatorEvm,
   balanceProofHashSolana,
   balanceProofFieldsMina,
   minaHashToField,

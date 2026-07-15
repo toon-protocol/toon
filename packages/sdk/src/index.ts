@@ -239,6 +239,8 @@ export {
   loadMinaSignerClient,
   fillEvmSettlementTxGas,
   balanceProofHashEvm,
+  coopCloseHashEvm,
+  eip712DomainSeparatorEvm,
   balanceProofHashSolana,
   balanceProofFieldsMina,
   minaHashToField,

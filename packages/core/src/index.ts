@@ -176,6 +176,8 @@ export {
   bigintToBytes32BE,
   concatBytes,
   balanceProofHashEvm,
+  coopCloseHashEvm,
+  eip712DomainSeparatorEvm,
   balanceProofHashSolana,
   minaHashToField,
   balanceProofFieldsMina,
