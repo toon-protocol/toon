@@ -28,6 +28,11 @@ jobs:
 
       - run: pnpm -r test --if-present
 
+      - name: connector-contract-canary
+        run: |
+          pnpm --filter @toon-protocol/sdk test:integration tests/integration/connector-contract.test.ts tests/integration/connector-contract.multichain.test.ts
+          pnpm --filter @toon-protocol/sdk exec tsc -p tests/integration/tsconfig.json
+
   devbox-validate:
     name: Devbox Environment Validation
     runs-on: ubuntu-latest
