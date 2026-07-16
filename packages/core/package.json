@@ -52,6 +52,7 @@
     "@scure/bip32": "^2.0.0",
     "@scure/bip39": "^2.0.0",
     "@toon-format/toon": "^1.1.0",
+    "@toon-protocol/settlement-digest": "workspace:*",
     "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
     "simple-git": "^3.32.3",

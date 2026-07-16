@@ -1,0 +1,55 @@
+{
+  "name": "@toon-protocol/settlement-digest",
+  "version": "1.0.0",
+  "description": "Dependency-light leaf for the RollingSwapChannel v2 EIP-712 balance-proof digest (EVM claim/coop-close) plus Solana/Mina message digests and pure EVM signer recovery. @noble-only — no ethers/abi/core deps.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "toon",
+    "eip712",
+    "balance-proof",
+    "settlement",
+    "payment-channel",
+    "secp256k1"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/toon-protocol/toon.git",
+    "directory": "packages/settlement-digest"
+  },
+  "author": "ALLiDoizCode",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.0.0",
+    "@noble/hashes": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
