@@ -7,9 +7,9 @@
  * @see _bmad-output/implementation-artifacts/12-6-build-settlement-tx.md
  */
 
-import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
+import { recoverEvmSigner } from '@toon-protocol/settlement-digest';
 
 import { SettlementTxError } from '../errors.js';
 import type { AccumulatedClaim } from '../stream-swap.js';
@@ -110,11 +110,6 @@ export function recoverEvmSignerAddress(
       `EVM signature v must be 27 or 28, got ${v}`
     );
   }
-  const recovery = v - 27;
-  const compactRS = claim.claimBytes.slice(0, 64);
-
-  let msgHash: Uint8Array;
-  let uncompressedPubkey: Uint8Array;
   try {
     const channelIdBytes = hexToBytes(claim.channelId);
     const recipientBytes = hexToBytes(claim.recipient);
@@ -134,7 +129,7 @@ export function recoverEvmSignerAddress(
         `verifyingContract must be 20 bytes (got ${verifyingContractBytes.length})`
       );
     }
-    msgHash = balanceProofHashEvm(
+    const msgHash = balanceProofHashEvm(
       channelIdBytes,
       BigInt(claim.cumulativeAmount),
       BigInt(claim.nonce),
@@ -142,12 +137,10 @@ export function recoverEvmSignerAddress(
       BigInt(chainId),
       verifyingContractBytes
     );
-    const sig = secp256k1.Signature.fromBytes(
-      compactRS,
-      'compact'
-    ).addRecoveryBit(recovery);
-    const point = sig.recoverPublicKey(msgHash);
-    uncompressedPubkey = point.toBytes(false);
+    // Delegate the secp256k1 recover + keccak address derivation to the
+    // dependency-light leaf (byte-identical to the previous inline impl).
+    // Length/`v` were already validated above; the leaf re-checks harmlessly.
+    return recoverEvmSigner(msgHash, claim.claimBytes);
   } catch (err) {
     throw new SettlementTxError(
       'ENCODING_FAILED',
@@ -155,11 +148,6 @@ export function recoverEvmSignerAddress(
       { cause: err }
     );
   }
-
-  // Uncompressed pubkey is 65 bytes: 0x04 || X(32) || Y(32). Address =
-  // last 20 bytes of keccak256(X||Y).
-  const addrHash = keccak_256(uncompressedPubkey.slice(1));
-  return '0x' + bytesToHex(addrHash.slice(-20)).toLowerCase();
 }
 
 // ---------------------------------------------------------------------------

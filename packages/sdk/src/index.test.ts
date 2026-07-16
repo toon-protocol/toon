@@ -267,6 +267,7 @@ describe('@toon-protocol/sdk package.json structure (AC1)', () => {
     const allowedDeps = new Set([
       '@ardrive/turbo-sdk',
       '@toon-protocol/core',
+      '@toon-protocol/settlement-digest',
       'nostr-tools',
       '@scure/bip39',
       '@scure/bip32',
