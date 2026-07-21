@@ -34,7 +34,7 @@ jobs:
       group: decomposer-issue-${{ github.event.issue.number }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v2

@@ -51,7 +51,7 @@ jobs:
           echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
           echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -60,11 +60,11 @@ jobs:
           git config user.name "${{ steps.app-user.outputs.name || 'github-actions[bot]' }}"
           git config user.email "${{ steps.app-user.outputs.email || 'github-actions[bot]@users.noreply.github.com' }}"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 8.15.9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: pnpm

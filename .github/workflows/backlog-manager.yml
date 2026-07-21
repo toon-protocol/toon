@@ -40,7 +40,7 @@ jobs:
       # still runs and treats the Project board as report-only.
       APP_ID: ${{ secrets.APP_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate GitHub App token
         id: app-token

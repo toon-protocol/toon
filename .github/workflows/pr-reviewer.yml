@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # real backstop now that --max-turns is removed
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: anthropics/claude-code-action@v1
         id: claude
         with:
