@@ -3,8 +3,21 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveNetworkProfile, RELAY_ONLY_CHAIN } from './network-profile.js';
+import {
+  resolveNetworkProfile,
+  resolveClientNetwork,
+  RELAY_ONLY_CHAIN,
+} from './network-profile.js';
 import type { ChainProviderConfigEntry } from './chain-config.js';
+
+/** The current deployed devnet Mina settlement (toon-meta docs/deployment.md). */
+const MINA_DEVNET_ZKAPP =
+  'B62qmgPhv2Xo6QVEtwjLja8UZJUtu8yapRFAR6gaoGtbM9zE5hG7Tkf';
+const MINA_DEVNET_TOKEN_ID =
+  '9497120696276615621907376728658022802954262638363646162765282600447713419198';
+/** The retired zkApp that must never resurface. */
+const MINA_RETIRED_ZKAPP =
+  'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6';
 
 describe('resolveNetworkProfile', () => {
   describe('mainnet (default tier)', () => {
@@ -84,6 +97,46 @@ describe('resolveNetworkProfile', () => {
         expect(types).toContain('evm');
         expect(types).toContain('solana');
         expect(types).toContain('mina');
+      });
+      it('the Mina connector provider carries the current zkApp + tokenId', () => {
+        const withKey = resolveNetworkProfile(tier, { keyId: '0xkey' });
+        const mina = withKey.chainProviders.find(
+          (c) => c.chainType === 'mina'
+        );
+        expect(mina).toBeDefined();
+        if (mina && mina.chainType === 'mina') {
+          expect(mina.zkAppAddress).toBe(MINA_DEVNET_ZKAPP);
+          expect(mina.zkAppAddress).not.toBe(MINA_RETIRED_ZKAPP);
+          expect(mina.tokenId).toBe(MINA_DEVNET_TOKEN_ID);
+        }
+      });
+    });
+  }
+
+  // Client-facing presets (ToonClientConfig shape) — the fallback a fresh
+  // `rig` client resolves when the announce carries nothing (drift-proof).
+  for (const tier of ['testnet', 'devnet'] as const) {
+    describe(`resolveClientNetwork("${tier}")`, () => {
+      const c = resolveClientNetwork(tier);
+
+      it('bakes the working publicnode Base Sepolia RPC (not the stale LB)', () => {
+        const evmKey = c.supportedChains.find((k) => k.startsWith('evm:'));
+        expect(evmKey).toBeDefined();
+        const evmRpc = evmKey ? c.chainRpcUrls[evmKey] : undefined;
+        expect(evmRpc).toBe('https://base-sepolia-rpc.publicnode.com');
+        expect(evmRpc).not.toBe('https://sepolia.base.org');
+      });
+
+      it('bakes the current Mina zkApp + tokenId into minaChannel', () => {
+        expect(c.minaChannel).toBeDefined();
+        expect(c.minaChannel?.zkAppAddress).toBe(MINA_DEVNET_ZKAPP);
+        expect(c.minaChannel?.zkAppAddress).not.toBe(MINA_RETIRED_ZKAPP);
+        expect(c.minaChannel?.tokenId).toBe(MINA_DEVNET_TOKEN_ID);
+        expect(c.minaChannel?.networkId).toBe('devnet');
+        expect(c.minaChannel?.graphqlUrl).toBe(
+          'https://api.minascan.io/node/devnet/v1/graphql'
+        );
+        expect(c.status.mina).toBe('configured');
       });
     });
   }

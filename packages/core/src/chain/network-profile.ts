@@ -183,6 +183,12 @@ interface MinaTierCfg {
   graphqlUrl: string;
   network: string;
   zkAppAddress: string;
+  /**
+   * Field id (decimal string) of the settlement token the zkApp channels are
+   * denominated in. Required to read a custom-token balance on Mina (the GraphQL
+   * `account(publicKey, token)` query); absent for the native-MINA case.
+   */
+  tokenId?: string;
 }
 
 /**
@@ -193,12 +199,14 @@ interface MinaTierCfg {
 const MINA_DEPLOYED_DEVNET: MinaTierCfg = {
   graphqlUrl: 'https://api.minascan.io/node/devnet/v1/graphql',
   network: 'devnet',
-  // Reconciled with e2e/testnets.json (#205): the previous address
-  // (B62qjFgX…) is a bare, unfunded zkApp on-chain (balance 0, channel
-  // nonceField 0) — usable for claim issuance only. This is the funded,
-  // on-chain-settling PaymentChannel zkApp (balance ~4 MINA, nonceField 21
-  // — the on-chain settle proven in #217), same VK hash 21482326…
-  zkAppAddress: 'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6',
+  // Post-2026-07-19 public-chain cutover (source of truth: toon-meta
+  // docs/deployment.md). This is the CURRENT deployed PaymentChannel zkApp; the
+  // previous address (B62qrH1As4…) is retired and MUST NOT be used. The channels
+  // settle a custom USDC token, so the tokenId is required to read balances /
+  // open channels against the right token.
+  zkAppAddress: 'B62qmgPhv2Xo6QVEtwjLja8UZJUtu8yapRFAR6gaoGtbM9zE5hG7Tkf',
+  tokenId:
+    '9497120696276615621907376728658022802954262638363646162765282600447713419198',
 };
 
 /** Public Mina endpoints per tier (Mina has no separate testnet → uses devnet). */
@@ -308,6 +316,7 @@ export function resolveNetworkProfile(
           graphqlUrl: mina.graphqlUrl,
           zkAppAddress: mina.zkAppAddress,
           network: mina.network,
+          ...(mina.tokenId && { tokenId: mina.tokenId }),
         },
         opts.keyId
       )
@@ -343,11 +352,17 @@ export interface ClientNetworkPresets {
   tokenNetworks: Record<string, string>;
   /** Solana channel params (rpcUrl + programId + tokenMint), if deployed. */
   solanaChannel?: { rpcUrl: string; programId: string; tokenMint?: string };
-  /** Mina channel params (graphqlUrl + zkAppAddress + networkId), if deployed. */
+  /**
+   * Mina channel params (graphqlUrl + zkAppAddress + networkId [+ tokenId]), if
+   * deployed. `tokenId` is the settlement-token Field id — present when the
+   * deployed channels are denominated in a custom token (client reads the token
+   * balance with it); absent for native MINA.
+   */
   minaChannel?: {
     graphqlUrl: string;
     zkAppAddress: string;
     networkId: 'devnet' | 'mainnet';
+    tokenId?: string;
   };
   /** Per-family settlement readiness (mirrors the node). */
   status: NetworkFamilyStatus;
@@ -419,6 +434,7 @@ export function resolveClientNetwork(
       graphqlUrl: mina.graphqlUrl,
       zkAppAddress: mina.zkAppAddress,
       networkId: mina.network === 'mainnet' ? 'mainnet' : 'devnet',
+      ...(mina.tokenId && { tokenId: mina.tokenId }),
     };
     status.mina = 'configured';
   }
