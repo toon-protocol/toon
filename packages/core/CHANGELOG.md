@@ -1,5 +1,11 @@
 # @toon-protocol/core
 
+## 3.1.3
+
+### Patch Changes
+
+- 8f5fe09: Add missing `engines.node` field to packages/core/package.json to match packages/sdk, and remove the stale `packages/rig` entry from tsconfig.json's exclude array.
+
 ## 3.1.2
 
 ### Patch Changes
