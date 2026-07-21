@@ -214,7 +214,12 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
   'base-sepolia': {
     name: 'base-sepolia',
     chainId: 84532,
-    rpcUrl: 'https://sepolia.base.org',
+    // The old `https://sepolia.base.org` is a stale-read load balancer: reads
+    // work, but openChannel->setTotalDeposit fails with InvalidChannelState
+    // (0xf806e9d9) because a follow-up read lands on a lagging replica. publicnode
+    // is the working devnet/testnet default (source of truth: toon-meta
+    // docs/deployment.md).
+    rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
     // Post-2026-07-19 public-chain cutover addresses (source of truth: toon-meta
     // docs/deployment.md). USDC is a 6-decimal mock with an ungated mint; the
     // retired e2e deployment (18-decimal USDC 0xac806…, TokenNetwork 0x47616F4b…,

@@ -156,7 +156,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
 
       const config = resolveChainConfig('base-sepolia');
       expect(config.chainId).toBe(84532);
-      expect(config.rpcUrl).toBe('https://sepolia.base.org');
+      // publicnode is the working devnet/testnet default; the old
+      // sepolia.base.org LB fails openChannel->setTotalDeposit (stale reads).
+      expect(config.rpcUrl).toBe('https://base-sepolia-rpc.publicnode.com');
       expect(config.name).toBe('base-sepolia');
       // NOTE: settlement addresses (usdcAddress/tokenNetworkAddress/
       // registryAddress) are intentionally NOT asserted here — they are being
