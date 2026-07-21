@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveNetworkProfile, RELAY_ONLY_CHAIN } from './network-profile.js';
+import {
+  resolveNetworkProfile,
+  RELAY_ONLY_CHAIN,
+  resolveClientNetwork,
+} from './network-profile.js';
 import type { ChainProviderConfigEntry } from './chain-config.js';
 
 describe('resolveNetworkProfile', () => {
@@ -181,5 +185,26 @@ describe('resolveNetworkProfile', () => {
       expect(empty.chainProviders).toEqual([]);
       expect(empty.status.evm).toBe('unconfigured');
     });
+  });
+});
+
+describe('resolveClientNetwork settlement-USDC token defaults', () => {
+  for (const tier of ['testnet', 'devnet'] as const) {
+    it(`${tier} defaults the Mina USDC tokenId (like the EVM/Solana USDC)`, () => {
+      const c = resolveClientNetwork(tier);
+      // Mina's analogue of solanaChannel.tokenMint / the EVM USDC contract:
+      // TokenId.derive of the deployed devnet USDC token owner.
+      expect(c.minaChannel?.tokenId).toBe(
+        '9497120696276615621907376728658022802954262638363646162765282600447713419198'
+      );
+      // Sanity: the sol/evm USDC defaults still resolve alongside it.
+      expect(c.solanaChannel?.tokenMint).toBe(
+        '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy'
+      );
+    });
+  }
+
+  it('mainnet has no Mina USDC tokenId (no token deployed)', () => {
+    expect(resolveClientNetwork('mainnet').minaChannel?.tokenId).toBeUndefined();
   });
 });

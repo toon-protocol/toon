@@ -179,6 +179,12 @@ interface MinaTierCfg {
   graphqlUrl: string;
   network: string;
   zkAppAddress: string;
+  /**
+   * Settlement-USDC token id (a Field, decimal string) — `TokenId.derive` of the
+   * USDC token owner. The Mina analogue of `usdcMint`/`usdcAddress`; lets the
+   * wallet view read the Mina USDC balance. Empty when no custom token is deployed.
+   */
+  usdcTokenId?: string;
 }
 
 /**
@@ -195,6 +201,11 @@ const MINA_DEPLOYED_DEVNET: MinaTierCfg = {
   // on-chain-settling PaymentChannel zkApp (balance ~4 MINA, nonceField 21
   // — the on-chain settle proven in #217), same VK hash 21482326…
   zkAppAddress: 'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6',
+  // Settlement-USDC token id = TokenId.derive(B62qqN1Pu3kF…) — the deployed
+  // devnet USDC token owner (advertised as the Mina preferredToken). Lets the
+  // wallet view read the Mina USDC balance, the analogue of the EVM/Solana USDC.
+  usdcTokenId:
+    '9497120696276615621907376728658022802954262638363646162765282600447713419198',
 };
 
 /** Public Mina endpoints per tier (Mina has no separate testnet → uses devnet). */
@@ -344,6 +355,13 @@ export interface ClientNetworkPresets {
     graphqlUrl: string;
     zkAppAddress: string;
     networkId: 'devnet' | 'mainnet';
+    /**
+     * Settlement-USDC token id (a Field, decimal string) — the Mina analogue of
+     * the EVM USDC contract / Solana USDC mint. Set so the wallet view can read
+     * the Mina USDC balance (`account(publicKey, token)`); absent when the tier
+     * has no deployed custom token.
+     */
+    tokenId?: string;
   };
   /** Per-family settlement readiness (mirrors the node). */
   status: NetworkFamilyStatus;
@@ -415,6 +433,7 @@ export function resolveClientNetwork(
       graphqlUrl: mina.graphqlUrl,
       zkAppAddress: mina.zkAppAddress,
       networkId: mina.network === 'mainnet' ? 'mainnet' : 'devnet',
+      ...(mina.usdcTokenId && { tokenId: mina.usdcTokenId }),
     };
     status.mina = 'configured';
   }
