@@ -122,10 +122,9 @@ describe('resolveNetworkProfile', () => {
       it('bakes the working publicnode Base Sepolia RPC (not the stale LB)', () => {
         const evmKey = c.supportedChains.find((k) => k.startsWith('evm:'));
         expect(evmKey).toBeDefined();
-        expect(c.chainRpcUrls[evmKey!]).toBe(
-          'https://base-sepolia-rpc.publicnode.com'
-        );
-        expect(c.chainRpcUrls[evmKey!]).not.toBe('https://sepolia.base.org');
+        const evmRpc = evmKey ? c.chainRpcUrls[evmKey] : undefined;
+        expect(evmRpc).toBe('https://base-sepolia-rpc.publicnode.com');
+        expect(evmRpc).not.toBe('https://sepolia.base.org');
       });
 
       it('bakes the current Mina zkApp + tokenId into minaChannel', () => {
