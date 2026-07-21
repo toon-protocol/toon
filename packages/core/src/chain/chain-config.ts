@@ -215,9 +215,13 @@ export const CHAIN_PRESETS: Record<ChainName, ChainPreset> = {
     name: 'base-sepolia',
     chainId: 84532,
     rpcUrl: 'https://sepolia.base.org',
-    usdcAddress: '0xac80670b86db1eeb5c18c82e18a6bda98fcb4504',
-    tokenNetworkAddress: '0x47616F4b9cF4dA25F74FD727Cd85E9CA0C70Ec5C',
-    registryAddress: '0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7',
+    // Post-2026-07-19 public-chain cutover addresses (source of truth: toon-meta
+    // docs/deployment.md). USDC is a 6-decimal mock with an ungated mint; the
+    // retired e2e deployment (18-decimal USDC 0xac806…, TokenNetwork 0x47616F4b…,
+    // registry 0xb9516c…) is still on-chain but MUST NOT be used.
+    usdcAddress: '0x49beE1Bca5d15Fb0963117923403F9498119a9Ce',
+    tokenNetworkAddress: '0x1E95493fEF46707E034b4a1945f25a8C76A1823D',
+    registryAddress: '0xcC9079adE929b168B54145f6d25262b64FAB9D5b',
   },
   // Base mainnet (public). USDC is Circle's native USDC on Base.
   // TOON TokenNetwork/registry not deployed yet → settlement relay-only.

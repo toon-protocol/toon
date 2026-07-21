@@ -159,8 +159,12 @@ interface SolanaTierCfg {
 const SOLANA_DEPLOYED_DEVNET: SolanaTierCfg = {
   rpcUrl: 'https://api.devnet.solana.com',
   cluster: 'devnet',
-  usdcMint: '9FtYCXjNiGDn17jSGvZuB5P4dZAKgVxUsDiQpLc8rbWy',
-  programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
+  // Post-2026-07-19 public-chain cutover (source of truth: toon-meta
+  // docs/deployment.md). USDC mint authority is the faucet treasury
+  // AEPoA5xT…; the pre-cutover self-hosted-validator values (mint
+  // 9FtYCX…, program EdJxYPD…) are retired and MUST NOT be used.
+  usdcMint: 'xyc5J8MgKFiEN13PnfftdXxUzYH34FEvw1LCrFwN7in',
+  programId: '2aEVJ8koKD8LTZrLRSGtAtU7LBt4e7QjjCgf1kzQ7Rip',
 };
 
 /** Public Solana endpoints per tier (the low-level presets are local-only). */
