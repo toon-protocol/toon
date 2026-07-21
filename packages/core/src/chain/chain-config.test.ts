@@ -409,12 +409,14 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       const b = CHAIN_PRESETS['base-sepolia'];
       expect(b.chainId).toBe(84532);
       expect(b.tokenNetworkAddress).toBe(
-        '0x47616F4b9cF4dA25F74FD727Cd85E9CA0C70Ec5C'
+        '0x1E95493fEF46707E034b4a1945f25a8C76A1823D'
       );
       expect(b.registryAddress).toBe(
-        '0xb9516c6c53c016c43f3671b1e5eb6096c83ec2c7'
+        '0xcC9079adE929b168B54145f6d25262b64FAB9D5b'
       );
-      expect(b.usdcAddress).toBe('0xac80670b86db1eeb5c18c82e18a6bda98fcb4504');
+      expect(b.usdcAddress).toBe('0x49beE1Bca5d15Fb0963117923403F9498119a9Ce');
+      // The retired 18-decimal e2e token must NOT resurface.
+      expect(b.usdcAddress).not.toBe('0xac80670b86db1eeb5c18c82e18a6bda98fcb4504');
     });
 
     it('base-mainnet has no TOON settlement contracts yet (unconfigured)', () => {

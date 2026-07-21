@@ -52,7 +52,7 @@ describe('resolveNetworkProfile', () => {
         expect(p.nodeEnv.EVM_CHAIN).toBe('base-sepolia');
         expect(p.nodeEnv.EVM_CHAIN_ID).toBe('84532');
         expect(p.nodeEnv.EVM_USDC_ADDRESS).toBe(
-          '0xac80670b86db1eeb5c18c82e18a6bda98fcb4504'
+          '0x49beE1Bca5d15Fb0963117923403F9498119a9Ce'
         );
       });
       it('uses the deployed Solana devnet program + mint', () => {
