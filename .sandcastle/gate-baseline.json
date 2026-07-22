@@ -1,5 +1,5 @@
 {
-  "$schema": "https://github.com/toon-protocol/toon-meta (see CONTEXT.md#the-gate) — consumed by the toon-meta read-only GATE.md/FACTORY.md rollup",
+  "_docs": "See toon-protocol/toon-meta CONTEXT.md#the-gate — this file is consumed by the toon-meta read-only GATE.md/FACTORY.md rollup",
   "repo": "toon-protocol/toon",
   "capturedAt": "2026-07-22",
   "capturedFromCommit": "76dc9f0b36679d073502086a56bbadffc9e1c391",
