@@ -29,13 +29,15 @@ Related:
   PR-`labeled` workflows only fire from the default branch, so nothing runs
   until these land on `main`.
 
-## Coexistence with the old loops
+## The old 4-loop automation (retired)
 
-This factory runs on the `agent:implement` / `agent:review` labels. The existing
-loops (`backlog-manager`, `issue-executor`, `pr-reviewer`, `issue-decomposer`)
-fire on **disjoint** labels — `agent:ready`, `agent:split`, `review-round:*` — so
-no issue or PR ever triggers two engines. Retiring the old loops is a later slice,
-gated on a merged agent PR.
+This factory runs on the `agent:implement` / `agent:review` labels. It previously
+coexisted with an older 4-loop system (`backlog-manager`, `issue-executor`,
+`pr-reviewer`, `issue-decomposer`), which fired on separate labels —
+`agent:ready`, `agent:split`, `review-round:*`. That old system has been retired
+(toon-protocol/toon-meta#178): auto-triage is now handled by the smart-zone
+`/to-tickets` flow, and this factory's runners fire only on a human-applied
+`agent:implement` / `agent:review` label.
 
 ---
 
