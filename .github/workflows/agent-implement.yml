@@ -26,10 +26,11 @@
 # │ itself verify-on-first-run.) Leave it unset/false for the pilot.           │
 # └───────────────────────────────────────────────────────────────────────────┘
 #
-# Coexists with the OLD loops (backlog-manager / issue-executor / pr-reviewer /
-# issue-decomposer): those fire on `agent:ready` / `agent:split` /
-# `review-round:*` — DISJOINT labels — so no issue triggers two engines.
-# Retiring the old loops is a later slice, gated on a merged agent PR.
+# The old 4-loop backlog automation (backlog-manager / issue-executor /
+# pr-reviewer / issue-decomposer, firing on `agent:ready` / `agent:split` /
+# `review-round:*`) has been retired (toon-protocol/toon-meta#178). This
+# runner is now the only agent-triggered path in this repo, and it fires only
+# on a human-applied `agent:implement` label.
 
 name: agent:implement
 

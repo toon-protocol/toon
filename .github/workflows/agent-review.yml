@@ -22,8 +22,10 @@
 # security), so this runner only works on same-repo PRs. That is expected for
 # the internal factory flow.
 #
-# Coexists with the old pr-reviewer loop, which fires on `review-round:*`
-# (disjoint labels). Retiring the old loops is a later slice.
+# The old pr-reviewer loop (firing on `review-round:*`) has been retired
+# (toon-protocol/toon-meta#178). This runner is now the only PR-review
+# automation in this repo, and it fires only on a human-applied
+# `agent:review` label.
 
 name: agent:review
 
