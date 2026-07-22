@@ -121,7 +121,7 @@ try {
   const review = await sandbox.run({
     name: "reviewer",
     maxIterations: 1,
-    agent: sandcastle.claudeCode("claude-opus-4-8"),
+    agent: sandcastle.claudeCode("claude-sonnet-5"),
     promptFile: "./.sandcastle/review-prompt.md",
     promptArgs: { BRANCH: headRef },
   });
@@ -138,7 +138,7 @@ try {
     await sandbox.run({
       name: "push-review",
       maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-opus-4-8"),
+      agent: sandcastle.claudeCode("claude-sonnet-5"),
       promptFile: "./.sandcastle/review-push-prompt.md",
       promptArgs: { BRANCH: headRef },
     });
