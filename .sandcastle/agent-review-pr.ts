@@ -55,13 +55,52 @@ if (!headRef) {
   throw new Error(`Could not resolve head branch for PR #${prNumber}.`);
 }
 
+// toon is a pnpm workspace — install with the committed lockfile (mirrors
+// main.ts). We do NOT copyToWorktree node_modules (pnpm's symlinked store
+// breaks across the host->worktree bind-mount).
 const hooks = {
-  sandbox: { onSandboxReady: [{ command: "pnpm install --frozen-lockfile" }] },
+  sandbox: {
+    onSandboxReady: [
+      // Wire `git push` auth deterministically inside the container. The engine
+      // (@ai-hero/sandcastle@0.12.0) configures git identity + safe.directory
+      // but NO credential helper, so the review-push step's in-sandbox
+      // `git push` to the PR branch is unauthenticated and only succeeds by
+      // luck. `gh auth setup-git` installs `gh` as git's credential helper
+      // (reads GH_TOKEN at push time, stores no token in any file). Guarded on
+      // GH_TOKEN so token-less local dev no-ops rather than aborting setup. See
+      // ./agent-implement-issue.ts for the full root-cause note. Propagated from
+      // store#51 (validated by store#52).
+      { command: 'if [ -n "$GH_TOKEN" ]; then gh auth setup-git; fi' },
+      { command: "pnpm install --frozen-lockfile" },
+    ],
+  },
 };
 
 console.log(
   `\n=== agent:review runner — PR #${prNumber} (head: ${headRef}) ===\n`,
 );
+
+// Resolve the repo once so the host-side push verification can query the remote
+// branch ref via the authenticated `gh`.
+const nwo = execFileSync(
+  "gh",
+  ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+  { encoding: "utf8" },
+).trim();
+
+// Read the current tip sha of the PR head branch on origin via the authenticated
+// host `gh`. Returns null if the branch does not exist on the remote.
+function remoteHeadSha(): string | null {
+  try {
+    return execFileSync(
+      "gh",
+      ["api", `repos/${nwo}/git/ref/heads/${headRef}`, "--jq", ".object.sha"],
+      { encoding: "utf8" },
+    ).trim();
+  } catch {
+    return null;
+  }
+}
 
 const sandbox = await sandcastle.createSandbox({
   branch: headRef,
@@ -71,6 +110,12 @@ const sandbox = await sandcastle.createSandbox({
   sandbox: docker({ env: sandboxSecrets() }),
   hooks,
 });
+
+// Set to a non-null message below when the reviewer produced commits but the
+// push did NOT advance the remote PR branch. Recorded (rather than exiting
+// inside the try) so the `finally` still closes the sandbox before we fail
+// non-zero.
+let reviewPushError: string | null = null;
 
 try {
   const review = await sandbox.run({
@@ -82,6 +127,9 @@ try {
   });
 
   if (review.commits.length > 0) {
+    // Snapshot the remote tip BEFORE pushing so we can prove the push landed.
+    const remoteHeadBefore = remoteHeadSha();
+
     // Push the reviewer's refinement commits back onto the PR branch. No merge,
     // no close, no new PR — the existing PR just gets updated.
     console.log(
@@ -94,6 +142,30 @@ try {
       promptFile: "./.sandcastle/review-push-prompt.md",
       promptArgs: { BRANCH: headRef },
     });
+
+    // FAIL LOUD. review-push-prompt.md logs COMPLETE regardless of whether the
+    // in-sandbox `git push` actually landed. Verify from the HOST that origin's
+    // PR-branch tip ADVANCED past its pre-push value. If it did not, the push
+    // failed silently (same class as store#50) and the reviewer's refinements
+    // never reached the PR — fail the Actions job instead of green-lying.
+    const remoteHeadAfter = remoteHeadSha();
+    if (remoteHeadAfter === null || remoteHeadAfter === remoteHeadBefore) {
+      reviewPushError =
+        `\nERROR: the push-review phase reported COMPLETE, but origin's tip ` +
+        `for PR branch '${headRef}' did not advance ` +
+        `(before: ${remoteHeadBefore ?? "<missing>"}, after: ` +
+        `${remoteHeadAfter ?? "<missing>"}).\n` +
+        `  The reviewer made ${review.commits.length} commit(s) but the ` +
+        `in-sandbox \`git push\` failed silently, so the PR did NOT pick them ` +
+        `up. Inspect the push-review phase logs above. The Actions job is ` +
+        `failing deliberately so this is not mistaken for success.`;
+    } else {
+      console.log(
+        `\nVerified: origin/${headRef} advanced ` +
+          `${remoteHeadBefore ?? "<new>"} → ${remoteHeadAfter}. ` +
+          `The PR picked up the reviewer's commits.`,
+      );
+    }
   } else {
     console.log(
       "\nReviewer made no changes — the code was already clean. Nothing to push.",
@@ -101,6 +173,13 @@ try {
   }
 } finally {
   await sandbox.close();
+}
+
+// Fail loud AFTER the sandbox is closed: a silently-failed review push must turn
+// the Actions job red, never green.
+if (reviewPushError) {
+  console.error(reviewPushError);
+  process.exit(1);
 }
 
 console.log("\nReview complete. The PR was NOT merged — a human still merges.");
