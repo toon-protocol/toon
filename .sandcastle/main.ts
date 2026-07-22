@@ -55,7 +55,21 @@ const MAX_ITERATIONS = 10;
 // sandbox resolves the exact dependency tree. This replaces the template's
 // default `npm install` (toon does not use npm).
 const hooks = {
-  sandbox: { onSandboxReady: [{ command: "pnpm install --frozen-lockfile" }] },
+  sandbox: {
+    onSandboxReady: [
+      // Wire `git push` auth deterministically inside the container. The engine
+      // (@ai-hero/sandcastle@0.12.0) configures git identity + safe.directory
+      // but NO credential helper, so a bare `git push` is unauthenticated and
+      // only succeeds by luck (relay#70) and fails silently otherwise
+      // (store#50). `gh auth setup-git` installs `gh` as git's credential helper
+      // (reads GH_TOKEN at push time, stores no token in any file). Guarded on
+      // GH_TOKEN so token-less local dev no-ops rather than aborting setup
+      // (onSandboxReady failures are fatal). See ./agent-implement-issue.ts for
+      // the full root-cause note. Propagated from store#51 (validated store#52).
+      { command: 'if [ -n "$GH_TOKEN" ]; then gh auth setup-git; fi' },
+      { command: "pnpm install --frozen-lockfile" },
+    ],
+  },
 };
 
 // NOTE: the stock template copies the host `node_modules` into the worktree
