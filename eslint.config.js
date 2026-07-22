@@ -65,6 +65,9 @@ export default tseslint.config(
       'archive/**',
       '.cache/**',
       '.claude/**',
+      // Sandcastle runner scripts run via tsx and are not in any tsconfig
+      // program, so typed ESLint (projectService) would error parsing them.
+      '.sandcastle/**',
       'packages/memvid-node/index.d.ts',
     ],
   }

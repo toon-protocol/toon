@@ -1565,9 +1565,8 @@ describe('SwarmCoordinator (Story 6.2)', () => {
         type: 'reject',
         code: 'F00',
         message: 'settlement failed',
-        triggeredBy: '',
         data: Buffer.alloc(0),
-      } as any);
+      });
       // Override sendPacket to throw
       failingConnector.sendPacket = async () => {
         throw new Error('Settlement RPC error');
