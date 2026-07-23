@@ -58,8 +58,21 @@ function runLintCeiling(): boolean {
   return report('lint-ceiling', checkLintCeiling(lintScript, loadBaseline()));
 }
 
+// The GitHub Actions API reports `started_at`/`completed_at` as `null` for a
+// job that hasn't started or finished yet, unlike the always-populated
+// `CiJobTiming` that `computeJobDurationsSeconds` expects.
+interface GhJobTiming {
+  name: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 interface GhJobsResponse {
-  jobs: CiJobTiming[];
+  jobs: GhJobTiming[];
+}
+
+function hasCompletedTimings(job: GhJobTiming): job is CiJobTiming {
+  return job.started_at !== null && job.completed_at !== null;
 }
 
 function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
@@ -69,7 +82,7 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
   }
 
   const parsed = JSON.parse(readFileSync(jobsJsonPath, 'utf8')) as GhJobsResponse;
-  const jobs = parsed.jobs.filter((job) => job.started_at && job.completed_at);
+  const jobs = parsed.jobs.filter(hasCompletedTimings);
   const durations = computeJobDurationsSeconds(jobs);
   const baseline = loadBaseline();
 

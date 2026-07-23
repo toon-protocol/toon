@@ -6,7 +6,7 @@ import {
   checkSpeedRegression,
   computeJobDurationsSeconds,
   type GateBaseline,
-} from './gate-guard';
+} from './gate-guard.ts';
 
 const baseline: GateBaseline = {
   gateSpeed: {
