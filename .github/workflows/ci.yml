@@ -22,14 +22,25 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      - run: pnpm lint
+      # lint has no dependency on the build output, so run it in the
+      # background while `pnpm -r build` (core -> sdk, topologically
+      # ordered) runs in the foreground, then block on lint's exit code.
+      # `wait` returns lint's exit status, and run steps already execute
+      # under `bash -eo pipefail`, so a lint failure still fails the step.
+      - name: Lint & build (overlapped)
+        run: |
+          pnpm lint &
+          lint_pid=$!
+          pnpm -r build
+          wait "$lint_pid"
 
       - name: Gate correctness no-regression guard (lint ceiling)
         run: npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling
 
-      - run: pnpm -r build
-
-      - run: pnpm -r test --if-present
+      # packages/* test suites are independent vitest processes (each package's
+      # own dependencies are already built above); running them concurrently
+      # instead of one-at-a-time cuts wall-clock at no extra runner-job cost.
+      - run: pnpm -r --parallel test --if-present
 
       # pnpm -r excludes the workspace root by default, so the root-level
       # .sandcastle/*.test.ts guard tests never run under `pnpm -r test`.
