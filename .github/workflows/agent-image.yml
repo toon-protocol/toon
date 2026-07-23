@@ -36,6 +36,15 @@ jobs:
       - name: Report agent image size
         run: docker image inspect sandcastle:toon --format '{{.Size}} bytes ({{.Id}})'
 
+      # No-regression guard (toon-protocol/toon#117): fails if the image grows
+      # beyond the frozen baseline + tolerance. No-ops until gate-baseline.json's
+      # dockerImageSize.bytes placeholder (per #116/#120) is filled in from a
+      # real run's measured size.
+      - name: Gate performance no-regression guard (image size)
+        run: |
+          bytes=$(docker image inspect sandcastle:toon --format '{{.Size}}')
+          npx tsx .sandcastle/gate-guard-cli.ts image-size "$bytes"
+
       - name: Verify toolchain inside image
         run: |
           docker run --rm --entrypoint bash sandcastle:toon -lc '
