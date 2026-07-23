@@ -1,0 +1,78 @@
+{
+  "_docs": "See toon-protocol/toon-meta CONTEXT.md#the-gate — this file is consumed by the toon-meta read-only GATE.md/FACTORY.md rollup",
+  "repo": "toon-protocol/toon",
+  "capturedAt": "2026-07-22",
+  "capturedFromCommit": "76dc9f0b36679d073502086a56bbadffc9e1c391",
+  "capturedFromRef": "main",
+  "gateShape": {
+    "lint": "eslint . --max-warnings 940",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run (via `pnpm -r test --if-present` in CI)",
+    "build": "pnpm -r run build"
+  },
+  "method": "Representative sample = the 5 most recent `push`-to-`main` runs of .github/workflows/ci.yml as of capturedAt, read via `gh run list --workflow=ci.yml --json ...` / `gh run view <id> --json jobs` / `gh api repos/toon-protocol/toon/actions/runs/<id>/timing`. Correctness counts taken directly from a clean checkout of capturedFromCommit via `npx eslint . -f json` and `pnpm run typecheck`, not from CI logs (CI truncates neither, but a local run is simpler to reproduce byte-for-byte). See `sampleRuns` for the raw per-run figures this baseline was averaged from. NOTE for reproduction: verify tests via `pnpm -r test --if-present` (what CI runs), not the root `vitest run` script — the root vitest.config.ts omits the `TOON_GENESIS_PEERS: '[]'` hermetic-fixture env that packages/sdk/vitest.config.ts sets, so a bare root `vitest run` spuriously fails ~50 sdk tests that pass under the real per-package CI command.",
+  "gateSpeed": {
+    "description": "CI wall-clock time for the ci.yml workflow (both jobs run in parallel; wall-clock is dominated by the `build` job).",
+    "unit": "seconds",
+    "averageTotalRunDurationSeconds": 112,
+    "averageBuildJobDurationSeconds": 106.4,
+    "averageDevboxValidateJobDurationSeconds": 48.2,
+    "sampleSize": 5
+  },
+  "gatePerformance": {
+    "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
+    "runnerMinutes": {
+      "unit": "raw job-seconds summed across both ci.yml jobs (build + Devbox Environment Validation), NOT GitHub-billed minutes",
+      "averagePerRunSeconds": 154.6,
+      "billedMinutes": 0,
+      "billedMinutesNote": "Public repo — GitHub-hosted Actions minutes are free; the Actions API always reports billable.UBUNTU.total_ms=0 for this repo regardless of actual runner time."
+    },
+    "cacheHitRate": {
+      "pnpmDependencyCache": "4/5 (80%) — action: actions/setup-node@v7 with cache: pnpm. The one miss was the run whose pnpm-lock.yaml changed, which correctly invalidates the cache key.",
+      "devboxCliAndNixStoreCache": "5/5 (100%) — action: jetify-com/devbox-install-action in the Devbox Environment Validation job."
+    },
+    "dockerImageSize": {
+      "status": "not yet measured",
+      "note": "The .sandcastle/Dockerfile agent image (sandcastle:toon) has no prior run that recorded its size — .github/workflows/agent-image.yml only ever asserted the image builds and its toolchain is correct. This change adds a 'Report agent image size' step (docker image inspect --format '{{.Size}}') to that workflow so the number is captured on its next run. This capture environment has neither a Docker daemon nor push access to trigger that workflow, so the figure could not be filled in here — update this field from that step's log output once available, without re-deriving the rest of the baseline."
+    }
+  },
+  "gateCorrectness": {
+    "description": "Current violation counts under the existing soft-gate ceiling (`eslint . --max-warnings 940`) and the known-debt typecheck gate. These are the frozen baseline the epic (toon-protocol/toon-meta#210) ratchets toward zero in follow-up slices — this issue only captures the number.",
+    "lint": {
+      "command": "npx eslint .",
+      "errors": 0,
+      "warnings": 940,
+      "maxWarningsCeiling": 940,
+      "byRule": {
+        "@typescript-eslint/no-non-null-assertion": 940
+      }
+    },
+    "typecheck": {
+      "command": "pnpm run typecheck",
+      "errors": 246,
+      "byErrorCode": {
+        "TS2307": 139,
+        "TS4111": 24,
+        "TS2339": 21,
+        "TS7006": 15,
+        "TS2322": 14,
+        "TS2352": 12,
+        "TS2353": 8,
+        "TS2740": 3,
+        "TS2538": 3,
+        "TS2769": 2,
+        "TS2532": 2,
+        "TS2345": 2,
+        "TS2578": 1
+      },
+      "note": "typecheck is a soft gate (known pre-existing debt, not wired into ci.yml as a blocking step) per toon#110 and the toon Part-of-#111 commit message. This 246 figure matches the ~246 recorded when that debt was carved out."
+    }
+  },
+  "sampleRuns": [
+    { "runId": 29953906825, "commit": "76dc9f0", "totalRunDurationSeconds": 103, "buildJobSeconds": 99, "devboxJobSeconds": 56, "pnpmCacheHit": true },
+    { "runId": 29951193583, "commit": "19c334a", "totalRunDurationSeconds": 105, "buildJobSeconds": 101, "devboxJobSeconds": 42, "pnpmCacheHit": true },
+    { "runId": 29945828463, "commit": "ea21347", "totalRunDurationSeconds": 117, "buildJobSeconds": 113, "devboxJobSeconds": 46, "pnpmCacheHit": true },
+    { "runId": 29935884552, "commit": "e4f8728", "totalRunDurationSeconds": 119, "buildJobSeconds": 114, "devboxJobSeconds": 47, "pnpmCacheHit": false },
+    { "runId": 29873378048, "commit": "264e73d", "totalRunDurationSeconds": 116, "buildJobSeconds": 105, "devboxJobSeconds": 50, "pnpmCacheHit": true }
+  ]
+}
