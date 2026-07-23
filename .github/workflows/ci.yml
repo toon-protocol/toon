@@ -24,9 +24,17 @@ jobs:
 
       - run: pnpm lint
 
+      - name: Gate correctness no-regression guard (lint ceiling)
+        run: npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling
+
       - run: pnpm -r build
 
       - run: pnpm -r test --if-present
+
+      # pnpm -r excludes the workspace root by default, so the root-level
+      # .sandcastle/*.test.ts guard tests never run under `pnpm -r test`.
+      - name: Gate guard unit tests
+        run: npx vitest run .sandcastle/gate-guard.test.ts
 
       - name: connector-contract-canary
         run: |
@@ -58,3 +66,36 @@ jobs:
 
       - name: Smoke build
         run: devbox run -- bash -c "pnpm install --no-frozen-lockfile && pnpm build"
+
+  gate-regression-guard:
+    name: Gate speed/performance no-regression guard
+    needs: [build, devbox-validate]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 8.15.9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --no-frozen-lockfile
+
+      # Reads THIS run's own build + devbox-validate job timings (not a
+      # recomputed/live threshold) and compares them against the frozen
+      # .sandcastle/gate-baseline.json averages, so the same commit always
+      # earns the same verdict.
+      - name: Fetch this run's job timings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" > /tmp/gate-guard-jobs.json
+
+      - name: Gate speed/performance no-regression guard
+        run: npx tsx .sandcastle/gate-guard-cli.ts speed-performance /tmp/gate-guard-jobs.json
