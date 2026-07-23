@@ -66,21 +66,22 @@ function validateAsset(
       field: side,
     };
   }
-  if (!isNonEmptyString(asset['assetCode'])) {
+  const { assetCode, assetScale, chain } = asset;
+  if (!isNonEmptyString(assetCode)) {
     return {
       valid: false,
       reason: `${side}.assetCode must be a non-empty string`,
       field: `${side}.assetCode`,
     };
   }
-  if (!isNonNegativeInteger(asset['assetScale'])) {
+  if (!isNonNegativeInteger(assetScale)) {
     return {
       valid: false,
       reason: `${side}.assetScale must be a non-negative integer`,
       field: `${side}.assetScale`,
     };
   }
-  if (typeof asset['chain'] !== 'string' || !validateChainId(asset['chain'])) {
+  if (typeof chain !== 'string' || !validateChainId(chain)) {
     return {
       valid: false,
       reason: `${side}.chain must be a valid chain identifier (e.g., "evm:base:8453")`,
@@ -100,16 +101,18 @@ export function isValidSwapPair(pair: unknown): SwapPairValidationResult {
     return { valid: false, reason: 'pair must be an object', field: '' };
   }
 
-  const fromResult = validateAsset(pair['from'], 'from');
+  const { from, to, rate, minAmount, maxAmount } = pair;
+
+  const fromResult = validateAsset(from, 'from');
   if (!fromResult.valid) return fromResult;
 
-  const toResult = validateAsset(pair['to'], 'to');
+  const toResult = validateAsset(to, 'to');
   if (!toResult.valid) return toResult;
 
   if (
-    typeof pair['rate'] !== 'string' ||
-    pair['rate'].length > MAX_NUMERIC_STRING_LENGTH ||
-    !RATE_REGEX.test(pair['rate'])
+    typeof rate !== 'string' ||
+    rate.length > MAX_NUMERIC_STRING_LENGTH ||
+    !RATE_REGEX.test(rate)
   ) {
     return {
       valid: false,
@@ -118,11 +121,11 @@ export function isValidSwapPair(pair: unknown): SwapPairValidationResult {
     };
   }
 
-  if (pair['minAmount'] !== undefined) {
+  if (minAmount !== undefined) {
     if (
-      typeof pair['minAmount'] !== 'string' ||
-      pair['minAmount'].length > MAX_NUMERIC_STRING_LENGTH ||
-      !AMOUNT_REGEX.test(pair['minAmount'])
+      typeof minAmount !== 'string' ||
+      minAmount.length > MAX_NUMERIC_STRING_LENGTH ||
+      !AMOUNT_REGEX.test(minAmount)
     ) {
       return {
         valid: false,
@@ -132,11 +135,11 @@ export function isValidSwapPair(pair: unknown): SwapPairValidationResult {
     }
   }
 
-  if (pair['maxAmount'] !== undefined) {
+  if (maxAmount !== undefined) {
     if (
-      typeof pair['maxAmount'] !== 'string' ||
-      pair['maxAmount'].length > MAX_NUMERIC_STRING_LENGTH ||
-      !AMOUNT_REGEX.test(pair['maxAmount'])
+      typeof maxAmount !== 'string' ||
+      maxAmount.length > MAX_NUMERIC_STRING_LENGTH ||
+      !AMOUNT_REGEX.test(maxAmount)
     ) {
       return {
         valid: false,
@@ -146,9 +149,9 @@ export function isValidSwapPair(pair: unknown): SwapPairValidationResult {
     }
   }
 
-  if (pair['minAmount'] !== undefined && pair['maxAmount'] !== undefined) {
+  if (minAmount !== undefined && maxAmount !== undefined) {
     // Use BigInt — amounts may exceed Number.MAX_SAFE_INTEGER (Epic 11 retro guard).
-    if (BigInt(pair['minAmount'] as string) > BigInt(pair['maxAmount'] as string)) {
+    if (BigInt(minAmount as string) > BigInt(maxAmount as string)) {
       return {
         valid: false,
         reason: 'minAmount must not exceed maxAmount',
