@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { MockInstance } from 'vitest';
 import { createLogger } from './logger.js';
 import type { Logger, LogEntry } from './logger.js';
 
 describe('createLogger', () => {
   let consoleSpy: {
-    log: ReturnType<typeof vi.spyOn>;
-    error: ReturnType<typeof vi.spyOn>;
-    warn: ReturnType<typeof vi.spyOn>;
+    log: MockInstance<Parameters<typeof console.log>, ReturnType<typeof console.log>>;
+    error: MockInstance<Parameters<typeof console.error>, ReturnType<typeof console.error>>;
+    warn: MockInstance<Parameters<typeof console.warn>, ReturnType<typeof console.warn>>;
   };
 
   beforeEach(() => {

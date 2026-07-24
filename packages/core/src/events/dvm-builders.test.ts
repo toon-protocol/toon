@@ -283,7 +283,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as Record<string, unknown>)['content'];
+        delete (params as unknown as Record<string, unknown>)['content'];
 
         // Act
         const event = buildJobRequestEvent(params, secretKey);
@@ -301,7 +301,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as Record<string, unknown>)['input'];
+        delete (params as unknown as Record<string, unknown>)['input'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -311,7 +311,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as Record<string, unknown>)['bid'];
+        delete (params as unknown as Record<string, unknown>)['bid'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -330,7 +330,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as Record<string, unknown>)['output'];
+        delete (params as unknown as Record<string, unknown>)['output'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -491,7 +491,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobResultParams();
-        delete (params as Record<string, unknown>)['requestEventId'];
+        delete (params as unknown as Record<string, unknown>)['requestEventId'];
 
         // Act & Assert
         expect(() => buildJobResultEvent(params, secretKey)).toThrow();
@@ -519,7 +519,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobResultParams();
-        delete (params as Record<string, unknown>)['amount'];
+        delete (params as unknown as Record<string, unknown>)['amount'];
 
         // Act & Assert
         expect(() => buildJobResultEvent(params, secretKey)).toThrow();
@@ -714,7 +714,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobFeedbackParams();
-        delete (params as Record<string, unknown>)['content'];
+        delete (params as unknown as Record<string, unknown>)['content'];
 
         // Act
         const event = buildJobFeedbackEvent(params, secretKey);
@@ -1069,7 +1069,7 @@ describe('DVM builders', () => {
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
       // Force content to undefined to trigger non-string validation
-      delete (params as Record<string, unknown>)['content'];
+      delete (params as unknown as Record<string, unknown>)['content'];
 
       // Act & Assert
       try {
@@ -1091,7 +1091,7 @@ describe('DVM builders', () => {
       // Arrange: force bid to a numeric value (TypeScript won't prevent this at runtime)
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams();
-      (params as Record<string, unknown>)['bid'] = 1000000;
+      (params as unknown as Record<string, unknown>)['bid'] = 1000000;
 
       // Act & Assert
       try {
@@ -1113,7 +1113,7 @@ describe('DVM builders', () => {
       // Arrange: force amount to a numeric value
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
-      (params as Record<string, unknown>)['amount'] = 500000;
+      (params as unknown as Record<string, unknown>)['amount'] = 500000;
 
       // Act & Assert
       try {

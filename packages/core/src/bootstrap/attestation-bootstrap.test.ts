@@ -16,11 +16,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 
 // GREEN phase: AttestationBootstrap implementation exists
 import { AttestationBootstrap } from './AttestationBootstrap.js';
+import type { VerificationResult } from './AttestationVerifier.js';
 
 // ============================================================================
 // Factories
@@ -92,12 +94,20 @@ function createPeerInfoEvent(relayPubkey: string): NostrEvent {
 function createMockVerifier(
   state: 'valid' | 'invalid' | 'missing' | 'expired'
 ): {
-  verify: ReturnType<typeof vi.fn>;
-  getState: ReturnType<typeof vi.fn>;
+  verify: Mock<
+    [attestation: NostrEvent],
+    boolean | VerificationResult | Promise<boolean | VerificationResult>
+  >;
+  getState: Mock<unknown[], unknown>;
 } {
   return {
-    verify: vi.fn().mockResolvedValue(state === 'valid'),
-    getState: vi.fn().mockReturnValue(state),
+    verify: vi
+      .fn<
+        [attestation: NostrEvent],
+        boolean | VerificationResult | Promise<boolean | VerificationResult>
+      >()
+      .mockResolvedValue(state === 'valid'),
+    getState: vi.fn<unknown[], unknown>().mockReturnValue(state),
   };
 }
 
