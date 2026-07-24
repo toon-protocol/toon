@@ -88,7 +88,7 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
+          data: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -216,7 +216,7 @@ function createMockEventStore() {
 function extractPublishedEvents(calls: SendPacketParams[]): NostrEvent[] {
   const events: NostrEvent[] = [];
   for (const call of calls) {
-    if (call.data.length > 0) {
+    if (call.data && call.data.length > 0) {
       try {
         events.push(decodeEventFromToon(call.data));
       } catch {
@@ -1486,7 +1486,7 @@ describe('WorkflowOrchestrator (Story 6.1)', () => {
 
       // Assert: collect all settlement packets (empty data = settlement)
       const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
+        (call) => (call.data?.length ?? 0) === 0
       );
       // Each settlement should have been called (one per step)
       expect(settlementCalls).toHaveLength(2);

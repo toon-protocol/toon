@@ -88,7 +88,7 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
+          data: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -222,7 +222,7 @@ function createMockSelectionEvent(
 function extractPublishedEvents(calls: SendPacketParams[]): NostrEvent[] {
   const events: NostrEvent[] = [];
   for (const call of calls) {
-    if (call.data.length > 0) {
+    if (call.data && call.data.length > 0) {
       try {
         events.push(decodeEventFromToon(call.data));
       } catch {
@@ -467,7 +467,7 @@ describe('SwarmCoordinator (Story 6.2)', () => {
 
       // Assert: no settlement packets (empty data = settlement)
       const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
+        (call) => (call.data?.length ?? 0) === 0
       );
       expect(settlementCalls).toHaveLength(0);
     });
@@ -534,7 +534,7 @@ describe('SwarmCoordinator (Story 6.2)', () => {
 
       // Assert: settlement was made (at least one sendPacket call with empty data)
       const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
+        (call) => (call.data?.length ?? 0) === 0
       );
       expect(settlementCalls).toHaveLength(1);
     });
@@ -590,7 +590,7 @@ describe('SwarmCoordinator (Story 6.2)', () => {
 
       // Assert: exactly 1 settlement (winner only, not 3)
       const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
+        (call) => (call.data?.length ?? 0) === 0
       );
       expect(settlementCalls).toHaveLength(1);
     });
