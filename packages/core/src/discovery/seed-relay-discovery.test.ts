@@ -287,7 +287,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
     webSocketConstructorBehavior = 'success';
     customWebSocketFactory = undefined;
     // Reset verifyEvent mock to return true (default for tests with synthetic events)
-    (verifyEvent as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    vi.mocked(verifyEvent).mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -922,7 +922,7 @@ describe('Story 3.4: Seed Relay Discovery', () => {
   describe('Event signature verification (CWE-345)', () => {
     it('skips kind:10036 events with invalid signatures', async () => {
       // Arrange -- mock verifyEvent to reject events
-      (verifyEvent as ReturnType<typeof vi.fn>).mockReturnValue(false);
+      vi.mocked(verifyEvent).mockReturnValue(false);
 
       const seedEntries = createSeedRelayList(1);
       const seedRelayEvent = createSeedRelayEvent(seedEntries);
