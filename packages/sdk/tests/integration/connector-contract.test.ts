@@ -29,8 +29,45 @@ import type {
   ILPRejectPacket,
   ConnectorConfig,
 } from '@toon-protocol/connector';
-import { buildSwarmSelectionEvent } from '@toon-protocol/core';
+import {
+  buildSwarmSelectionEvent,
+  type EmbeddableConnectorLike,
+  type RegisterPeerParams,
+} from '@toon-protocol/core';
 import { createNode, type NodeConfig } from '../../src/index.js';
+
+/**
+ * Narrows node.connector (EmbeddableConnectorLike | null) to non-null.
+ * Always set in these tests via createTestNodeConfig(); asserts that
+ * invariant without a non-null assertion (`!`), which the lint gate
+ * forbids here.
+ */
+function requireConnector(
+  connector: EmbeddableConnectorLike | null | undefined
+): EmbeddableConnectorLike {
+  if (!connector) {
+    throw new Error('expected connector to be defined');
+  }
+  return connector;
+}
+
+/**
+ * Calls registerPeer with the connector package's real request shape
+ * (`PeerRegistrationRequest`: authToken required, settlement typed as
+ * `AdminSettlementConfig`). The SDK's structural `EmbeddableConnectorLike`
+ * (`RegisterPeerParams`: authToken optional, settlement typed as
+ * `Record<string, unknown>`) is a looser supertype that every
+ * `PeerRegistrationRequest` satisfies at runtime, but TS can't confirm
+ * `AdminSettlementConfig` (no index signature) as a `Record<string,
+ * unknown>` structurally, so the cast is centralized here once instead of
+ * at every call site.
+ */
+function callRegisterPeer(
+  connector: EmbeddableConnectorLike,
+  params: PeerRegistrationRequest
+): Promise<void> {
+  return connector.registerPeer(params as unknown as RegisterPeerParams);
+}
 
 // 60-second per-test timeout — AC #2 hard ceiling. Tests should each finish
 // in <100ms; the cap exists so a hanging stub fails the canary fast.
@@ -98,7 +135,12 @@ function createTestNodeConfig(stub = createStubConnector()): NodeConfig {
   const secretKey = new Uint8Array(32).fill(0x42);
   return {
     secretKey,
-    connector: stub,
+    // The stub's registerPeer resolves Promise<PeerInfo> (the real
+    // connector's documented return shape, asserted on directly below via
+    // the stub); EmbeddableConnectorLike's structural type narrows this to
+    // Promise<void> (the SDK adapter's return type) — both are true of the
+    // same mock simultaneously, TS just can't see it structurally.
+    connector: stub as unknown as EmbeddableConnectorLike,
     ilpAddress: 'g.test.contract',
     assetCode: 'USD',
     assetScale: 6,
@@ -117,80 +159,81 @@ const STUB_HEX_64 = 'a'.repeat(64);
 // sendPacket() — AC #1 + #2
 // ---------------------------------------------------------------------------
 
-describe(
-  'connector contract: sendPacket()',
-  { timeout: SIXTY_SECONDS },
-  () => {
-    it('SendPacketParams.expiresAt is mandatory (compile-time + runtime shape)', async () => {
-      const stub = createStubConnector();
-      const node = createNode(createTestNodeConfig(stub));
+describe('connector contract: sendPacket()', { timeout: SIXTY_SECONDS }, () => {
+  it('SendPacketParams.expiresAt is mandatory (compile-time + runtime shape)', async () => {
+    const stub = createStubConnector();
+    const node = createNode(createTestNodeConfig(stub));
 
-      // Mandatory params per @toon-protocol/connector v3.3.2:
-      //   destination: string, amount: bigint, expiresAt: Date, data?: Buffer
-      const params: SendPacketParams = {
-        destination: 'g.test.peer',
-        amount: 1000n,
-        expiresAt: new Date(Date.now() + 30_000),
-        data: Buffer.from([0x01]),
-      };
+    // Mandatory params per @toon-protocol/connector v3.3.2:
+    //   destination: string, amount: bigint, expiresAt: Date, data?: Buffer
+    const params: SendPacketParams = {
+      destination: 'g.test.peer',
+      amount: 1000n,
+      expiresAt: new Date(Date.now() + 30_000),
+      data: Buffer.from([0x01]),
+    };
 
-      await node.connector.sendPacket(params);
+    const connector = requireConnector(node.connector);
+    await connector.sendPacket(params);
 
-      expect(stub.sendPacket).toHaveBeenCalledTimes(1);
-      const called = stub.sendPacket.mock.calls[0]?.[0] as SendPacketParams;
-      expect(called.expiresAt).toBeInstanceOf(Date);
+    expect(stub.sendPacket).toHaveBeenCalledTimes(1);
+    const called = stub.sendPacket.mock.calls[0]?.[0] as SendPacketParams;
+    expect(called.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects when expiresAt is omitted (runtime guard against pre-v3.x defaulting)', async () => {
+    // In v2.x, expiresAt was optional and the connector defaulted to now+30s.
+    // In v3.x, omitting expiresAt is a contract violation. The stub mirrors
+    // v3.x behavior: throw rather than silently default.
+    const stub = createStubConnector({
+      sendPacket: async (params) => {
+        if (!(params.expiresAt instanceof Date)) {
+          throw new TypeError(
+            'sendPacket: expiresAt is mandatory and must be a Date'
+          );
+        }
+        return {
+          type: FULFILL,
+          fulfillment: Buffer.alloc(32),
+          data: Buffer.alloc(0),
+        } satisfies ILPFulfillPacket;
+      },
     });
+    const node = createNode(createTestNodeConfig(stub));
 
-    it('rejects when expiresAt is omitted (runtime guard against pre-v3.x defaulting)', async () => {
-      // In v2.x, expiresAt was optional and the connector defaulted to now+30s.
-      // In v3.x, omitting expiresAt is a contract violation. The stub mirrors
-      // v3.x behavior: throw rather than silently default.
-      const stub = createStubConnector({
-        sendPacket: async (params) => {
-          if (!(params.expiresAt instanceof Date)) {
-            throw new TypeError(
-              'sendPacket: expiresAt is mandatory and must be a Date'
-            );
-          }
-          return {
-            type: FULFILL,
-            fulfillment: Buffer.alloc(32),
-            data: Buffer.alloc(0),
-          } satisfies ILPFulfillPacket;
-        },
-      });
-      const node = createNode(createTestNodeConfig(stub));
+    const badParams = {
+      destination: 'g.test.peer',
+      amount: 1000n,
+      data: Buffer.from([0x01]),
+      // expiresAt deliberately omitted
+    } as unknown as SendPacketParams;
 
-      const badParams = {
-        destination: 'g.test.peer',
-        amount: 1000n,
-        data: Buffer.from([0x01]),
-        // expiresAt deliberately omitted
-      } as unknown as SendPacketParams;
+    const connector = requireConnector(node.connector);
+    await expect(connector.sendPacket(badParams)).rejects.toThrow(/expiresAt/);
+  });
 
-      await expect(node.connector.sendPacket(badParams)).rejects.toThrow(
-        /expiresAt/
-      );
-    });
+  it('return shape is ILPFulfillPacket | ILPRejectPacket (PacketType discriminator)', async () => {
+    const node = createNode(createTestNodeConfig());
+    const connector = requireConnector(node.connector);
+    // node.connector.sendPacket()'s structural return type
+    // (SendPacketResult, from EmbeddableConnectorLike) is a superset that
+    // also accepts legacy string-discriminated shapes for mock
+    // compatibility; the real connector always resolves the narrower
+    // PacketType-enum-discriminated shape this test asserts on.
+    const result = (await connector.sendPacket({
+      destination: 'g.test.peer',
+      amount: 1n,
+      expiresAt: new Date(Date.now() + 30_000),
+    })) as unknown as ILPFulfillPacket | ILPRejectPacket;
 
-    it('return shape is ILPFulfillPacket | ILPRejectPacket (PacketType discriminator)', async () => {
-      const node = createNode(createTestNodeConfig());
-      const result: ILPFulfillPacket | ILPRejectPacket =
-        await node.connector.sendPacket({
-          destination: 'g.test.peer',
-          amount: 1n,
-          expiresAt: new Date(Date.now() + 30_000),
-        });
-
-      // Discriminated union must use PacketType enum, not legacy 'type: "fulfill"'
-      expect([FULFILL, REJECT]).toContain(result.type);
-      if (result.type === FULFILL) {
-        expect(result.fulfillment).toBeInstanceOf(Buffer);
-        expect(result.fulfillment.length).toBe(32);
-      }
-    });
-  }
-);
+    // Discriminated union must use PacketType enum, not legacy 'type: "fulfill"'
+    expect([FULFILL, REJECT]).toContain(result.type);
+    if (result.type === FULFILL) {
+      expect(result.fulfillment).toBeInstanceOf(Buffer);
+      expect(result.fulfillment.length).toBe(32);
+    }
+  });
+});
 
 // ---------------------------------------------------------------------------
 // buildSwarmSelectionEvent() — AC #1
@@ -267,6 +310,7 @@ describe(
     it('PeerRegistrationRequest shape (id, url, authToken; optional routes/settlement)', async () => {
       const stub = createStubConnector();
       const node = createNode(createTestNodeConfig(stub));
+      const connector = requireConnector(node.connector);
 
       const params: PeerRegistrationRequest = {
         id: 'peer-contract-1',
@@ -278,7 +322,7 @@ describe(
       // Use objectContaining so the canary catches removal/rename of
       // mandatory fields without false-failing on benign SDK-side
       // normalization (e.g., a future release that defaults `routes: []`).
-      await node.connector.registerPeer(params);
+      await callRegisterPeer(connector, params);
       expect(stub.registerPeer).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'peer-contract-1',
@@ -305,7 +349,7 @@ describe(
         url: 'btp+wss://peer2.example.com',
         authToken: 'secret2',
       };
-      await node.connector.registerPeer(minimal);
+      await callRegisterPeer(connector, minimal);
       expect(stub.registerPeer).toHaveBeenCalledTimes(2);
       expect(stub.registerPeer).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -324,9 +368,11 @@ describe(
               'registerPeer: id, url, and authToken are mandatory'
             );
           }
+          return makePeerInfo(config.id);
         },
       });
       const node = createNode(createTestNodeConfig(stub));
+      const connector = requireConnector(node.connector);
 
       const incomplete = {
         id: 'peer-x',
@@ -334,7 +380,7 @@ describe(
         // authToken deliberately omitted
       } as unknown as PeerRegistrationRequest;
 
-      await expect(node.connector.registerPeer(incomplete)).rejects.toThrow(
+      await expect(callRegisterPeer(connector, incomplete)).rejects.toThrow(
         /authToken/
       );
     });
