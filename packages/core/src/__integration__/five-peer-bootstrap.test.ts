@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { getPublicKey } from 'nostr-tools/pure';
+import { getPublicKey, type NostrEvent } from 'nostr-tools/pure';
 import {
   NostrRelayServer,
   InMemoryEventStore,
@@ -100,7 +100,7 @@ class InMemoryIlpRouter {
     const request: HandlePacketRequest = {
       amount: params.amount.toString(),
       destination: params.destination,
-      data: Buffer.from(params.data).toString('base64'),
+      data: Buffer.from(params.data ?? new Uint8Array()).toString('base64'),
     };
 
     const response = await handler(request);
@@ -109,8 +109,8 @@ class InMemoryIlpRouter {
     if (response.accept) {
       const result: SendPacketResult = {
         type: 'fulfill',
-        fulfillment: response.fulfillment
-          ? Uint8Array.from(Buffer.from(response.fulfillment, 'base64'))
+        data: response.data
+          ? Uint8Array.from(Buffer.from(response.data, 'base64'))
           : new Uint8Array(32),
       };
       return result;
@@ -358,7 +358,7 @@ describe('Five-Peer Bootstrap Integration', () => {
 
       // Capture events
       node.bootstrapService.on((event) => peer.events.push(event));
-      node.relayMonitor.on((event) => peer.events.push(event));
+      node.discoveryTracker.on((event) => peer.events.push(event));
 
       peer.node = node;
     }
@@ -442,7 +442,9 @@ describe('Five-Peer Bootstrap Integration', () => {
 
   it('genesis event store has kind:10032 events from all 5 peers', () => {
     const storedEvents = peers[0]!.eventStore.query([{ kinds: [10032] }]);
-    const storedPubkeys = new Set(storedEvents.map((e) => e.pubkey));
+    const storedPubkeys = new Set(
+      storedEvents.map((e: NostrEvent) => e.pubkey)
+    );
 
     for (let i = 0; i < PEER_COUNT; i++) {
       expect(storedPubkeys.has(peers[i]!.pubkey)).toBe(true);
