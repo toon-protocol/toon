@@ -1,7 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { EmbeddableConnectorLike } from '@toon-protocol/core';
 import { createNode, type NodeConfig } from './index.js';
 
 // ATDD tests for Story 1.8 -- connector direct methods API
+
+/**
+ * Narrows a possibly-null/undefined connector to EmbeddableConnectorLike.
+ * Both `node.connector` (ConnectorApi | null) and `config.connector`
+ * (optional on NodeConfig) are always set in these tests via
+ * createTestConfig()/createMockConnector(); this asserts that invariant
+ * without a non-null assertion (`!`), which the lint gate forbids here.
+ */
+function requireConnector(
+  connector: EmbeddableConnectorLike | null | undefined
+): EmbeddableConnectorLike {
+  if (!connector) {
+    throw new Error('expected connector to be defined');
+  }
+  return connector;
+}
 
 /**
  * Creates a minimal mock connector for testing the API surface.
@@ -46,7 +63,8 @@ describe('Connector Direct Methods API', () => {
 
     // Assert
     expect(node.connector).toBeDefined();
-    expect(typeof node.connector.registerPeer).toBe('function');
+    const connector = requireConnector(node.connector);
+    expect(typeof connector.registerPeer).toBe('function');
   });
 
   it('[P2] node.connector exposes removePeer method', () => {
@@ -57,7 +75,8 @@ describe('Connector Direct Methods API', () => {
     const node = createNode(config);
 
     // Assert
-    expect(typeof node.connector.removePeer).toBe('function');
+    const connector = requireConnector(node.connector);
+    expect(typeof connector.removePeer).toBe('function');
   });
 
   it('[P2] node.channelClient is null when connector lacks channel support', () => {
@@ -101,7 +120,8 @@ describe('Connector Direct Methods API', () => {
     const node = createNode(config);
 
     // Assert
-    expect(typeof node.connector.sendPacket).toBe('function');
+    const connector = requireConnector(node.connector);
+    expect(typeof connector.sendPacket).toBe('function');
   });
 
   // ---------------------------------------------------------------------------
@@ -130,11 +150,13 @@ describe('Connector Direct Methods API', () => {
     };
 
     // Act
-    await node.connector.registerPeer(params);
+    const connector = requireConnector(node.connector);
+    await connector.registerPeer(params);
 
     // Assert
-    expect(config.connector.registerPeer).toHaveBeenCalledWith(params);
-    expect(config.connector.registerPeer).toHaveBeenCalledTimes(1);
+    const configConnector = requireConnector(config.connector);
+    expect(configConnector.registerPeer).toHaveBeenCalledWith(params);
+    expect(configConnector.registerPeer).toHaveBeenCalledTimes(1);
   });
 
   it('[P2] node.connector.removePeer delegates to the underlying connector', async () => {
@@ -143,11 +165,13 @@ describe('Connector Direct Methods API', () => {
     const node = createNode(config);
 
     // Act
-    await node.connector.removePeer('peer-to-remove');
+    const connector = requireConnector(node.connector);
+    await connector.removePeer('peer-to-remove');
 
     // Assert
-    expect(config.connector.removePeer).toHaveBeenCalledWith('peer-to-remove');
-    expect(config.connector.removePeer).toHaveBeenCalledTimes(1);
+    const configConnector = requireConnector(config.connector);
+    expect(configConnector.removePeer).toHaveBeenCalledWith('peer-to-remove');
+    expect(configConnector.removePeer).toHaveBeenCalledTimes(1);
   });
 
   it('[P2] node.connector.sendPacket delegates to the underlying connector', async () => {
@@ -161,11 +185,13 @@ describe('Connector Direct Methods API', () => {
     };
 
     // Act
-    const result = await node.connector.sendPacket(params);
+    const connector = requireConnector(node.connector);
+    const result = await connector.sendPacket(params);
 
     // Assert
-    expect(config.connector.sendPacket).toHaveBeenCalledWith(params);
-    expect(config.connector.sendPacket).toHaveBeenCalledTimes(1);
+    const configConnector = requireConnector(config.connector);
+    expect(configConnector.sendPacket).toHaveBeenCalledWith(params);
+    expect(configConnector.sendPacket).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       type: 'fulfill',
       fulfillment: new Uint8Array(32),
