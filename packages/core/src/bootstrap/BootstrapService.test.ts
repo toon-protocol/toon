@@ -644,6 +644,7 @@ describe('BootstrapService', () => {
 
     const mockChannelClient = {
       openChannel: vi.fn().mockResolvedValue({ channelId: '0xchannel123' }),
+      getChannelState: vi.fn(),
     };
 
     const events: BootstrapEvent[] = [];

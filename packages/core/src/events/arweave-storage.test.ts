@@ -91,7 +91,11 @@ describe('Arweave Storage Event Builder/Parser (Story 8.0)', () => {
       const iTag = event.tags.find((t: string[]) => t[0] === 'i');
       expect(iTag).toBeDefined();
       expect(iTag![2]).toBe('blob');
-      const decodedBlob = Buffer.from(iTag![1], 'base64');
+      const iTagBlob = iTag![1];
+      if (!iTagBlob) {
+        throw new Error('i tag missing base64 blob value');
+      }
+      const decodedBlob = Buffer.from(iTagBlob, 'base64');
       expect(decodedBlob).toEqual(blobData);
 
       // Assert: bid tag with usdc denomination

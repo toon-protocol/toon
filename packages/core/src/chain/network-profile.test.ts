@@ -171,7 +171,11 @@ describe('resolveNetworkProfile', () => {
       expect(p.status.evm).toBe('configured');
       // Apex gets a real EVM provider (registry/tokenNetwork are baked).
       expect(p.chainProviders).toHaveLength(1);
-      expect(p.chainProviders[0].chainType).toBe('evm');
+      const [firstProvider] = p.chainProviders;
+      if (!firstProvider) {
+        throw new Error('expected exactly one chain provider');
+      }
+      expect(firstProvider.chainType).toBe('evm');
     });
 
     it('Solana URL → RPC + mock USDC mint, but relay-only (program not deployed)', () => {

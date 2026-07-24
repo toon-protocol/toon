@@ -65,7 +65,9 @@ describe('extractPrefixFromHandshake -- happy path', () => {
 
   it('round-trips with buildPrefixHandshakeData (AC #1)', () => {
     const handshakeData = buildPrefixHandshakeData('g.toon.region-a');
-    const extracted = extractPrefixFromHandshake(handshakeData);
+    const extracted = extractPrefixFromHandshake(
+      handshakeData as unknown as Record<string, unknown>
+    );
     expect(extracted).toBe('g.toon.region-a');
   });
 });

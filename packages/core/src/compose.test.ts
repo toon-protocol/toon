@@ -93,9 +93,13 @@ describe('createToonNode', () => {
     expect(mockConnector.setPacketHandler).toHaveBeenCalledTimes(1);
     // The compose layer wraps handlePacket in an adapter that adds rejectReason
     // for connector compatibility, so the argument is a wrapper function.
-    const registeredHandler = (
+    const setPacketHandlerCall = (
       mockConnector.setPacketHandler as ReturnType<typeof vi.fn>
-    ).mock.calls[0][0];
+    ).mock.calls[0];
+    if (!setPacketHandlerCall) {
+      throw new Error('setPacketHandler was not called');
+    }
+    const registeredHandler = setPacketHandlerCall[0];
     expect(typeof registeredHandler).toBe('function');
 
     // Verify the adapter delegates to the user-provided handlePacket
