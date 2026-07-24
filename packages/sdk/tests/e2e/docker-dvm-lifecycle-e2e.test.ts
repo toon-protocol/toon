@@ -63,6 +63,7 @@ import {
   waitForPeer2Bootstrap,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -137,7 +138,7 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
 
     node = createNode({
       secretKey: nodeSecretKey,
-      connector,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,
@@ -157,7 +158,6 @@ describe('Docker DVM Lifecycle E2E (Story 5.3)', () => {
     // Register peer1 with routes for both peer1 and peer2
     await connector.registerPeer({
       id: 'peer1',
-      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],

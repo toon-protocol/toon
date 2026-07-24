@@ -84,6 +84,7 @@ import {
   waitForPeer2Bootstrap,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -175,7 +176,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     node = createNode({
       secretKey: nostrSecretKey,
-      connector,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,
@@ -199,7 +200,6 @@ describe('Docker SDK Publish Event E2E', () => {
     // -------------------------------------------------------------------
     await connector.registerPeer({
       id: 'peer1',
-      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],

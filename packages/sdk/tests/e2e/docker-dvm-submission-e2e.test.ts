@@ -63,6 +63,7 @@ import {
   waitForEventOnRelay,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -211,7 +212,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
 
     node = createNode({
       secretKey: nostrSecretKey,
-      connector,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,
@@ -231,7 +232,6 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
-      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }],
@@ -346,7 +346,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const probe1Result = await connector.sendPacket({
       destination: 'g.toon.peer1',
       amount: 99999n,
-      data: corruptData,
+      data: Buffer.from(corruptData),
       expiresAt: new Date(Date.now() + 30000),
     });
     // Peer rejects corrupt data (PacketType.REJECT = 14 per ILP OER wire spec)
@@ -370,7 +370,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const probe2Result = await connector.sendPacket({
       destination: 'g.toon.peer1',
       amount: BigInt(validBytes.length) * 10n,
-      data: tampered,
+      data: Buffer.from(tampered),
       expiresAt: new Date(Date.now() + 30000),
     });
     expect(probe2Result.type).toBe(REJECT);
@@ -392,7 +392,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
     const probe3Result = await connector.sendPacket({
       destination: 'g.toon.peer1',
       amount: requiredAmount / 2n,
-      data: goodBytes,
+      data: Buffer.from(goodBytes),
       expiresAt: new Date(Date.now() + 30000),
     });
     expect(probe3Result.type).toBe(REJECT);

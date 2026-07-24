@@ -22,6 +22,8 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import WebSocket from 'ws';
 import { decodeEventFromToon } from '@toon-protocol/relay';
+import type { ConnectorNode } from '@toon-protocol/connector';
+import type { EmbeddableConnectorLike } from '@toon-protocol/core';
 
 // Repo root resolved from this file's location, independent of process.cwd().
 // File path: <repo>/packages/sdk/tests/e2e/helpers/docker-e2e-setup.ts → walk up 5 levels.
@@ -45,6 +47,7 @@ function loadSdkE2eEnv(): void {
       const match = line.match(/^([A-Za-z0-9_]+)=(.*)$/);
       if (match) {
         const [, key, value] = match;
+        if (!key) continue;
         if (process.env[key] === undefined || process.env[key] === '') {
           process.env[key] = value;
         }
@@ -703,6 +706,15 @@ export async function releaseMinaAccount(pk: string): Promise<void> {
   } catch {
     // non-fatal
   }
+}
+
+// connector.registerPeer's authToken is required on ConnectorNode
+// (@toon-protocol/connector) but optional on EmbeddableConnectorLike
+// (@toon-protocol/core); see create-node.ts's own bridge for the same variance.
+export function asEmbeddableConnector(
+  connector: ConnectorNode
+): EmbeddableConnectorLike {
+  return connector as unknown as EmbeddableConnectorLike;
 }
 
 export function skipIfNotReady(servicesReady: boolean): boolean {
