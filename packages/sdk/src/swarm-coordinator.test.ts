@@ -88,7 +88,7 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
+          data: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -216,13 +216,22 @@ function createMockSelectionEvent(
 }
 
 /**
+ * Settlement packets carry no relay data (pure value transfer); publish
+ * packets carry TOON-encoded event bytes. Distinguishes the two among
+ * captured sendPacket calls.
+ */
+function isSettlementCall(call: SendPacketParams): boolean {
+  return (call.data?.length ?? 0) === 0;
+}
+
+/**
  * Extracts TOON-decoded Nostr events from captured sendPacket calls.
  * Settlement packets have empty data; publish packets have TOON-encoded data.
  */
 function extractPublishedEvents(calls: SendPacketParams[]): NostrEvent[] {
   const events: NostrEvent[] = [];
   for (const call of calls) {
-    if (call.data.length > 0) {
+    if (call.data && call.data.length > 0) {
       try {
         events.push(decodeEventFromToon(call.data));
       } catch {
@@ -466,9 +475,8 @@ describe('SwarmCoordinator (Story 6.2)', () => {
       vi.advanceTimersByTime(DEFAULT_TIMEOUT_MS + 1);
 
       // Assert: no settlement packets (empty data = settlement)
-      const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
-      );
+      const settlementCalls =
+        connector.sendPacketCalls.filter(isSettlementCall);
       expect(settlementCalls).toHaveLength(0);
     });
   });
@@ -533,9 +541,8 @@ describe('SwarmCoordinator (Story 6.2)', () => {
       expect(coordinator.getState()).toBe('settled');
 
       // Assert: settlement was made (at least one sendPacket call with empty data)
-      const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
-      );
+      const settlementCalls =
+        connector.sendPacketCalls.filter(isSettlementCall);
       expect(settlementCalls).toHaveLength(1);
     });
   });
@@ -589,9 +596,8 @@ describe('SwarmCoordinator (Story 6.2)', () => {
       await coordinator.selectWinner(createMockSelectionEvent());
 
       // Assert: exactly 1 settlement (winner only, not 3)
-      const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => call.data.length === 0
-      );
+      const settlementCalls =
+        connector.sendPacketCalls.filter(isSettlementCall);
       expect(settlementCalls).toHaveLength(1);
     });
 

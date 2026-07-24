@@ -79,7 +79,7 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
+          data: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -91,6 +91,18 @@ function createMockConnector(
       ) => HandlePacketResponse | Promise<HandlePacketResponse>
     ): void {},
   };
+}
+
+/**
+ * Narrows a captured sendPacket call's optional `data` field, throwing if
+ * the connector call under test didn't include one (the assertion below
+ * would otherwise fail with a less specific error).
+ */
+function requireCallData(call: SendPacketParams): Uint8Array {
+  if (call.data === undefined) {
+    throw new Error('expected sendPacket call to include data');
+  }
+  return call.data;
 }
 
 /**
@@ -265,7 +277,7 @@ describe('publishFeedback() unit tests (Story 5.3, Task 1.1/1.5)', () => {
     // The amount is computed internally by publishEvent() as
     // basePricePerByte * toonData.length. Verify by computing from the
     // TOON-encoded data actually sent to the connector.
-    const toonDataLength = BigInt(call.data.length);
+    const toonDataLength = BigInt(requireCallData(call).length);
     expect(toonDataLength).toBeGreaterThan(0n);
     expect(call.amount).toBe(basePricePerByte * toonDataLength);
 
@@ -393,7 +405,7 @@ describe('publishResult() unit tests (Story 5.3, Task 1.2/1.6)', () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
     const call = connector.sendPacketCalls[0]!;
     // Verify by computing from the TOON-encoded data actually sent to the connector.
-    const toonDataLength = BigInt(call.data.length);
+    const toonDataLength = BigInt(requireCallData(call).length);
     expect(toonDataLength).toBeGreaterThan(0n);
     expect(call.amount).toBe(basePricePerByte * toonDataLength);
 
@@ -469,8 +481,9 @@ describe('settleCompute() unit tests (Story 5.3, Task 1.3/1.7-1.11)', () => {
     expect(String(call.amount)).toBe('3000000');
 
     // Assert -- data is empty (pure value transfer, not a relay write)
-    expect(call.data).toBeInstanceOf(Uint8Array);
-    expect(call.data.length).toBe(0);
+    const callData = requireCallData(call);
+    expect(callData).toBeInstanceOf(Uint8Array);
+    expect(callData.length).toBe(0);
 
     // Cleanup
     await node.stop();
