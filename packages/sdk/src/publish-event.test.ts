@@ -140,8 +140,9 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     expect(call.destination).toBe('g.peer.address');
 
     // Assert -- data is a Uint8Array (TOON-encoded then base64'd then decoded back by DirectRuntimeClient)
-    expect(call.data).toBeInstanceOf(Uint8Array);
-    expect(requireCallData(call).length).toBeGreaterThan(0);
+    const callData = requireCallData(call);
+    expect(callData).toBeInstanceOf(Uint8Array);
+    expect(callData.length).toBeGreaterThan(0);
 
     // Assert -- amount is a bigint computed from TOON length
     expect(typeof call.amount).toBe('bigint');
