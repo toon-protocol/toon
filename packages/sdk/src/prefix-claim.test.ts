@@ -33,6 +33,13 @@ vi.mock('nostr-tools');
 /** Fixed secret key for deterministic identity derivation (32 bytes) */
 const TEST_SECRET_KEY = Uint8Array.from(Buffer.from('a'.repeat(64), 'hex'));
 
+function requireCallData(call: SendPacketParams): Uint8Array {
+  if (call.data === undefined) {
+    throw new Error('expected sendPacket call to include data');
+  }
+  return call.data;
+}
+
 /**
  * Creates a mock connector that records sendPacket calls.
  */
@@ -49,7 +56,7 @@ function createMockConnector(
       return (
         sendPacketResult ?? {
           type: 'fulfill',
-          fulfillment: Buffer.from('test-fulfillment'),
+          data: Buffer.from('test-fulfillment'),
         }
       );
     },
@@ -80,7 +87,7 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
+      data: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -118,7 +125,7 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
+      data: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -136,11 +143,12 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
     const call = connector.sendPacketCalls[0]!;
     expect(call.data).toBeInstanceOf(Uint8Array);
-    expect(call.data.length).toBeGreaterThan(0);
+    const callData = requireCallData(call);
+    expect(callData.length).toBeGreaterThan(0);
 
     // Decode the TOON data to verify it's a prefix claim event
     const { decodeEventFromToon } = await import('@toon-protocol/core/toon');
-    const decoded = decodeEventFromToon(call.data);
+    const decoded = decodeEventFromToon(callData);
     expect(decoded.kind).toBe(10034);
 
     // Verify the content contains the requested prefix
@@ -159,7 +167,7 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
+      data: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
@@ -192,7 +200,7 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // Arrange
     const connector = createMockConnector({
       type: 'fulfill',
-      fulfillment: Buffer.from('test-fulfillment'),
+      data: Buffer.from('test-fulfillment'),
     });
     const node = createNode({
       secretKey: TEST_SECRET_KEY,
