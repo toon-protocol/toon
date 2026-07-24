@@ -348,7 +348,7 @@ describe('createPrefixClaimHandler() (Story 7.6, AC #8, #9, #10, #12)', () => {
       accept(metadata?: Record<string, unknown>): HandlePacketAcceptResponse {
         return {
           accept: true,
-          fulfillment: 'test-fulfillment',
+          data: 'test-fulfillment',
           ...(metadata ? { metadata } : {}),
         };
       },
