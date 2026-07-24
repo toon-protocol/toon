@@ -22,7 +22,10 @@ import type { NostrEvent } from 'nostr-tools/pure';
 
 // GREEN phase: AttestationBootstrap implementation exists
 import { AttestationBootstrap } from './AttestationBootstrap.js';
-import type { VerificationResult } from './AttestationVerifier.js';
+import type { AttestationBootstrapConfig } from './AttestationBootstrap.js';
+
+// Mirrors AttestationBootstrapConfig['verifier'] so the mock can't drift from the real DI interface.
+type MockVerifierConfig = AttestationBootstrapConfig['verifier'];
 
 // ============================================================================
 // Factories
@@ -94,20 +97,22 @@ function createPeerInfoEvent(relayPubkey: string): NostrEvent {
 function createMockVerifier(
   state: 'valid' | 'invalid' | 'missing' | 'expired'
 ): {
-  verify: Mock<
-    [attestation: NostrEvent],
-    boolean | VerificationResult | Promise<boolean | VerificationResult>
+  verify: Mock<Parameters<MockVerifierConfig['verify']>, ReturnType<MockVerifierConfig['verify']>>;
+  getState: Mock<
+    Parameters<NonNullable<MockVerifierConfig['getState']>>,
+    ReturnType<NonNullable<MockVerifierConfig['getState']>>
   >;
-  getState: Mock<unknown[], unknown>;
 } {
   return {
     verify: vi
-      .fn<
-        [attestation: NostrEvent],
-        boolean | VerificationResult | Promise<boolean | VerificationResult>
-      >()
+      .fn<Parameters<MockVerifierConfig['verify']>, ReturnType<MockVerifierConfig['verify']>>()
       .mockResolvedValue(state === 'valid'),
-    getState: vi.fn<unknown[], unknown>().mockReturnValue(state),
+    getState: vi
+      .fn<
+        Parameters<NonNullable<MockVerifierConfig['getState']>>,
+        ReturnType<NonNullable<MockVerifierConfig['getState']>>
+      >()
+      .mockReturnValue(state),
   };
 }
 

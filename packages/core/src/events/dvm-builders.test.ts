@@ -39,6 +39,15 @@ import {
   createJobFeedbackParams,
 } from './dvm-test-helpers.js';
 
+/**
+ * Casts a params object to a mutable record so tests can delete/overwrite
+ * required fields to simulate malformed runtime input (bypassing the
+ * builder params' compile-time guarantees on purpose).
+ */
+function asMutableRecord<T extends object>(value: T): Record<string, unknown> {
+  return value as unknown as Record<string, unknown>;
+}
+
 describe('DVM builders', () => {
   // ==========================================================================
   // Tests: buildJobRequestEvent (AC #1)
@@ -283,7 +292,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as unknown as Record<string, unknown>)['content'];
+        delete asMutableRecord(params)['content'];
 
         // Act
         const event = buildJobRequestEvent(params, secretKey);
@@ -301,7 +310,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as unknown as Record<string, unknown>)['input'];
+        delete asMutableRecord(params)['input'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -311,7 +320,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as unknown as Record<string, unknown>)['bid'];
+        delete asMutableRecord(params)['bid'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -330,7 +339,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobRequestParams();
-        delete (params as unknown as Record<string, unknown>)['output'];
+        delete asMutableRecord(params)['output'];
 
         // Act & Assert
         expect(() => buildJobRequestEvent(params, secretKey)).toThrow();
@@ -491,7 +500,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobResultParams();
-        delete (params as unknown as Record<string, unknown>)['requestEventId'];
+        delete asMutableRecord(params)['requestEventId'];
 
         // Act & Assert
         expect(() => buildJobResultEvent(params, secretKey)).toThrow();
@@ -519,7 +528,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobResultParams();
-        delete (params as unknown as Record<string, unknown>)['amount'];
+        delete asMutableRecord(params)['amount'];
 
         // Act & Assert
         expect(() => buildJobResultEvent(params, secretKey)).toThrow();
@@ -714,7 +723,7 @@ describe('DVM builders', () => {
         // Arrange
         const secretKey = FIXED_BUILDER_SECRET_KEY;
         const params = createJobFeedbackParams();
-        delete (params as unknown as Record<string, unknown>)['content'];
+        delete asMutableRecord(params)['content'];
 
         // Act
         const event = buildJobFeedbackEvent(params, secretKey);
@@ -1069,7 +1078,7 @@ describe('DVM builders', () => {
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
       // Force content to undefined to trigger non-string validation
-      delete (params as unknown as Record<string, unknown>)['content'];
+      delete asMutableRecord(params)['content'];
 
       // Act & Assert
       try {
@@ -1091,7 +1100,7 @@ describe('DVM builders', () => {
       // Arrange: force bid to a numeric value (TypeScript won't prevent this at runtime)
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobRequestParams();
-      (params as unknown as Record<string, unknown>)['bid'] = 1000000;
+      asMutableRecord(params)['bid'] = 1000000;
 
       // Act & Assert
       try {
@@ -1113,7 +1122,7 @@ describe('DVM builders', () => {
       // Arrange: force amount to a numeric value
       const secretKey = FIXED_BUILDER_SECRET_KEY;
       const params = createJobResultParams();
-      (params as unknown as Record<string, unknown>)['amount'] = 500000;
+      asMutableRecord(params)['amount'] = 500000;
 
       // Act & Assert
       try {
