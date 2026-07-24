@@ -45,6 +45,7 @@ function loadSdkE2eEnv(): void {
       const match = line.match(/^([A-Za-z0-9_]+)=(.*)$/);
       if (match) {
         const [, key, value] = match;
+        if (!key) continue;
         if (process.env[key] === undefined || process.env[key] === '') {
           process.env[key] = value;
         }

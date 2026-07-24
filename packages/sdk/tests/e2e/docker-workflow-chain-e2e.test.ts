@@ -43,6 +43,7 @@ import {
   buildWorkflowDefinitionEvent,
   parseWorkflowDefinition,
   WORKFLOW_CHAIN_KIND,
+  type EmbeddableConnectorLike,
 } from '@toon-protocol/core';
 
 import {
@@ -121,7 +122,10 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
 
     node = createNode({
       secretKey: nodeSecretKey,
-      connector,
+      // connector.registerPeer's authToken is required on ConnectorNode
+      // (@toon-protocol/connector) but optional on EmbeddableConnectorLike
+      // (@toon-protocol/core); see create-node.ts's own bridge for the same variance.
+      connector: connector as unknown as EmbeddableConnectorLike,
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,
@@ -141,7 +145,6 @@ describe('Docker Workflow Chain E2E (Story 6.1 — T-6.1-16)', () => {
     // Register peer1
     await connector.registerPeer({
       id: 'peer1',
-      evmAddress: PEER1_EVM_ADDRESS,
       url: PEER1_BTP_URL,
       authToken: '',
       routes: [{ prefix: 'g.toon.peer1' }, { prefix: 'g.toon.peer2' }],
