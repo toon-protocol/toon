@@ -85,6 +85,10 @@ class InMemoryIlpRouter {
       };
     }
 
+    if (params.data === undefined) {
+      throw new Error('expected sendPacket call to include data');
+    }
+
     // Convert SendPacketParams -> HandlePacketRequest
     const request: HandlePacketRequest = {
       amount: params.amount.toString(),
@@ -98,8 +102,8 @@ class InMemoryIlpRouter {
     if (response.accept) {
       return {
         type: 'fulfill',
-        fulfillment: response.fulfillment
-          ? Uint8Array.from(Buffer.from(response.fulfillment, 'base64'))
+        data: response.data
+          ? Uint8Array.from(Buffer.from(response.data, 'base64'))
           : new Uint8Array(32),
       };
     }

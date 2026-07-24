@@ -574,8 +574,8 @@ describe('createNode() Composition with Lifecycle', () => {
       expect(response.code).toBe('F04');
       // Metadata should include required vs received
       expect(response.metadata).toBeDefined();
-      expect(response.metadata?.required).toBe(requiredAmount.toString());
-      expect(response.metadata?.received).toBe(underpaidAmount.toString());
+      expect(response.metadata?.['required']).toBe(requiredAmount.toString());
+      expect(response.metadata?.['received']).toBe(underpaidAmount.toString());
     }
     // Handler should NOT have been invoked
     expect(handlerFn).not.toHaveBeenCalled();

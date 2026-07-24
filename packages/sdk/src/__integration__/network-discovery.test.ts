@@ -349,14 +349,6 @@ describe('Network Discovery and Bootstrap Integration', () => {
         preferredTokens: { [CHAIN_ID]: TOKEN_ADDRESS },
         tokenNetworks: { [CHAIN_ID]: TOKEN_NETWORK_ADDRESS },
       },
-      settlementNegotiationConfig: {
-        ownSupportedChains: [CHAIN_ID],
-        ownSettlementAddresses: { [CHAIN_ID]: TEST_ACCOUNT_ADDRESS },
-        ownPreferredTokens: { [CHAIN_ID]: TOKEN_ADDRESS },
-        ownTokenNetworks: { [CHAIN_ID]: TOKEN_NETWORK_ADDRESS },
-        initialDeposit: '100000',
-        settlementTimeout: 86400,
-      },
     };
 
     const node = createNode(config);

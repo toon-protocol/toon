@@ -87,6 +87,18 @@ function createMockConnector(
   };
 }
 
+/**
+ * Narrows a captured sendPacket call's optional `data` field, throwing if
+ * the connector call under test didn't include one (the assertion below
+ * would otherwise fail with a less specific error).
+ */
+function requireCallData(call: SendPacketParams): Uint8Array {
+  if (call.data === undefined) {
+    throw new Error('expected sendPacket call to include data');
+  }
+  return call.data;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -128,8 +140,9 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     expect(call.destination).toBe('g.peer.address');
 
     // Assert -- data is a Uint8Array (TOON-encoded then base64'd then decoded back by DirectRuntimeClient)
-    expect(call.data).toBeInstanceOf(Uint8Array);
-    expect(call.data.length).toBeGreaterThan(0);
+    const callData = requireCallData(call);
+    expect(callData).toBeInstanceOf(Uint8Array);
+    expect(callData.length).toBeGreaterThan(0);
 
     // Assert -- amount is a bigint computed from TOON length
     expect(typeof call.amount).toBe('bigint');
@@ -661,7 +674,9 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
     const call = connector.sendPacketCalls[0]!;
     const expectedToon = encodeEventToToon(event);
-    expect(Buffer.from(call.data).equals(Buffer.from(expectedToon))).toBe(true);
+    expect(
+      Buffer.from(requireCallData(call)).equals(Buffer.from(expectedToon))
+    ).toBe(true);
 
     // Assert -- amount is computed from the custom encoder's output length
     expect(call.amount).toBe(basePricePerByte * BigInt(expectedToon.length));
@@ -805,10 +820,11 @@ describe('publishEvent() unit tests (Story 2.6)', () => {
     // Assert -- the data bytes sent to the connector match the TOON encoding
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion: sendPacket was called above
     const call = connector.sendPacketCalls[0]!;
-    expect(Buffer.from(call.data).equals(Buffer.from(expectedToon))).toBe(true);
+    const callData = requireCallData(call);
+    expect(Buffer.from(callData).equals(Buffer.from(expectedToon))).toBe(true);
 
     // Assert -- the data can be decoded back to the original event
-    const decoded = decodeEventFromToon(call.data);
+    const decoded = decodeEventFromToon(callData);
     expect(decoded.id).toBe(event.id);
     expect(decoded.content).toBe('roundtrip test content');
     expect(decoded.kind).toBe(event.kind);
