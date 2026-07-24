@@ -33,6 +33,11 @@ vi.mock('nostr-tools');
 /** Fixed secret key for deterministic identity derivation (32 bytes) */
 const TEST_SECRET_KEY = Uint8Array.from(Buffer.from('a'.repeat(64), 'hex'));
 
+/**
+ * Narrows a captured sendPacket call's optional `data` field, throwing if
+ * the connector call under test didn't include one (the assertion below
+ * would otherwise fail with a less specific error).
+ */
 function requireCallData(call: SendPacketParams): Uint8Array {
   if (call.data === undefined) {
     throw new Error('expected sendPacket call to include data');
@@ -142,8 +147,8 @@ describe('claimPrefix() SDK convenience method (Story 7.6, AC #7, #8)', () => {
     // Assert -- the data sent contains a Kind 10034 event
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- test assertion
     const call = connector.sendPacketCalls[0]!;
-    expect(call.data).toBeInstanceOf(Uint8Array);
     const callData = requireCallData(call);
+    expect(callData).toBeInstanceOf(Uint8Array);
     expect(callData.length).toBeGreaterThan(0);
 
     // Decode the TOON data to verify it's a prefix claim event
