@@ -48,7 +48,6 @@ import {
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
 import type { ConnectorConfig } from '@toon-protocol/connector';
 import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
-import type { EmbeddableConnectorLike } from '@toon-protocol/core';
 import {
   createWalletClient,
   http,
@@ -85,6 +84,7 @@ import {
   waitForPeer2Bootstrap,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -176,10 +176,7 @@ describe('Docker SDK Publish Event E2E', () => {
 
     node = createNode({
       secretKey: nostrSecretKey,
-      // connector.registerPeer's authToken is required on ConnectorNode
-      // (@toon-protocol/connector) but optional on EmbeddableConnectorLike
-      // (@toon-protocol/core); see create-node.ts's own bridge for the same variance.
-      connector: connector as unknown as EmbeddableConnectorLike,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,

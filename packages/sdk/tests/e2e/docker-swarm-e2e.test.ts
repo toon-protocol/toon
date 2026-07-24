@@ -43,7 +43,6 @@ import {
   buildSwarmRequestEvent,
   parseSwarmRequest,
   buildJobResultEvent,
-  type EmbeddableConnectorLike,
 } from '@toon-protocol/core';
 
 import {
@@ -61,6 +60,7 @@ import {
   waitForPeer2Bootstrap,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -127,10 +127,7 @@ describe('Docker Swarm Competitive Execution E2E (Story 6.2 — T-6.2-14)', () =
 
     node = createNode({
       secretKey: nodeSecretKey,
-      // connector.registerPeer's authToken is required on ConnectorNode
-      // (@toon-protocol/connector) but optional on EmbeddableConnectorLike
-      // (@toon-protocol/core); see create-node.ts's own bridge for the same variance.
-      connector: connector as unknown as EmbeddableConnectorLike,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,

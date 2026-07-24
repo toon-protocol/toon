@@ -47,7 +47,6 @@ import {
   TEXT_TO_SPEECH_KIND,
   buildJobRequestEvent,
   parseJobRequest,
-  type EmbeddableConnectorLike,
 } from '@toon-protocol/core';
 
 import {
@@ -64,6 +63,7 @@ import {
   waitForEventOnRelay,
   checkAllServicesReady,
   skipIfNotReady,
+  asEmbeddableConnector,
 } from './helpers/docker-e2e-setup.js';
 
 // ---------------------------------------------------------------------------
@@ -212,10 +212,7 @@ describe('Docker DVM Job Submission E2E (Story 5.2)', () => {
 
     node = createNode({
       secretKey: nostrSecretKey,
-      // connector.registerPeer's authToken is required on ConnectorNode
-      // (@toon-protocol/connector) but optional on EmbeddableConnectorLike
-      // (@toon-protocol/core); see create-node.ts's own bridge for the same variance.
-      connector: connector as unknown as EmbeddableConnectorLike,
+      connector: asEmbeddableConnector(connector),
       ilpAddress: testIlpAddress,
       basePricePerByte: 10n,
       toonEncoder: encodeEventToToon,
