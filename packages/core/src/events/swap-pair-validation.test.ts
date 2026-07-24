@@ -94,7 +94,7 @@ describe('isValidSwapPair', () => {
 
   it('rejects when from is missing', () => {
     const bad = { ...validPair() } as unknown as Record<string, unknown>;
-    delete bad.from;
+    delete bad['from'];
     const result = isValidSwapPair(bad);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.field).toContain('from');
@@ -102,7 +102,7 @@ describe('isValidSwapPair', () => {
 
   it('rejects when to is missing', () => {
     const bad = { ...validPair() } as unknown as Record<string, unknown>;
-    delete bad.to;
+    delete bad['to'];
     const result = isValidSwapPair(bad);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.field).toContain('to');
@@ -404,7 +404,7 @@ describe('assertSwapPairForParse', () => {
 
   it('includes swapPairs[index] and field in the error message', () => {
     const bad = { ...validPair() } as unknown as Record<string, unknown>;
-    delete bad.to;
+    delete bad['to'];
     try {
       assertSwapPairForParse(bad, 7);
       expect.fail('should have thrown');
