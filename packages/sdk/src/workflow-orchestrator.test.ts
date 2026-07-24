@@ -209,6 +209,15 @@ function createMockEventStore() {
 }
 
 /**
+ * Settlement packets carry no relay data (pure value transfer); publish
+ * packets carry TOON-encoded event bytes. Distinguishes the two among
+ * captured sendPacket calls.
+ */
+function isSettlementCall(call: SendPacketParams): boolean {
+  return (call.data?.length ?? 0) === 0;
+}
+
+/**
  * Extracts TOON-decoded Nostr events from captured sendPacket calls.
  * Settlement packets have empty data; publish packets have TOON-encoded data.
  * Returns only the publish (non-empty data) packets, decoded to NostrEvent.
@@ -1485,9 +1494,8 @@ describe('WorkflowOrchestrator (Story 6.1)', () => {
       );
 
       // Assert: collect all settlement packets (empty data = settlement)
-      const settlementCalls = connector.sendPacketCalls.filter(
-        (call) => (call.data?.length ?? 0) === 0
-      );
+      const settlementCalls =
+        connector.sendPacketCalls.filter(isSettlementCall);
       // Each settlement should have been called (one per step)
       expect(settlementCalls).toHaveLength(2);
 
