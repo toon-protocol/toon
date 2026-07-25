@@ -69,6 +69,10 @@ export default tseslint.config(
       // program, so typed ESLint (projectService) would error parsing them.
       '.sandcastle/**',
       'packages/memvid-node/index.d.ts',
+      // Excluded from tsconfig.json (needs o1js/@toon-protocol/mina-zkapp/
+      // @noble/ciphers, none of which are repo deps) -- same reason typed
+      // ESLint (projectService) can't parse it either. See toon#141.
+      'packages/sdk/tests/e2e/docker-mina-settlement-e2e.test.ts',
     ],
   }
 );

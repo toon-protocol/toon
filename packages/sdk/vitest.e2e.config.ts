@@ -13,7 +13,6 @@ export default defineConfig({
         '../core/src/nip34/index.ts'
       ),
       '@toon-protocol/core': resolve(__dirname, '../core/src/index.ts'),
-      '@toon-protocol/relay': resolve(__dirname, '../relay/src/index.ts'),
       '@toon-protocol/sdk': resolve(__dirname, './src/index.ts'),
     },
   },

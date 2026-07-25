@@ -25,7 +25,7 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { createNode, type ServiceNode } from '@toon-protocol/sdk';
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
 import type { EmbeddableConnectorLike } from '@toon-protocol/core';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 import { createConnection } from 'node:net';
 
 import {

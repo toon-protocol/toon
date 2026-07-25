@@ -8,8 +8,20 @@ import type {
   ConnectorNodeLike,
   SendPacketParams,
   SendPacketResult,
-} from './direct-runtime-client.js';
+} from './direct-ilp-client.js';
 import { BootstrapError } from './BootstrapService.js';
+
+/**
+ * Narrows a captured sendPacket call's optional `data` field, throwing if
+ * the connector call under test didn't include one (the assertion below
+ * would otherwise fail with a less specific error).
+ */
+function requireCallData(call: SendPacketParams): Uint8Array {
+  if (call.data === undefined) {
+    throw new Error('expected sendPacket call to include data');
+  }
+  return call.data;
+}
 
 /** Helper: build a mock ConnectorNodeLike */
 function mockConnector(
@@ -67,7 +79,9 @@ describe('createDirectIlpClient', () => {
 
       const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
         .calls[0]![0] as SendPacketParams;
-      expect(Buffer.from(callArgs.data).toString()).toBe('hello world');
+      expect(Buffer.from(requireCallData(callArgs)).toString()).toBe(
+        'hello world'
+      );
     });
 
     it('should pass destination through unchanged', async () => {

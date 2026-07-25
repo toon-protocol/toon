@@ -21,7 +21,7 @@ import {
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import WebSocket from 'ws';
-import { decodeEventFromToon } from '@toon-protocol/relay';
+import { decodeEventFromToon } from '@toon-protocol/core';
 import type { ConnectorNode } from '@toon-protocol/connector';
 import type { EmbeddableConnectorLike } from '@toon-protocol/core';
 

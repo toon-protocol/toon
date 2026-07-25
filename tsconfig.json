@@ -22,6 +22,8 @@
     "node_modules",
     "dist",
     "coverage",
-    "archive"
-  ]
+    "archive",
+    "packages/sdk/tests/e2e/docker-mina-settlement-e2e.test.ts"
+  ],
+  "_comment_exclude": "docker-mina-settlement-e2e.test.ts needs o1js (171MB), the published @toon-protocol/mina-zkapp, and @noble/ciphers/chacha.js -- none are repo deps, this test never runs in the gate (opt-in docker e2e suite, separate vitest config), and the deps are too heavy to add just to satisfy typecheck. Scoped to this one file, not the whole docker e2e tree. See toon-protocol/toon#141."
 }
