@@ -31,9 +31,20 @@ export default defineConfig({
     poolOptions: {
       forks: { minForks: 1, maxForks: 4 },
     },
-    // Canonical test count: `pnpm test` at the repo root is the single source
-    // of truth for total test count. All workspace members with tests must be
-    // listed here so counts are consistent across pipeline steps.
+    // Whole-repo developer run: `pnpm test` here is the one command that
+    // covers every workspace member's unit tests AND the root-level
+    // .sandcastle guards in a single process, so it is the canonical total
+    // test count (2308 passed / 6 skipped). All workspace members with tests
+    // must stay matched by these globs so that count stays complete.
+    //
+    // It is NOT, however, the only run that matters, and CI does not execute
+    // it in full (toon#144). CI's blocking suite is `pnpm -r --parallel test`,
+    // which runs each package under its own config, where cross-package
+    // imports resolve through the built dist/ entry points rather than the
+    // `resolve.alias` source mappings above — a genuinely different signal
+    // that this config cannot replace. The two must not diverge in behaviour:
+    // .sandcastle/vitest-config-parity.test.ts is the blocking guard that
+    // holds them together, and CI runs it on every pull request.
     include: ['packages/*/src/**/*.test.ts', '.sandcastle/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/__integration__/**'],
     coverage: {
