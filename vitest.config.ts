@@ -13,6 +13,19 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Unit tests must be hermetic: disable the bundled genesis peer seed
+    // (packages/core/src/discovery/genesis-peers.json) so zero-known-peer
+    // fixtures stay zero-peer regardless of live seed content. See toon#79.
+    //
+    // This MUST stay in sync with packages/sdk/vitest.config.ts. It was
+    // missing here while the sdk config had it, so the root run bootstrapped
+    // nodes against the live devnet apex in the seed; BootstrapService then
+    // announced its own kind:10032 as a paid ILP PREPARE, adding an extra
+    // sendPacket to fixtures that assert on exactly one published event and
+    // adding intermediary hops to route-aware fee maths (toon#144).
+    env: {
+      TOON_GENESIS_PEERS: '[]',
+    },
     testTimeout: 120_000,
     pool: 'forks',
     poolOptions: {
