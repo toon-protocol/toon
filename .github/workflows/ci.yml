@@ -34,6 +34,28 @@ jobs:
           pnpm -r build
           wait "$lint_pid"
 
+      # Typecheck is a HARD gate at zero errors (toon-protocol/toon#144).
+      # #126-#142 cleared all 246 baseline errors but nothing in the gate
+      # checked the result, so a reintroduced error would have merged silently.
+      # `tsc --noEmit` exits non-zero on any error, so this step FAILS the
+      # build -- it is not advisory. It must run AFTER `pnpm -r build`: the
+      # root tsconfig resolves cross-package imports (@toon-protocol/core,
+      # @toon-protocol/settlement-digest) through each package's published
+      # `types` entry under dist/, so typechecking a clean checkout without
+      # dist/ produces ~90 phantom TS2307s.
+      #
+      # This lives as a step in the `build` job rather than a separate job
+      # deliberately: it mirrors how `lint` is wired (also a step here, also
+      # genuinely blocking), it reuses the install + build this job already
+      # paid for, and it keeps the run's summed runner-seconds inside the
+      # frozen .sandcastle/gate-baseline.json budget that the
+      # `gate-regression-guard` job enforces. That guard already lists
+      # `build` in its `needs:`, so this check is registered with the
+      # aggregator by construction -- a typecheck failure fails `build`,
+      # which skips `gate-regression-guard`, which fails the run.
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Gate correctness no-regression guard (lint ceiling)
         run: npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling
 
