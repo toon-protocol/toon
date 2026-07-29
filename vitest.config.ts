@@ -23,9 +23,6 @@ export default defineConfig({
     // announced its own kind:10032 as a paid ILP PREPARE, adding an extra
     // sendPacket to fixtures that assert on exactly one published event and
     // adding intermediary hops to route-aware fee maths (toon#144).
-    env: {
-      TOON_GENESIS_PEERS: '[]',
-    },
     testTimeout: 120_000,
     pool: 'forks',
     poolOptions: {
