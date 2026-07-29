@@ -66,8 +66,26 @@ jobs:
 
       # pnpm -r excludes the workspace root by default, so the root-level
       # .sandcastle/*.test.ts guard tests never run under `pnpm -r test`.
-      - name: Gate guard unit tests
-        run: npx vitest run .sandcastle/gate-guard.test.ts
+      #
+      # This is the one command in the gate that loads the ROOT
+      # vitest.config.ts, so it is also where the root config's own state is
+      # checked (toon-protocol/toon#144). `.sandcastle/vitest-config-parity.test.ts`
+      # asserts the root config applies every `test.env` var the per-package
+      # configs set; because it executes under the root config, its
+      # `process.env` IS that config's effective environment. A vitest failure
+      # exits non-zero, so this step BLOCKS -- it does not warn -- and the
+      # workflow triggers on `pull_request`, so the check runs before merge
+      # rather than after it.
+      #
+      # Deliberately a step in `build` rather than a new job, for the same
+      # reasons as the Typecheck step above: `gate-regression-guard` already
+      # lists `build` in its `needs:`, so this is registered with the
+      # aggregator by construction, and it reuses this job's install. Widened
+      # from the single gate-guard.test.ts file to the whole directory so new
+      # .sandcastle guards are picked up automatically; the added parity file
+      # costs ~0.1s.
+      - name: Gate guard unit tests (incl. root vitest config parity)
+        run: npx vitest run .sandcastle/
 
       - name: connector-contract-canary
         run: |
