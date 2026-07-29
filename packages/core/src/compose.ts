@@ -256,7 +256,7 @@ export interface ToonNode {
  * ```typescript
  * import { ConnectorNode } from '@toon-protocol/connector';
  * import { createToonNode } from '@toon-protocol/core/compose';
- * import { encodeEvent, decodeEvent } from '@toon-protocol/relay';
+ * import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core/toon';
  *
  * const connector = new ConnectorNode({ ... });
  *
@@ -265,8 +265,8 @@ export interface ToonNode {
  *   handlePacket: async (req) => { ... },
  *   secretKey: new Uint8Array(32),
  *   ilpInfo: { ilpAddress: 'g.example', ... },
- *   toonEncoder: encodeEvent,
- *   toonDecoder: decodeEvent,
+ *   toonEncoder: encodeEventToToon,
+ *   toonDecoder: decodeEventFromToon,
  * });
  *
  * // Attach event listeners before start

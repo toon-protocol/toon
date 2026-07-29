@@ -65,7 +65,9 @@
         "TS2345": 2,
         "TS2578": 1
       },
-      "note": "typecheck is a soft gate (known pre-existing debt, not wired into ci.yml as a blocking step) per toon#110 and the toon Part-of-#111 commit message. This 246 figure matches the ~246 recorded when that debt was carved out."
+      "note": "HISTORICAL. 246 was the soft-gate debt captured at capturedFromCommit, when typecheck was not wired into ci.yml as a blocking step (toon#110, the toon Part-of-#111 commit message). That debt is now fully paid: #126/#128/#131/#132/#134/#136/#139/#140/#142 ratcheted 246 -> 1, and toon#144 removed the last error and added a blocking `Typecheck` step to the ci.yml `build` job. The live ceiling is now 0 errors, enforced by `tsc --noEmit`'s own exit code rather than by a number in this file -- there is no typecheck guard subcommand in gate-guard-cli.ts because zero needs no threshold.",
+      "currentErrors": 0,
+      "enforcedInCi": true
     }
   },
   "sampleRuns": [
