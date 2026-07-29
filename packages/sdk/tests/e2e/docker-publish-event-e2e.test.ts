@@ -47,7 +47,7 @@ import {
 } from '@toon-protocol/sdk';
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
 import type { ConnectorConfig } from '@toon-protocol/connector';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 import {
   createWalletClient,
   http,

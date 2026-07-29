@@ -37,8 +37,8 @@ import type {
   HandlePacketResponse,
 } from '@toon-protocol/core';
 
-// --- Import from @toon-protocol/relay (exists, for TOON encoding) ---
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+// --- Import from @toon-protocol/core (exists, for TOON encoding) ---
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // Infrastructure Constants

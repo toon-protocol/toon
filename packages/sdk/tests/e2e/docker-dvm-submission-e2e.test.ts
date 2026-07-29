@@ -40,7 +40,7 @@ import {
   type HandlerContext,
 } from '@toon-protocol/sdk';
 import { ConnectorNode, createLogger } from '@toon-protocol/connector';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 import {
   TEXT_GENERATION_KIND,
   IMAGE_GENERATION_KIND,

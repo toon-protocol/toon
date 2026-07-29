@@ -40,7 +40,7 @@ import type {
 } from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // InMemoryIlpRouter -- shared routing fabric between mock connectors

@@ -42,8 +42,8 @@ import type {
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 
-// --- Import from @toon-protocol/relay (for TOON encoding) ---
-import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/relay';
+// --- Import from @toon-protocol/core (for TOON encoding) ---
+import { encodeEventToToon, decodeEventFromToon } from '@toon-protocol/core';
 
 // ---------------------------------------------------------------------------
 // Mock Embedded Connector
