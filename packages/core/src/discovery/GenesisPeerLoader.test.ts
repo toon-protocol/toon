@@ -121,6 +121,28 @@ describe('GenesisPeerLoader', () => {
     // Guard: the seed that ships in the published package must be usable.
     // core 2.0.0 shipped a seed pointing at a rotated/dead devnet identity
     // (and 1.6.0 shipped an empty one) with no test to catch either (toon#56).
+    //
+    // These three assert on the *bundled* genesis-peers.json, so they must
+    // read it directly rather than whatever TOON_GENESIS_PEERS happens to be
+    // in the ambient environment. Test runners set that override to `[]` to
+    // keep zero-peer fixtures hermetic (toon#144), and a developer may export
+    // it for a private network; either would otherwise turn this guard into a
+    // false pass/fail about the shipped file. `vi.stubEnv` cannot unset a
+    // variable in vitest 1.x, so save/delete/restore by hand.
+    let savedOverride: string | undefined;
+
+    beforeEach(() => {
+      savedOverride = process.env['TOON_GENESIS_PEERS'];
+      delete process.env['TOON_GENESIS_PEERS'];
+    });
+
+    afterEach(() => {
+      if (savedOverride === undefined) {
+        delete process.env['TOON_GENESIS_PEERS'];
+      } else {
+        process.env['TOON_GENESIS_PEERS'] = savedOverride;
+      }
+    });
 
     it('is non-empty', () => {
       expect(GenesisPeerLoader.loadGenesisPeers().length).toBeGreaterThan(0);
