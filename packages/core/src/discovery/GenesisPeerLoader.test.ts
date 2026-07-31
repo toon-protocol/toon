@@ -163,7 +163,7 @@ describe('GenesisPeerLoader', () => {
       const peers = GenesisPeerLoader.loadGenesisPeers();
       expect(peers).toContainEqual({
         pubkey:
-          '2813187eb66741f9509de2055161f328a0f04e01e1fc20188610b8dbd0591ea5',
+          '3f12da6d0cf10c91094894b88fc520757fc2860a1a5efb6664d3340ff97cfe40',
         relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
         ilpAddress: 'g.proxy',
         btpEndpoint: 'wss://proxy.devnet.toonprotocol.dev:443',
