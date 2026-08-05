@@ -23,7 +23,9 @@
     "averageTotalRunDurationSeconds": 106.6,
     "averageTotalRunDurationSecondsNote": "INFORMATIONAL, NOT GATED (toon#151). max(job completed_at) - min(job started_at). All five recaptured runs were scheduled onto free runners (7.8s average total queue), so the span happens to equal the longest job here — that coincidence is exactly why the previous 112s span baseline looked sound and then false-FAILed the moment the org's runner pool was saturated (toon#150 measured a 402.0s span for 147.0s of compute). The guard prints this number for context and never compares against it.",
     "averageQueueSecondsPerRun": 7.8,
-    "sampleSize": 5
+    "sampleSize": 5,
+    "regressionTolerance": 0.2,
+    "regressionToleranceRationale": "toon#153. The 50% band inherited from the retired span metric (toon#151) was sized for a queue-inflated quantity that could swing tens of seconds run-to-run; averageLongestJobDurationSeconds is a job duration and is far steadier. The 5 sampleRuns' longestJobSeconds (104, 100, 108, 112, 109) deviate at most 6.2% from the 106.6s mean (the 100s low outlier). 20% is roughly 3x that observed spread -- enough headroom that no sampleRun would ever false-FAIL -- while still catching a genuine 40% compute regression (106.6s -> 149.2s exceeds the 127.9s allowance)."
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
@@ -31,6 +33,8 @@
       "unit": "raw job-seconds summed across both gated ci.yml jobs (build + Devbox Environment Validation), NOT GitHub-billed minutes",
       "averagePerRunSeconds": 154.6,
       "recapturedNote": "toon#151 re-measured this against the current job set on 2026-08-05 and got 154.6 again (per-run: 158, 149, 153, 156, 157), so the figure is unchanged. Summed job-seconds is execution time only and never included queue time, which is why this metric passed throughout the toon#150 incident while the span-based speed metric failed.",
+      "regressionTolerance": 0.15,
+      "regressionToleranceRationale": "toon#153. The 5 sampleRuns' sumRunnerSeconds (158, 149, 153, 156, 157) deviate at most 3.6% from the 154.6s mean (the 149s low outlier) -- tighter than gateSpeed's spread, so this figure gets a tighter band than gateSpeed.regressionTolerance. 15% is roughly 4x that observed spread, comfortably covering the top observed sample (158s, +2.2%) while still catching a genuine 40% compute regression (154.6s -> 216.4s exceeds the 177.8s allowance).",
       "billedMinutes": 0,
       "billedMinutesNote": "Public repo — GitHub-hosted Actions minutes are free; the Actions API always reports billable.UBUNTU.total_ms=0 for this repo regardless of actual runner time."
     },

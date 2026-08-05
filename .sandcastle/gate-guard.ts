@@ -30,6 +30,13 @@ export interface GateBaseline {
       maxWarningsCeiling: number;
     };
   };
+  // The individual runs the averages above were computed from (toon#151);
+  // used by tests to pin behaviour at the top of observed normal variance
+  // without hand-copying numbers that could drift from gate-baseline.json.
+  sampleRuns?: ReadonlyArray<{
+    longestJobSeconds: number;
+    sumRunnerSeconds: number;
+  }>;
 }
 
 export interface GuardResult {
@@ -37,14 +44,36 @@ export interface GuardResult {
   reason: string;
 }
 
-// Single-run job-second measurements are noisy versus the 5-run baseline
-// average; a same-magnitude single run can legitimately land 20-40% above the
-// mean without any real regression. 50% keeps the guard from false-FAILing on
-// that noise while still catching an actual regression. toon#151 deliberately
-// did NOT touch this number: the false FAIL it fixed came from measuring the
+// 50% was sized for the span-era gateSpeed metric, which absorbed runner
+// queue depth and could legitimately swing tens of seconds run-to-run (the
+// toon#150 incident: 402.0s measured against 147.0s of actual compute).
+// toon#151 replaced that metric with a job duration but deliberately left
+// this number untouched: the false FAIL it fixed came from measuring the
 // wrong quantity, and widening a tolerance until it stops firing would have
-// traded a false FAIL for a false PASS.
+// traded a false FAIL for a false PASS. It remains the right band for
+// dockerImageSize, an unrelated and still-unmeasured quantity with no
+// sample spread yet to ratchet against.
 export const DEFAULT_REGRESSION_TOLERANCE = 0.5;
+
+// toon#153: gateSpeed's averageLongestJobDurationSeconds is a job duration,
+// not a queue-inflated span, so it is far less noisy than the metric 50% was
+// sized for. The five gate-baseline.json sampleRuns' longestJobSeconds (104,
+// 100, 108, 112, 109) deviate at most 6.2% from the 106.6s mean. 20% is
+// roughly 3x that observed spread -- enough headroom that none of the
+// sample runs would ever false-FAIL -- while still catching a genuine 40%
+// compute regression (106.6s -> 149.2s exceeds the 127.9s allowance). See
+// gate-baseline.json's gateSpeed.regressionToleranceRationale for the full
+// derivation.
+export const SPEED_REGRESSION_TOLERANCE = 0.2;
+
+// toon#153: the five sampleRuns' sumRunnerSeconds (158, 149, 153, 156, 157)
+// deviate at most 3.6% from the 154.6s mean -- tighter than the longest-job
+// spread above, so this figure gets a tighter band. 15% is roughly 4x that
+// observed spread, comfortably covering the top observed sample (158s,
+// +2.2%) while still catching a 40% compute regression (154.6s -> 216.4s
+// exceeds the 177.8s allowance). See gate-baseline.json's
+// gatePerformance.runnerMinutes.regressionToleranceRationale.
+export const PERFORMANCE_REGRESSION_TOLERANCE = 0.15;
 
 const MAX_WARNINGS_PATTERN = /--max-warnings[= ](\d+)/;
 
@@ -205,7 +234,7 @@ export function checkMeasurementCoverage(measuredJobCount: number): GuardResult 
 export function checkSpeedRegression(
   actualLongestJobSeconds: number,
   baseline: GateBaseline,
-  tolerance: number = DEFAULT_REGRESSION_TOLERANCE,
+  tolerance: number = SPEED_REGRESSION_TOLERANCE,
 ): GuardResult {
   const baselineSeconds = baseline.gateSpeed.averageLongestJobDurationSeconds;
 
@@ -237,7 +266,7 @@ export function checkSpeedRegression(
 export function checkPerformanceRegression(
   actualSumRunnerSeconds: number,
   baseline: GateBaseline,
-  tolerance: number = DEFAULT_REGRESSION_TOLERANCE,
+  tolerance: number = PERFORMANCE_REGRESSION_TOLERANCE,
 ): GuardResult {
   const baselineSeconds = baseline.gatePerformance.runnerMinutes.averagePerRunSeconds;
   const allowedSeconds = baselineSeconds * (1 + tolerance);
