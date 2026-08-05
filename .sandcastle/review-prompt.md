@@ -47,7 +47,7 @@ Review the code changes on branch `{{BRANCH}}` and improve code clarity, consist
 If you find improvements to make:
 
 1. Make the changes directly on this branch
-2. Run toon's gate to ensure nothing is broken — `eslint . --max-warnings 940`, `pnpm run typecheck`, `vitest run`, and `pnpm -r run build`. lint/test/build must pass; typecheck has known pre-existing debt, so only ensure you introduce no new type errors.
+2. Run toon's gate to ensure nothing is broken — `eslint . --max-warnings 940`, `pnpm -r run build` then `pnpm run typecheck`, and `vitest run`. lint, build, and test must pass cleanly; typecheck is a hard gate at zero errors, blocking in CI (toon#144), and must also pass cleanly — remember to build before typechecking, since cross-package imports resolve through each package's built `dist/` and a clean checkout without `dist/` produces ~90 phantom TS2307 errors.
 3. Commit describing the refinements
 
 If the code is already clean and well-structured, do nothing.
@@ -56,4 +56,13 @@ Once complete, output <promise>COMPLETE</promise>.
 
 ## Context budget
 
-If you approach ~60% of your context window, STOP: write a structured handoff note (current state + remaining steps) to `.sandcastle/logs/handoff-<task-id>.md` and end your turn so a fresh agent continues. Do not push past ~60% — small, resumable units beat one degraded run.
+Operate as if your context is capped at **~200k tokens**, whatever your model's actual window
+is (org policy: toon-meta's `CLAUDE.md` → *Context budget policy* — the cap is absolute, not a
+percentage of the window). Treat ~200k as a hard ceiling, not a target.
+
+Start preparing a handoff at roughly **120k** tokens of context, and hand off no later than
+roughly **160k** — never run to the ceiling. Handing off means: write a structured handoff note
+(what you reviewed, what you changed, what is left to check, and exact file/line pointers) to
+`.sandcastle/logs/handoff-<task-id>.md`, **commit it on this branch** (use `git add -f` —
+`.sandcastle/.gitignore` ignores `logs/`, and the sandbox is destroyed when the run ends, so an
+uncommitted note is lost), and end your turn so a fresh agent continues.
