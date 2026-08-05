@@ -1,5 +1,12 @@
 # @toon-protocol/sdk
 
+## 3.1.5
+
+### Patch Changes
+
+- Updated dependencies [dcb55ad]
+  - @toon-protocol/core@3.2.0
+
 ## 3.1.4
 
 ### Patch Changes
