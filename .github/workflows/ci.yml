@@ -139,14 +139,25 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
-      # Reads THIS run's own build + devbox-validate job timings (not a
+      # Reads THIS ATTEMPT's own build + devbox-validate job timings (not a
       # recomputed/live threshold) and compares them against the frozen
       # .sandcastle/gate-baseline.json averages, so the same commit always
       # earns the same verdict.
-      - name: Fetch this run's job timings
+      #
+      # toon#151: the attempt is addressed explicitly (`/attempts/<n>/jobs`
+      # plus a run_attempt filter in the CLI) rather than relying on the bare
+      # `/jobs` endpoint's default of "latest attempt". Note that "Re-run
+      # failed jobs" carries the untouched jobs' ORIGINAL timings into the new
+      # attempt -- correctly, since they did not re-run. Only "Re-run all
+      # jobs" produces fresh measurements.
+      - name: Fetch this attempt's job timings
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" > /tmp/gate-guard-jobs.json
+        run: gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs?per_page=100" > /tmp/gate-guard-jobs.json
 
       - name: Gate speed/performance no-regression guard
+        env:
+          # This job measures the run's WORK, not itself.
+          GATE_GUARD_SELF_JOB_NAME: Gate speed/performance no-regression guard
+          GATE_GUARD_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: npx tsx .sandcastle/gate-guard-cli.ts speed-performance /tmp/gate-guard-jobs.json

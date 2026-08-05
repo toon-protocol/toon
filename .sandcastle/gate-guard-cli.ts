@@ -5,10 +5,16 @@
 //   lint-ceiling                  - fails if package.json's `lint` script's
 //                                    --max-warnings ceiling exceeds the frozen
 //                                    baseline (the ceiling must never silently rise).
-//   speed-performance <jobsJson>  - fails if this run's wall-clock or summed
+//   speed-performance <jobsJson>  - fails if this run's longest job or summed
 //                                    runner-seconds regress vs the frozen baseline.
 //                                    <jobsJson> is the path to a file containing
-//                                    the `gh api .../actions/runs/<id>/jobs` response.
+//                                    the `gh api .../actions/runs/<id>/attempts/<n>/jobs`
+//                                    response. Both gated figures are per-job
+//                                    execution time, so neither can be inflated by
+//                                    runner queue depth (toon#151).
+//                                    Env: GATE_GUARD_SELF_JOB_NAME (job to exclude,
+//                                    i.e. the guard's own), GATE_GUARD_RUN_ATTEMPT
+//                                    (only measure jobs from this attempt).
 //   image-size <bytes>            - fails if the built agent image exceeds the
 //                                    frozen baseline size. No-ops until #116/#120's
 //                                    placeholder dockerImageSize.bytes is filled in.
@@ -23,9 +29,11 @@ import { fileURLToPath } from 'node:url';
 import {
   checkImageSizeRegression,
   checkLintCeiling,
+  checkMeasurementCoverage,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
+  selectMeasurableJobs,
   type CiJobTiming,
   type GateBaseline,
   type GuardResult,
@@ -65,14 +73,12 @@ interface GhJobTiming {
   name: string;
   started_at: string | null;
   completed_at: string | null;
+  created_at?: string;
+  run_attempt?: number;
 }
 
 interface GhJobsResponse {
   jobs: GhJobTiming[];
-}
-
-function hasCompletedTimings(job: GhJobTiming): job is CiJobTiming {
-  return job.started_at !== null && job.completed_at !== null;
 }
 
 function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
@@ -82,17 +88,44 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
   }
 
   const parsed = JSON.parse(readFileSync(jobsJsonPath, 'utf8')) as GhJobsResponse;
-  const jobs = parsed.jobs.filter(hasCompletedTimings);
+
+  // The guard's own job is still in progress while it reads the API, so it is
+  // dropped by the completed-timings filter anyway -- but name it explicitly
+  // so a stale/completed row from an earlier attempt can never land in the
+  // measurement either.
+  const selfJobName = process.env.GATE_GUARD_SELF_JOB_NAME;
+  const attemptEnv = process.env.GATE_GUARD_RUN_ATTEMPT;
+  const attempt = attemptEnv ? Number(attemptEnv) : undefined;
+
+  const jobs = selectMeasurableJobs(parsed.jobs, {
+    excludeNames: selfJobName ? [selfJobName] : [],
+    attempt: attempt !== undefined && Number.isFinite(attempt) ? attempt : undefined,
+  }) as CiJobTiming[];
+
   const durations = computeJobDurationsSeconds(jobs);
   const baseline = loadBaseline();
 
-  const speedPass = report('speed', checkSpeedRegression(durations.totalWallClockSeconds, baseline));
+  // Context only -- neither figure is gated, because both include the time
+  // jobs sat queued for a free runner (toon#151).
+  const queue =
+    durations.totalQueueSeconds === undefined
+      ? ''
+      : `; summed time spent waiting for a runner ${durations.totalQueueSeconds.toFixed(1)}s`;
+  const perJob = Object.entries(durations.byName)
+    .map(([name, seconds]) => `${name}=${seconds.toFixed(1)}s`)
+    .join(', ');
+  console.log(
+    `[gate-guard] INFO: measured ${jobs.length} job(s) of attempt ${attempt ?? '?'} — ${perJob}; run span ${durations.totalWallClockSeconds.toFixed(1)}s${queue} (span and queue are reported for context only, NOT gated)`,
+  );
+
+  const coveragePass = report('coverage', checkMeasurementCoverage(jobs.length));
+  const speedPass = report('speed', checkSpeedRegression(durations.longestJobSeconds, baseline));
   const performancePass = report(
     'performance',
     checkPerformanceRegression(durations.sumRunnerSeconds, baseline),
   );
 
-  return speedPass && performancePass;
+  return coveragePass && speedPass && performancePass;
 }
 
 function runImageSize(bytesArg: string | undefined): boolean {
