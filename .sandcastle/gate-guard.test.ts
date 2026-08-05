@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkImageSizeRegression,
   checkLintCeiling,
+  checkMeasurementCoverage,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
@@ -181,6 +182,23 @@ describe('selectMeasurableJobs', () => {
       excludeNames: ['Gate speed/performance no-regression guard'],
     });
     expect(selected.map((job) => job.name)).toEqual(['build']);
+  });
+});
+
+describe('checkMeasurementCoverage', () => {
+  it('fails when nothing was measured, instead of passing on all-zero durations', () => {
+    const empty = computeJobDurationsSeconds([]);
+    // Every threshold is trivially satisfied by zero...
+    expect(checkSpeedRegression(empty.longestJobSeconds, baseline).pass).toBe(true);
+    expect(checkPerformanceRegression(empty.sumRunnerSeconds, baseline).pass).toBe(true);
+    // ...so an empty measurement has to be caught on its own.
+    const result = checkMeasurementCoverage(0);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('no completed jobs to measure');
+  });
+
+  it('passes once at least one job was measured', () => {
+    expect(checkMeasurementCoverage(2).pass).toBe(true);
   });
 });
 

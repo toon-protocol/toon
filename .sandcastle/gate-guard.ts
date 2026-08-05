@@ -177,6 +177,21 @@ export function computeJobDurationsSeconds(jobs: CiJobTiming[]): JobDurations {
   return { byName, longestJobSeconds, sumRunnerSeconds, totalWallClockSeconds, totalQueueSeconds };
 }
 
+// Zero measured jobs makes every duration 0, which would sail under every
+// threshold. A filter that matched nothing is a broken guard, not a fast run,
+// so it fails rather than silently passing.
+export function checkMeasurementCoverage(measuredJobCount: number): GuardResult {
+  if (measuredJobCount === 0) {
+    return {
+      pass: false,
+      reason:
+        'no completed jobs to measure — the jobs API response was empty or every job was filtered out; the guard cannot vouch for this run',
+    };
+  }
+
+  return { pass: true, reason: `measured ${measuredJobCount} completed job(s)` };
+}
+
 // toon#151: this used to compare the run's wall-clock SPAN
 // (max(completed) - min(started)) against the baseline. The span includes the
 // time jobs spend queued for a free runner, which is a property of how busy

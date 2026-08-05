@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import {
   checkImageSizeRegression,
   checkLintCeiling,
+  checkMeasurementCoverage,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
@@ -117,13 +118,14 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
     `[gate-guard] INFO: measured ${jobs.length} job(s) of attempt ${attempt ?? '?'} — ${perJob}; run span ${durations.totalWallClockSeconds.toFixed(1)}s${queue} (span and queue are reported for context only, NOT gated)`,
   );
 
+  const coveragePass = report('coverage', checkMeasurementCoverage(jobs.length));
   const speedPass = report('speed', checkSpeedRegression(durations.longestJobSeconds, baseline));
   const performancePass = report(
     'performance',
     checkPerformanceRegression(durations.sumRunnerSeconds, baseline),
   );
 
-  return speedPass && performancePass;
+  return coveragePass && speedPass && performancePass;
 }
 
 function runImageSize(bytesArg: string | undefined): boolean {
