@@ -216,26 +216,6 @@ describe('checkSpeedRegression', () => {
     expect(result.reason).toContain('gate speed regressed');
   });
 
-  // toon#153: the tolerance was ratcheted from the span-era 50% down to a
-  // figure calibrated against averageLongestJobDurationSeconds's own
-  // observed spread (see gate-baseline.json's gateSpeed.regressionTolerance
-  // and its rationale). Pin the exact value so a future edit that widens it
-  // back toward 50% fails a test instead of silently regressing.
-  it('uses a 20% tolerance, not the retired 50% span-era value', () => {
-    expect(SPEED_REGRESSION_TOLERANCE).toBe(0.2);
-  });
-
-  it('passes at 112s, the highest longestJobSeconds among the baseline sampleRuns (top of observed normal variance)', () => {
-    const result = checkSpeedRegression(112, baseline);
-    expect(result.pass).toBe(true);
-  });
-
-  it('fails a genuine 40% compute regression', () => {
-    const result = checkSpeedRegression(106.6 * 1.4, baseline);
-    expect(result.pass).toBe(false);
-    expect(result.reason).toContain('gate speed regressed');
-  });
-
   it('reads the frozen baseline number, not a live threshold, for the same commit', () => {
     const first = checkSpeedRegression(112, baseline);
     const second = checkSpeedRegression(112, baseline);
@@ -257,6 +237,10 @@ describe('the committed gate-baseline.json', () => {
   const committed = JSON.parse(
     readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
   ) as GateBaseline;
+  // `?? 0` never fires in practice — the test below asserts the figure is a
+  // number — and a 0 baseline would fail the slowdown expectations loudly.
+  const baselineLongestJobSeconds = committed.gateSpeed.averageLongestJobDurationSeconds ?? 0;
+  const baselineSumRunnerSeconds = committed.gatePerformance.runnerMinutes.averagePerRunSeconds;
 
   it('carries the gating speed figure the guard reads', () => {
     expect(typeof committed.gateSpeed.averageLongestJobDurationSeconds).toBe('number');
@@ -266,36 +250,29 @@ describe('the committed gate-baseline.json', () => {
   // actually enforces; a hand-edit of one without the other should fail
   // this test rather than silently drift.
   it('records the ratcheted tolerances next to the numbers they were derived from', () => {
-    const gateSpeed = committed.gateSpeed as unknown as { regressionTolerance?: number };
-    const runnerMinutes = committed.gatePerformance.runnerMinutes as unknown as {
-      regressionTolerance?: number;
-    };
-    expect(gateSpeed.regressionTolerance).toBe(SPEED_REGRESSION_TOLERANCE);
-    expect(runnerMinutes.regressionTolerance).toBe(PERFORMANCE_REGRESSION_TOLERANCE);
+    expect(committed.gateSpeed.regressionTolerance).toBe(SPEED_REGRESSION_TOLERANCE);
+    expect(committed.gatePerformance.runnerMinutes.regressionTolerance).toBe(
+      PERFORMANCE_REGRESSION_TOLERANCE,
+    );
   });
 
   // The regression this guard exists to catch: a change that genuinely makes
   // a gate job much slower must still go red against the committed numbers.
   it('still fails a genuine 2x slowdown of the longest job', () => {
-    const doubled = (committed.gateSpeed.averageLongestJobDurationSeconds ?? 0) * 2;
-    expect(checkSpeedRegression(doubled, committed).pass).toBe(false);
-    expect(checkPerformanceRegression(committed.gatePerformance.runnerMinutes.averagePerRunSeconds * 2, committed).pass).toBe(
-      false,
-    );
+    expect(checkSpeedRegression(baselineLongestJobSeconds * 2, committed).pass).toBe(false);
+    expect(checkPerformanceRegression(baselineSumRunnerSeconds * 2, committed).pass).toBe(false);
   });
 
   // toon#153: a genuine 40% compute regression must still fail even at the
-  // tighter, ratcheted tolerance -- the whole point of tightening it.
+  // tighter, ratcheted tolerances -- the whole point of tightening them.
   it('fails a 40% slowdown of the longest job or of summed runner-seconds', () => {
-    const longestJobSlowdown = (committed.gateSpeed.averageLongestJobDurationSeconds ?? 0) * 1.4;
-    const runnerSecondsSlowdown = committed.gatePerformance.runnerMinutes.averagePerRunSeconds * 1.4;
-    expect(checkSpeedRegression(longestJobSlowdown, committed).pass).toBe(false);
-    expect(checkPerformanceRegression(runnerSecondsSlowdown, committed).pass).toBe(false);
+    expect(checkSpeedRegression(baselineLongestJobSeconds * 1.4, committed).pass).toBe(false);
+    expect(checkPerformanceRegression(baselineSumRunnerSeconds * 1.4, committed).pass).toBe(false);
   });
 
   // toon#153: the highest individual sampleRuns figures (112s longest job,
-  // 158s summed runner-seconds) must still pass -- the ratcheted tolerance
-  // must never false-FAIL on the normal variance it was calibrated against.
+  // 158s summed runner-seconds) must still pass -- the ratcheted tolerances
+  // must never false-FAIL on the normal variance they were calibrated against.
   it('passes at the top of the observed sampleRuns variance', () => {
     const sampleRuns = committed.sampleRuns ?? [];
     expect(sampleRuns.length).toBeGreaterThan(0);
@@ -323,23 +300,22 @@ describe('checkPerformanceRegression', () => {
     expect(result.pass).toBe(false);
     expect(result.reason).toContain('gate performance regressed');
   });
+});
 
-  // toon#153: runner-seconds' observed spread (~3.6%) is tighter than the
-  // longest-job figure's (~6.2%), so it gets a tighter tolerance than speed.
-  it('uses a 15% tolerance, tighter than gateSpeed, calibrated to its own lower observed spread', () => {
+// toon#153 ratcheted the two job-duration bands down from the span-era 50%,
+// each to a figure calibrated against its own metric's observed spread. Pin the
+// values so an edit that widens one back toward 50% fails a test instead of
+// silently regressing the guard.
+describe('the ratcheted regression tolerances', () => {
+  it('gates the longest job at 20%, not the retired 50% span-era value', () => {
+    expect(SPEED_REGRESSION_TOLERANCE).toBe(0.2);
+  });
+
+  // Runner-seconds' observed spread (~3.6%) is tighter than the longest-job
+  // figure's (~6.2%), so it earns the tighter of the two bands.
+  it('gates runner-seconds tighter still, at 15%', () => {
     expect(PERFORMANCE_REGRESSION_TOLERANCE).toBe(0.15);
     expect(PERFORMANCE_REGRESSION_TOLERANCE).toBeLessThan(SPEED_REGRESSION_TOLERANCE);
-  });
-
-  it('passes at 158s, the highest sumRunnerSeconds among the baseline sampleRuns (top of observed normal variance)', () => {
-    const result = checkPerformanceRegression(158, baseline);
-    expect(result.pass).toBe(true);
-  });
-
-  it('fails a genuine 40% compute regression', () => {
-    const result = checkPerformanceRegression(154.6 * 1.4, baseline);
-    expect(result.pass).toBe(false);
-    expect(result.reason).toContain('gate performance regressed');
   });
 });
 

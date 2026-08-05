@@ -16,10 +16,17 @@ export interface GateBaseline {
     // run. It includes runner queue time, so it is recorded for context but
     // never compared against.
     averageTotalRunDurationSeconds: number;
+    // DOCUMENTATION (toon#153): the band this metric is gated at, recorded
+    // beside the number it was derived from (with a `regressionToleranceRationale`
+    // spelling out the derivation). The guard enforces the constant below; a
+    // test pins the two in sync so neither can be edited alone.
+    regressionTolerance?: number;
   };
   gatePerformance: {
     runnerMinutes: {
       averagePerRunSeconds: number;
+      // DOCUMENTATION only, as above.
+      regressionTolerance?: number;
     };
     dockerImageSize: {
       bytes?: number;
@@ -44,35 +51,37 @@ export interface GuardResult {
   reason: string;
 }
 
-// 50% was sized for the span-era gateSpeed metric, which absorbed runner
-// queue depth and could legitimately swing tens of seconds run-to-run (the
-// toon#150 incident: 402.0s measured against 147.0s of actual compute).
-// toon#151 replaced that metric with a job duration but deliberately left
-// this number untouched: the false FAIL it fixed came from measuring the
-// wrong quantity, and widening a tolerance until it stops firing would have
-// traded a false FAIL for a false PASS. It remains the right band for
-// dockerImageSize, an unrelated and still-unmeasured quantity with no
-// sample spread yet to ratchet against.
-export const DEFAULT_REGRESSION_TOLERANCE = 0.5;
+// Each tolerance is a band around a frozen baseline average, sized from that
+// metric's OWN run-to-run spread across gate-baseline.json's sampleRuns: wide
+// enough that normal variance can never false-FAIL, tight enough that a real
+// compute regression still goes red. gate-baseline.json records each band
+// beside the number it was derived from, under `regressionTolerance` /
+// `regressionToleranceRationale`.
 
-// toon#153: gateSpeed's averageLongestJobDurationSeconds is a job duration,
-// not a queue-inflated span, so it is far less noisy than the metric 50% was
-// sized for. The five gate-baseline.json sampleRuns' longestJobSeconds (104,
-// 100, 108, 112, 109) deviate at most 6.2% from the 106.6s mean. 20% is
-// roughly 3x that observed spread -- enough headroom that none of the
-// sample runs would ever false-FAIL -- while still catching a genuine 40%
-// compute regression (106.6s -> 149.2s exceeds the 127.9s allowance). See
-// gate-baseline.json's gateSpeed.regressionToleranceRationale for the full
-// derivation.
+// 50% was sized for the span-era gateSpeed metric, which absorbed runner queue
+// depth and could legitimately swing tens of seconds run-to-run (the toon#150
+// incident: a 402.0s span measured against 147.0s of actual compute). toon#151
+// replaced that metric with a job duration but deliberately left this number
+// untouched: the false FAIL it fixed came from measuring the wrong quantity,
+// and widening a tolerance until it stops firing would have traded a false FAIL
+// for a false PASS. toon#153 ratcheted the two job-duration metrics below and
+// left 50% here, where it still fits: dockerImageSize is an unrelated and
+// still-unmeasured quantity, with no sample spread yet to ratchet against.
+export const IMAGE_SIZE_REGRESSION_TOLERANCE = 0.5;
+
+// toon#153: averageLongestJobDurationSeconds is a job duration, not a
+// queue-inflated span, so it is far steadier than the metric 50% was sized for.
+// The five sampleRuns' longestJobSeconds (104, 100, 108, 112, 109) deviate at
+// most 6.2% from the 106.6s mean. 20% is roughly 3x that spread -- no sample
+// run could false-FAIL -- and still catches a genuine 40% compute regression
+// (106.6s -> 149.2s exceeds the 127.9s allowance).
 export const SPEED_REGRESSION_TOLERANCE = 0.2;
 
 // toon#153: the five sampleRuns' sumRunnerSeconds (158, 149, 153, 156, 157)
-// deviate at most 3.6% from the 154.6s mean -- tighter than the longest-job
-// spread above, so this figure gets a tighter band. 15% is roughly 4x that
-// observed spread, comfortably covering the top observed sample (158s,
-// +2.2%) while still catching a 40% compute regression (154.6s -> 216.4s
-// exceeds the 177.8s allowance). See gate-baseline.json's
-// gatePerformance.runnerMinutes.regressionToleranceRationale.
+// deviate at most 3.6% from the 154.6s mean -- steadier still than the
+// longest-job figure, so this metric gets a tighter band. 15% is roughly 4x
+// that spread, comfortably clearing the top observed sample (158s, +2.2%),
+// and still catches a 40% regression (154.6s -> 216.4s exceeds 177.8s).
 export const PERFORMANCE_REGRESSION_TOLERANCE = 0.15;
 
 const MAX_WARNINGS_PATTERN = /--max-warnings[= ](\d+)/;
@@ -287,7 +296,7 @@ export function checkPerformanceRegression(
 export function checkImageSizeRegression(
   actualBytes: number,
   baseline: GateBaseline,
-  tolerance: number = DEFAULT_REGRESSION_TOLERANCE,
+  tolerance: number = IMAGE_SIZE_REGRESSION_TOLERANCE,
 ): GuardResult {
   const baselineBytes = baseline.gatePerformance.dockerImageSize.bytes;
 
