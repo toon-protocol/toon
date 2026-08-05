@@ -4,6 +4,9 @@
   "capturedAt": "2026-07-22",
   "capturedFromCommit": "76dc9f0b36679d073502086a56bbadffc9e1c391",
   "capturedFromRef": "main",
+  "timingsRecapturedAt": "2026-08-05",
+  "timingsRecapturedFromCommit": "982f219fab60151d9072b6a2aab70aede5470cc4",
+  "timingsRecaptureMethod": "toon#151. `gateSpeed` and `gatePerformance.runnerMinutes` were re-measured against the workflow's CURRENT job set, via `gh api repos/toon-protocol/toon/actions/runs/<id>/attempts/1/jobs` for the 5 most recent `push`-to-`main` runs of ci.yml as of 2026-08-05 (run ids in `sampleRuns`; the same 5-most-recent-push-runs rule as the original capture). Only the two GATED jobs are counted — `build` and `Devbox Environment Validation`. The `Gate speed/performance no-regression guard` job itself is excluded: it observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API. Note that `Build sandcastle agent image` belongs to a DIFFERENT workflow (agent-image.yml) with its own run id, so it has never appeared in this run's job list and does not affect these figures — its size is gated separately by `dockerImageSize`. The recaptured summed runner-seconds (154.6) came out identical to the 2026-07-22 capture, i.e. the gate's compute has not drifted; only the wall-clock figure needed replacing, and it was replaced by a queue-immune metric rather than re-averaged.",
   "gateShape": {
     "lint": "eslint . --max-warnings 940",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,18 +15,22 @@
   },
   "method": "Representative sample = the 5 most recent `push`-to-`main` runs of .github/workflows/ci.yml as of capturedAt, read via `gh run list --workflow=ci.yml --json ...` / `gh run view <id> --json jobs` / `gh api repos/toon-protocol/toon/actions/runs/<id>/timing`. Correctness counts taken directly from a clean checkout of capturedFromCommit via `npx eslint . -f json` and `pnpm run typecheck`, not from CI logs (CI truncates neither, but a local run is simpler to reproduce byte-for-byte). See `sampleRuns` for the raw per-run figures this baseline was averaged from. HISTORICAL NOTE for reproduction: at capturedFromCommit the root `vitest run` script spuriously failed ~50 sdk tests that passed under CI's per-package command, because the root vitest.config.ts omitted the `TOON_GENESIS_PEERS: '[]'` hermetic-fixture env that packages/sdk/vitest.config.ts sets (toon#79). That is FIXED: toon#146 added the env to the root config (50 failed -> 0 failed / 2308 passed / 6 skipped) and toon#144 added `.sandcastle/vitest-config-parity.test.ts`, run by the blocking `Gate guard unit tests (incl. root vitest config parity)` step, which fails the build if a package config ever again sets a `test.env` var the root config does not apply. Either command now reproduces a clean run; `pnpm -r test --if-present` remains the one whose timings this baseline measured.",
   "gateSpeed": {
-    "description": "CI wall-clock time for the ci.yml workflow (both jobs run in parallel; wall-clock is dominated by the `build` job).",
+    "description": "Execution time of the ci.yml workflow's gated jobs (`build` and `Devbox Environment Validation`; the `Gate speed/performance no-regression guard` job is excluded because it measures the run rather than being part of it). The GATED figure is `averageLongestJobDurationSeconds`: the measured jobs run in parallel, so on a free runner pool the longest of them IS the run's wall-clock, and unlike the raw span it cannot be inflated by runner queue depth.",
     "unit": "seconds",
-    "averageTotalRunDurationSeconds": 112,
-    "averageBuildJobDurationSeconds": 106.4,
-    "averageDevboxValidateJobDurationSeconds": 48.2,
+    "averageLongestJobDurationSeconds": 106.6,
+    "averageBuildJobDurationSeconds": 106.6,
+    "averageDevboxValidateJobDurationSeconds": 48,
+    "averageTotalRunDurationSeconds": 106.6,
+    "averageTotalRunDurationSecondsNote": "INFORMATIONAL, NOT GATED (toon#151). max(job completed_at) - min(job started_at). All five recaptured runs were scheduled onto free runners (7.8s average total queue), so the span happens to equal the longest job here — that coincidence is exactly why the previous 112s span baseline looked sound and then false-FAILed the moment the org's runner pool was saturated (toon#150 measured a 402.0s span for 147.0s of compute). The guard prints this number for context and never compares against it.",
+    "averageQueueSecondsPerRun": 7.8,
     "sampleSize": 5
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
     "runnerMinutes": {
-      "unit": "raw job-seconds summed across both ci.yml jobs (build + Devbox Environment Validation), NOT GitHub-billed minutes",
+      "unit": "raw job-seconds summed across both gated ci.yml jobs (build + Devbox Environment Validation), NOT GitHub-billed minutes",
       "averagePerRunSeconds": 154.6,
+      "recapturedNote": "toon#151 re-measured this against the current job set on 2026-08-05 and got 154.6 again (per-run: 158, 149, 153, 156, 157), so the figure is unchanged. Summed job-seconds is execution time only and never included queue time, which is why this metric passed throughout the toon#150 incident while the span-based speed metric failed.",
       "billedMinutes": 0,
       "billedMinutesNote": "Public repo — GitHub-hosted Actions minutes are free; the Actions API always reports billable.UBUNTU.total_ms=0 for this repo regardless of actual runner time."
     },
@@ -71,10 +78,20 @@
     }
   },
   "sampleRuns": [
-    { "runId": 29953906825, "commit": "76dc9f0", "totalRunDurationSeconds": 103, "buildJobSeconds": 99, "devboxJobSeconds": 56, "pnpmCacheHit": true },
-    { "runId": 29951193583, "commit": "19c334a", "totalRunDurationSeconds": 105, "buildJobSeconds": 101, "devboxJobSeconds": 42, "pnpmCacheHit": true },
-    { "runId": 29945828463, "commit": "ea21347", "totalRunDurationSeconds": 117, "buildJobSeconds": 113, "devboxJobSeconds": 46, "pnpmCacheHit": true },
-    { "runId": 29935884552, "commit": "e4f8728", "totalRunDurationSeconds": 119, "buildJobSeconds": 114, "devboxJobSeconds": 47, "pnpmCacheHit": false },
-    { "runId": 29873378048, "commit": "264e73d", "totalRunDurationSeconds": 116, "buildJobSeconds": 105, "devboxJobSeconds": 50, "pnpmCacheHit": true }
-  ]
+    { "runId": 30655195940, "commit": "982f219", "longestJobSeconds": 104, "sumRunnerSeconds": 158, "buildJobSeconds": 104, "devboxJobSeconds": 54, "totalRunSpanSeconds": 104, "queueSeconds": 10 },
+    { "runId": 30654949560, "commit": "f3ae203", "longestJobSeconds": 100, "sumRunnerSeconds": 149, "buildJobSeconds": 100, "devboxJobSeconds": 49, "totalRunSpanSeconds": 100, "queueSeconds": 4 },
+    { "runId": 30459572572, "commit": "63c39cd", "longestJobSeconds": 108, "sumRunnerSeconds": 153, "buildJobSeconds": 108, "devboxJobSeconds": 45, "totalRunSpanSeconds": 108, "queueSeconds": 11 },
+    { "runId": 30423562085, "commit": "3787568", "longestJobSeconds": 112, "sumRunnerSeconds": 156, "buildJobSeconds": 112, "devboxJobSeconds": 44, "totalRunSpanSeconds": 112, "queueSeconds": 10 },
+    { "runId": 30423296593, "commit": "4821c2d", "longestJobSeconds": 109, "sumRunnerSeconds": 157, "buildJobSeconds": 109, "devboxJobSeconds": 48, "totalRunSpanSeconds": 109, "queueSeconds": 4 }
+  ],
+  "supersededSampleRuns": {
+    "note": "The 2026-07-22 capture's raw per-run figures, kept for history. `totalRunDurationSeconds` there is the span metric toon#151 retired.",
+    "runs": [
+      { "runId": 29953906825, "commit": "76dc9f0", "totalRunDurationSeconds": 103, "buildJobSeconds": 99, "devboxJobSeconds": 56, "pnpmCacheHit": true },
+      { "runId": 29951193583, "commit": "19c334a", "totalRunDurationSeconds": 105, "buildJobSeconds": 101, "devboxJobSeconds": 42, "pnpmCacheHit": true },
+      { "runId": 29945828463, "commit": "ea21347", "totalRunDurationSeconds": 117, "buildJobSeconds": 113, "devboxJobSeconds": 46, "pnpmCacheHit": true },
+      { "runId": 29935884552, "commit": "e4f8728", "totalRunDurationSeconds": 119, "buildJobSeconds": 114, "devboxJobSeconds": 47, "pnpmCacheHit": false },
+      { "runId": 29873378048, "commit": "264e73d", "totalRunDurationSeconds": 116, "buildJobSeconds": 105, "devboxJobSeconds": 50, "pnpmCacheHit": true }
+    ]
+  }
 }
