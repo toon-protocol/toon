@@ -304,6 +304,17 @@ export function createDiscoveryTracker(
                 peerId
               );
             }
+          } else {
+            const reason =
+              `No shared settlement chain with ${peerId}: ` +
+              `we support [${config.settlementInfo.supportedChains.join(', ')}], ` +
+              `peer supports [${peerInfo.supportedChains.join(', ')}]`;
+            console.warn('[DiscoveryTracker] %s', reason);
+            emit({
+              type: 'bootstrap:settlement-failed',
+              peerId,
+              reason,
+            });
           }
         } catch (error) {
           const reason =

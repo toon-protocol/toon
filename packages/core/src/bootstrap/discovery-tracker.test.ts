@@ -294,6 +294,49 @@ describe('createDiscoveryTracker', () => {
     expect(negotiation?.settlementAddress).toBe('0x1234');
   });
 
+  it('no shared settlement chain emits settlement-failed naming both sets, instead of silently skipping negotiation', async () => {
+    // toon#165: a convention mismatch between the local preset and the peer's
+    // announce can drop the intended chain out of the intersection entirely.
+    // That must be loud (a settlement-failed event naming both chain sets),
+    // not a silent no-op that leaves the peer registered with no negotiation
+    // metadata and no trace of why.
+    const peerInfoNoOverlap: IlpPeerInfo = {
+      ...validPeerInfo,
+      supportedChains: ['solana:devnet'],
+      settlementAddresses: { 'solana:devnet': 'Sol1234' },
+    };
+
+    const events: BootstrapEvent[] = [];
+    const tracker = createDiscoveryTracker({
+      secretKey,
+      settlementInfo: {
+        supportedChains: ['evm:84532'],
+      },
+    });
+    tracker.setConnectorAdmin(mockAdmin);
+    tracker.on((event) => events.push(event));
+
+    tracker.processEvent(
+      makeEvent(peerPubkey, JSON.stringify(peerInfoNoOverlap))
+    );
+    await tracker.peerWith(peerPubkey);
+
+    // Peer registration itself still succeeds — only settlement negotiation failed.
+    expect(events.some((e) => e.type === 'bootstrap:peer-registered')).toBe(
+      true
+    );
+
+    const failure = events.find((e) => e.type === 'bootstrap:settlement-failed');
+    expect(failure).toBeDefined();
+    if (failure && failure.type === 'bootstrap:settlement-failed') {
+      expect(failure.reason).toContain('evm:84532');
+      expect(failure.reason).toContain('solana:devnet');
+    }
+
+    const peerId = `nostr-${peerPubkey.slice(0, 16)}`;
+    expect(tracker.getPeerNegotiation(peerId)).toBeUndefined();
+  });
+
   it('registration failure is non-fatal and emits settlement-failed', async () => {
     // Simulate connector admin registration failure
     const failingAdmin = {
