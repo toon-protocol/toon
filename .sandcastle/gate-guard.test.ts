@@ -9,6 +9,7 @@ import {
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
+  computeMaxDeviationFraction,
   PERFORMANCE_REGRESSION_TOLERANCE,
   selectMeasurableJobs,
   SPEED_REGRESSION_TOLERANCE,
@@ -132,6 +133,26 @@ describe('computeJobDurationsSeconds', () => {
     ]);
     expect(result.totalQueueSeconds).toBe(0);
     expect(result.longestJobSeconds).toBe(93);
+  });
+});
+
+describe('computeMaxDeviationFraction', () => {
+  it('returns 0 when every sample equals the mean', () => {
+    expect(computeMaxDeviationFraction([100, 100, 100])).toBe(0);
+  });
+
+  it('returns the largest fractional distance from the mean', () => {
+    // mean = 100; deviations are 0%, +10%, -10% -- the max is 0.1 either way.
+    expect(computeMaxDeviationFraction([100, 110, 90])).toBeCloseTo(0.1, 10);
+  });
+
+  it('is driven by the single furthest outlier, not an average of deviations', () => {
+    // mean = 104; deviations are ~0.96%, ~0.96%, ~1.92% -- driven by the 106.
+    expect(computeMaxDeviationFraction([103, 103, 106])).toBeCloseTo(2 / 104, 10);
+  });
+
+  it('throws on an empty sample set rather than dividing by zero', () => {
+    expect(() => computeMaxDeviationFraction([])).toThrow('requires at least one sample');
   });
 });
 
@@ -286,6 +307,36 @@ describe('the committed gate-baseline.json', () => {
   it('passes toon#150, whose compute was inside baseline all along', () => {
     expect(checkSpeedRegression(93, committed).pass).toBe(true);
     expect(checkPerformanceRegression(147, committed).pass).toBe(true);
+  });
+
+  // toon#173: the toon#153 regressionToleranceRationale strings asserted a
+  // "3x"/"4x" spread-to-tolerance ratio in prose, computed once against the
+  // sampleRuns of the day and then left to drift -- by the time #157 merged,
+  // the actual gating run (120.0s/164.0s) sat outside every sampleRun the
+  // rationale cited. This block recomputes the observed spread from the
+  // committed sampleRuns on every test run, so a future hand-edit of
+  // sampleRuns without updating observedMaxDeviationFraction (or a tolerance
+  // edit that no longer clears the observed spread) fails loudly instead of
+  // silently going stale again.
+  describe('the committed regressionToleranceRationale is falsifiable', () => {
+    const sampleRuns = committed.sampleRuns ?? [];
+
+    it('gateSpeed.observedMaxDeviationFraction matches what the committed sampleRuns actually produce', () => {
+      const observed = computeMaxDeviationFraction(sampleRuns.map((run) => run.longestJobSeconds));
+      expect(committed.gateSpeed.observedMaxDeviationFraction).toBeCloseTo(observed, 6);
+      // The whole point of the ratchet: the enforced tolerance must still
+      // clear the observed spread, or normal variance would false-FAIL.
+      expect(SPEED_REGRESSION_TOLERANCE).toBeGreaterThan(observed);
+    });
+
+    it('gatePerformance.runnerMinutes.observedMaxDeviationFraction matches what the committed sampleRuns actually produce', () => {
+      const observed = computeMaxDeviationFraction(sampleRuns.map((run) => run.sumRunnerSeconds));
+      expect(committed.gatePerformance.runnerMinutes.observedMaxDeviationFraction).toBeCloseTo(
+        observed,
+        6,
+      );
+      expect(PERFORMANCE_REGRESSION_TOLERANCE).toBeGreaterThan(observed);
+    });
   });
 });
 
