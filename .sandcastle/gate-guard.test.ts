@@ -9,7 +9,9 @@ import {
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
+  PERFORMANCE_REGRESSION_TOLERANCE,
   selectMeasurableJobs,
+  SPEED_REGRESSION_TOLERANCE,
   type GateBaseline,
 } from './gate-guard.ts';
 
@@ -235,19 +237,49 @@ describe('the committed gate-baseline.json', () => {
   const committed = JSON.parse(
     readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
   ) as GateBaseline;
+  // `?? 0` never fires in practice — the test below asserts the figure is a
+  // number — and a 0 baseline would fail the slowdown expectations loudly.
+  const baselineLongestJobSeconds = committed.gateSpeed.averageLongestJobDurationSeconds ?? 0;
+  const baselineSumRunnerSeconds = committed.gatePerformance.runnerMinutes.averagePerRunSeconds;
 
   it('carries the gating speed figure the guard reads', () => {
     expect(typeof committed.gateSpeed.averageLongestJobDurationSeconds).toBe('number');
   });
 
+  // toon#153: the recorded rationale documents the tolerance the code
+  // actually enforces; a hand-edit of one without the other should fail
+  // this test rather than silently drift.
+  it('records the ratcheted tolerances next to the numbers they were derived from', () => {
+    expect(committed.gateSpeed.regressionTolerance).toBe(SPEED_REGRESSION_TOLERANCE);
+    expect(committed.gatePerformance.runnerMinutes.regressionTolerance).toBe(
+      PERFORMANCE_REGRESSION_TOLERANCE,
+    );
+  });
+
   // The regression this guard exists to catch: a change that genuinely makes
   // a gate job much slower must still go red against the committed numbers.
   it('still fails a genuine 2x slowdown of the longest job', () => {
-    const doubled = (committed.gateSpeed.averageLongestJobDurationSeconds ?? 0) * 2;
-    expect(checkSpeedRegression(doubled, committed).pass).toBe(false);
-    expect(checkPerformanceRegression(committed.gatePerformance.runnerMinutes.averagePerRunSeconds * 2, committed).pass).toBe(
-      false,
-    );
+    expect(checkSpeedRegression(baselineLongestJobSeconds * 2, committed).pass).toBe(false);
+    expect(checkPerformanceRegression(baselineSumRunnerSeconds * 2, committed).pass).toBe(false);
+  });
+
+  // toon#153: a genuine 40% compute regression must still fail even at the
+  // tighter, ratcheted tolerances -- the whole point of tightening them.
+  it('fails a 40% slowdown of the longest job or of summed runner-seconds', () => {
+    expect(checkSpeedRegression(baselineLongestJobSeconds * 1.4, committed).pass).toBe(false);
+    expect(checkPerformanceRegression(baselineSumRunnerSeconds * 1.4, committed).pass).toBe(false);
+  });
+
+  // toon#153: the highest individual sampleRuns figures (112s longest job,
+  // 158s summed runner-seconds) must still pass -- the ratcheted tolerances
+  // must never false-FAIL on the normal variance they were calibrated against.
+  it('passes at the top of the observed sampleRuns variance', () => {
+    const sampleRuns = committed.sampleRuns ?? [];
+    expect(sampleRuns.length).toBeGreaterThan(0);
+    const topLongestJob = Math.max(...sampleRuns.map((run) => run.longestJobSeconds));
+    const topSumRunnerSeconds = Math.max(...sampleRuns.map((run) => run.sumRunnerSeconds));
+    expect(checkSpeedRegression(topLongestJob, committed).pass).toBe(true);
+    expect(checkPerformanceRegression(topSumRunnerSeconds, committed).pass).toBe(true);
   });
 
   // toon#150's actual measurements: 93.0s longest job / 147.0s summed.
@@ -267,6 +299,23 @@ describe('checkPerformanceRegression', () => {
     const result = checkPerformanceRegression(154.6 * 1.6, baseline);
     expect(result.pass).toBe(false);
     expect(result.reason).toContain('gate performance regressed');
+  });
+});
+
+// toon#153 ratcheted the two job-duration bands down from the span-era 50%,
+// each to a figure calibrated against its own metric's observed spread. Pin the
+// values so an edit that widens one back toward 50% fails a test instead of
+// silently regressing the guard.
+describe('the ratcheted regression tolerances', () => {
+  it('gates the longest job at 20%, not the retired 50% span-era value', () => {
+    expect(SPEED_REGRESSION_TOLERANCE).toBe(0.2);
+  });
+
+  // Runner-seconds' observed spread (~3.6%) is tighter than the longest-job
+  // figure's (~6.2%), so it earns the tighter of the two bands.
+  it('gates runner-seconds tighter still, at 15%', () => {
+    expect(PERFORMANCE_REGRESSION_TOLERANCE).toBe(0.15);
+    expect(PERFORMANCE_REGRESSION_TOLERANCE).toBeLessThan(SPEED_REGRESSION_TOLERANCE);
   });
 });
 
