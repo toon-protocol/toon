@@ -3,10 +3,8 @@ import type { MockInstance } from 'vitest';
 import { createLogger } from './logger.js';
 import type { Logger, LogEntry } from './logger.js';
 
-type ConsoleMethodSpy<TMethod extends (...args: never[]) => unknown> = MockInstance<
-  Parameters<TMethod>,
-  ReturnType<TMethod>
->;
+type ConsoleMethodSpy<TMethod extends (...args: never[]) => unknown> =
+  MockInstance<Parameters<TMethod>, ReturnType<TMethod>>;
 
 describe('createLogger', () => {
   let consoleSpy: {

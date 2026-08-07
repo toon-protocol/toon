@@ -133,10 +133,7 @@ describe('EVM v2 EIP-712 digest — golden vectors (connector#324 finding #1 / c
   const verifyingContract = hexToBytes(V2_GOLDEN.verifyingContract);
 
   it('[P0] eip712DomainSeparatorEvm reproduces the pinned domain separator', () => {
-    const ds = eip712DomainSeparatorEvm(
-      V2_GOLDEN.chainId,
-      verifyingContract
-    );
+    const ds = eip712DomainSeparatorEvm(V2_GOLDEN.chainId, verifyingContract);
     expect(ds.length).toBe(32);
     expect(bytesToHex(ds)).toBe(V2_GOLDEN.domainSeparator);
   });

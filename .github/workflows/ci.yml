@@ -56,6 +56,20 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Blocking gate (toon-protocol/toon#169): `pnpm format:check` existed as
+      # a script but was never referenced anywhere in this workflow, so no PR
+      # had ever had to pass it and 15 files on `main` were already flagged
+      # before this step was added (repaired in a separate commit on the same
+      # PR). A step in `build` for the same reasons as Typecheck above --
+      # `build` is gated by `CI OK`, and this reuses the job's install.
+      #
+      # The glob (`packages/*/src/**/*.ts`, package.json) deliberately covers
+      # no `**/*.md` and nothing outside `packages/*/src`; widening it is a
+      # separate decision with its own argument, not a drive-by of this
+      # gate's wiring.
+      - name: Format check
+        run: pnpm format:check
+
       - name: Gate correctness no-regression guard (lint ceiling)
         run: npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling
 
@@ -161,3 +175,30 @@ jobs:
           GATE_GUARD_SELF_JOB_NAME: Gate speed/performance no-regression guard
           GATE_GUARD_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: npx tsx .sandcastle/gate-guard-cli.ts speed-performance /tmp/gate-guard-jobs.json
+
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    needs: [build, devbox-validate, gate-regression-guard]
+    if: always()
+    steps:
+      # Fleet-wide aggregate required check per toon-meta#279: this single job
+      # is the repo's required status, so a skipped or cancelled gating job
+      # must never read as a pass. All three needed jobs are expected to run
+      # on every run of this workflow -- gate-regression-guard only skips when
+      # a dependency failed, which must fail the aggregate anyway. Anything
+      # other than 'success' (failure, cancelled, skipped) fails this job.
+      - name: Require every gating job to have succeeded
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEVBOX_RESULT: ${{ needs.devbox-validate.result }}
+          GATE_RESULT: ${{ needs.gate-regression-guard.result }}
+        run: |
+          echo "build: $BUILD_RESULT"
+          echo "devbox-validate: $DEVBOX_RESULT"
+          echo "gate-regression-guard: $GATE_RESULT"
+          if [ "$BUILD_RESULT" != "success" ] || [ "$DEVBOX_RESULT" != "success" ] || [ "$GATE_RESULT" != "success" ]; then
+            echo "CI not OK: at least one gating job did not succeed (skipped/cancelled counts as failure)."
+            exit 1
+          fi
+          echo "CI OK: all gating jobs succeeded."

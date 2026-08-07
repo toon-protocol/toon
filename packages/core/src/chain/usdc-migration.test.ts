@@ -46,7 +46,9 @@ describe('MOCK_USDC_ADDRESS invariant', () => {
   it('[P0] address is the Anvil deterministic deploy address', () => {
     // This address is produced by DeployLocal.s.sol using Anvil Account #0
     // at nonce 0. Changing it breaks connector + core integration.
-    expect(MOCK_USDC_ADDRESS).toBe('0x5FbDB2315678afecb367f032d93F642f64180aa3');
+    expect(MOCK_USDC_ADDRESS).toBe(
+      '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+    );
   });
 
   it('[P1] address is a valid EIP-55 mixed-case checksummed Ethereum address', () => {
@@ -54,7 +56,9 @@ describe('MOCK_USDC_ADDRESS invariant', () => {
   });
 
   it('[P1] address is not the zero address', () => {
-    expect(MOCK_USDC_ADDRESS).not.toBe('0x0000000000000000000000000000000000000000');
+    expect(MOCK_USDC_ADDRESS).not.toBe(
+      '0x0000000000000000000000000000000000000000'
+    );
   });
 
   it('[P1] address is not the production Arbitrum One USDC address (wrong network)', () => {

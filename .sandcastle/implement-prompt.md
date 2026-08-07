@@ -46,12 +46,14 @@ Rules for the gate:
 
 - **lint** and **test** and **build** must pass cleanly. The lint budget
   (`--max-warnings 940`) is a hard ceiling: do NOT introduce new warnings.
-- **typecheck** has KNOWN pre-existing repo-wide debt (tracked separately). It
-  does NOT currently pass on a clean checkout. Run it and diff against the
-  baseline: your change must not ADD new type errors in files you touch. Do not
-  attempt to burn down the pre-existing debt here — that is a separate issue.
+- **typecheck** is a hard gate at ZERO errors, blocking in CI (toon#144). You
+  must build BEFORE typechecking: run `pnpm -r run build` first, then
+  `pnpm run typecheck` — cross-package imports resolve through each package's
+  built `dist/`, so typechecking a clean checkout without `dist/` produces
+  ~90 phantom TS2307 errors. `pnpm run typecheck` must pass cleanly with no
+  errors.
 
-Do not commit until lint, test, and build pass and typecheck introduces no new errors.
+Do not commit until lint, test, build, and typecheck all pass cleanly.
 
 # COMMIT
 
@@ -79,4 +81,16 @@ ONLY WORK ON A SINGLE TASK.
 
 ## Context budget
 
-If you approach ~60% of your context window, STOP: write a structured handoff note (current state + remaining steps) to `.sandcastle/logs/handoff-<task-id>.md` and end your turn so a fresh agent continues. Do not push past ~60% — small, resumable units beat one degraded run.
+Operate as if your context is capped at **~200k tokens**, whatever your model's actual window
+is (org policy: toon-meta's `CLAUDE.md` → *Context budget policy* — the cap is absolute, not a
+percentage of the window, because a percentage means different things on different models).
+Treat ~200k as a hard ceiling, not a target, and do the real work well below it.
+
+Start preparing a handoff at roughly **120k** tokens of context, and hand off no later than
+roughly **160k** — never run to the ceiling. Handing off means: write a structured handoff note
+(goal and remaining work as a concrete task list; what has been done and where — files,
+branches, commits; key decisions and why; exact paths/line numbers instead of "see above") to
+`.sandcastle/logs/handoff-<task-id>.md`, **commit it on this branch** (use `git add -f` —
+`.sandcastle/.gitignore` ignores `logs/`, and the sandbox is destroyed when the run ends, so an
+uncommitted note is lost), and end your turn so a fresh agent continues. Small, resumable units
+beat one degraded run.

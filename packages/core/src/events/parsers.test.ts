@@ -99,7 +99,9 @@ describe('parseIlpPeerInfo', () => {
       JSON.stringify({ ...createTestIlpPeerInfo(), httpEndpoint: 123 })
     );
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow(/httpEndpoint must be a string/);
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      /httpEndpoint must be a string/
+    );
   });
 
   it('throws when supportsUpgrade is not a boolean', () => {
@@ -108,7 +110,9 @@ describe('parseIlpPeerInfo', () => {
       JSON.stringify({ ...createTestIlpPeerInfo(), supportsUpgrade: 'yes' })
     );
     expect(() => parseIlpPeerInfo(event)).toThrow(InvalidEventError);
-    expect(() => parseIlpPeerInfo(event)).toThrow(/supportsUpgrade must be a boolean/);
+    expect(() => parseIlpPeerInfo(event)).toThrow(
+      /supportsUpgrade must be a boolean/
+    );
   });
 
   it('throws for wrong event kind', () => {

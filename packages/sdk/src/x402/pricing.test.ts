@@ -19,17 +19,26 @@ describe('computeX402RequiredAmount', () => {
   });
 
   it('routing buffer is always added regardless of payload size', () => {
-    const noBuffer: X402PricingConfig = { basePricePerByte: 10n, routingBuffer: 0n };
-    const withBuffer: X402PricingConfig = { basePricePerByte: 10n, routingBuffer: 500n };
+    const noBuffer: X402PricingConfig = {
+      basePricePerByte: 10n,
+      routingBuffer: 0n,
+    };
+    const withBuffer: X402PricingConfig = {
+      basePricePerByte: 10n,
+      routingBuffer: 500n,
+    };
 
     const bytes = 100;
     expect(computeX402RequiredAmount(bytes, withBuffer)).toBe(
-      computeX402RequiredAmount(bytes, noBuffer) + 500n,
+      computeX402RequiredAmount(bytes, noBuffer) + 500n
     );
   });
 
   it('custom per-byte rate override changes the computed amount', () => {
-    const customConfig: X402PricingConfig = { basePricePerByte: 50n, routingBuffer: 100n };
+    const customConfig: X402PricingConfig = {
+      basePricePerByte: 50n,
+      routingBuffer: 100n,
+    };
     const result = computeX402RequiredAmount(10, customConfig);
     expect(result).toBe(600n); // 10 * 50n + 100n
   });

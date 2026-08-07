@@ -65,7 +65,12 @@ function sha256(data: Buffer): string {
 
 function mockSuccessfulNixBuild(storePath: string, imageData: Buffer) {
   mockExecFile.mockImplementation(
-    (_cmd: string, _args: string[], _opts: object, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+    (
+      _cmd: string,
+      _args: string[],
+      _opts: object,
+      cb: (err: Error | null, stdout: string, stderr: string) => void
+    ) => {
       cb(null, storePath + '\n', '');
     }
   );
@@ -223,7 +228,12 @@ describe('NixBuilder reproducibility policy guard', () => {
 
   it('[P1] build fails with clear error when Nix store path is unexpected', async () => {
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      (
+        _cmd: string,
+        _args: string[],
+        _opts: object,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
         cb(null, '/unexpected/path/output\n', '');
       }
     );
@@ -236,12 +246,19 @@ describe('NixBuilder reproducibility policy guard', () => {
   it('[P1] build propagates nix CLI errors as thrown exceptions', async () => {
     const nixError = new Error('nix build failed: derivation error');
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      (
+        _cmd: string,
+        _args: string[],
+        _opts: object,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
         cb(nixError, '', 'error output');
       }
     );
 
-    await expect(new NixBuilder(config).build()).rejects.toThrow('nix build failed');
+    await expect(new NixBuilder(config).build()).rejects.toThrow(
+      'nix build failed'
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -262,7 +279,12 @@ describe('NixBuilder reproducibility policy guard', () => {
     const resultOriginal = await new NixBuilder(config).build();
 
     mockExecFile.mockImplementation(
-      (_cmd: string, _args: string[], _opts: object, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+      (
+        _cmd: string,
+        _args: string[],
+        _opts: object,
+        cb: (err: Error | null, stdout: string, stderr: string) => void
+      ) => {
         cb(null, NIX_STORE_PATH + '\n', '');
       }
     );

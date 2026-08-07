@@ -115,15 +115,19 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
       nonce: nonce.toString(),
     });
 
-    const recovered = recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
+    const recovered = recoverEvmSignerAddress(
+      claim,
+      TEST_CHAIN_ID,
+      TEST_VERIFYING_CONTRACT
+    );
     expect(recovered).toBe(expectedAddr);
   });
 
   it('[P0] throws INVALID_SIGNATURE_LENGTH on wrong-length claimBytes', () => {
     const claim = makeClaim({ claimBytes: new Uint8Array(64) });
-    expect(() => recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT)).toThrowError(
-      SettlementTxError
-    );
+    expect(() =>
+      recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT)
+    ).toThrowError(SettlementTxError);
     try {
       recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
     } catch (err) {
@@ -183,7 +187,11 @@ describe('recoverEvmSignerAddress (AC-7, T-049 round-trip)', () => {
 
     // May throw or return a non-matching address; either is a reject path.
     try {
-      const recovered = recoverEvmSignerAddress(claim, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
+      const recovered = recoverEvmSignerAddress(
+        claim,
+        TEST_CHAIN_ID,
+        TEST_VERIFYING_CONTRACT
+      );
       expect(recovered).not.toBe(expectedAddr);
     } catch (err) {
       expect(err).toBeInstanceOf(SettlementTxError);
@@ -208,7 +216,12 @@ describe('verifyEvmClaimSignature (AC-7)', () => {
       nonce: '2',
     });
 
-    const res = verifyEvmClaimSignature(claim, expectedAddr, TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
+    const res = verifyEvmClaimSignature(
+      claim,
+      expectedAddr,
+      TEST_CHAIN_ID,
+      TEST_VERIFYING_CONTRACT
+    );
     expect(res.valid).toBe(true);
     expect(res.recovered).toBe(expectedAddr);
   });
@@ -229,7 +242,12 @@ describe('verifyEvmClaimSignature (AC-7)', () => {
     });
 
     // Wrong expected address
-    const res = verifyEvmClaimSignature(claim, '0x' + '00'.repeat(20), TEST_CHAIN_ID, TEST_VERIFYING_CONTRACT);
+    const res = verifyEvmClaimSignature(
+      claim,
+      '0x' + '00'.repeat(20),
+      TEST_CHAIN_ID,
+      TEST_VERIFYING_CONTRACT
+    );
     expect(res.valid).toBe(false);
   });
 });

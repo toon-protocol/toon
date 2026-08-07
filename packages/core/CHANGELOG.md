@@ -1,5 +1,56 @@
 # @toon-protocol/core
 
+## 3.2.1
+
+### Patch Changes
+
+- c8d6dd3: fix: use the bare `evm:<chainId>` settlement identifier on the wire (toon#165)
+
+  Settlement negotiation intersects the two sides' `supportedChains` sets, and the
+  live fleet's kind:10032 announce plus the connector's x402 greeting both use the
+  bare `evm:<numeric chainId>` form (e.g. `evm:84532`). Two places still emitted an
+  extra family segment (`evm:base:84532`), which intersected with nothing and made
+  EVM silently drop out of negotiation, falling through to Solana:
+  - **core** — `resolveClientNetwork` now emits `evm:<chainId>` for the preset
+    client's `supportedChains` / `chainRpcUrls` / `preferredTokens` /
+    `tokenNetworks` keys. `BootstrapService` and the discovery tracker log the
+    negotiated intersection so an empty one is diagnosable instead of silent.
+  - **sdk** — `createNode`'s auto-populated `settlementInfo` (which flows into
+    `BootstrapService` and the kind:10032 announce) now uses the same bare form.
+    It previously announced `evm:base:<chainId>` while the connector's own
+    `chainProviders` entry in the same function already used `evm:<chainId>`.
+    The derivation is extracted as `buildDefaultSettlementInfo` and pinned by
+    tests across every chain preset.
+
+  No config or wire format change is required of callers that already passed an
+  explicit `settlementInfo`; only the auto-populated default changed.
+
+## 3.2.0
+
+### Minor Changes
+
+- dcb55ad: fix(discovery): point the genesis peer seed at the live apex announce
+
+  The committed seed still described the retired TypeScript connector: it pinned that
+  connector's nostr key `3f12da6d…`, the old `g.proxy` ILP address, and the root-path
+  BTP endpoint `wss://proxy.devnet.toonprotocol.dev:443` that only the TypeScript edge
+  ever served. `ToonClient`'s bootstrap queries kind:10032 with
+  `authors: [<seed pubkey>]`, so a client got `EOSE, found 0 events` and could not open
+  a channel at all — measured live on devnet, 2026-08-05.
+
+  All three facts are refreshed against the live announce on
+  `wss://relay-ws.devnet.toonprotocol.dev`, read raw over NIP-01 and validated with
+  `parseIlpPeerInfo`:
+  - `pubkey` → `30fdd01d…`, the apex announcer's durable identity. Its
+    `edgeIdentity.publicKey` matches what `GET /ilp/identity` reports on the apex box,
+    so this announce really does describe that connector.
+  - `ilpAddress` → `g.toon`
+  - `btpEndpoint` → `wss://proxy.devnet.toonprotocol.dev/ilp/btp`, the Rust edge's path.
+
+  The endpoint change matters on its own: a seed that names the root path sends a client
+  to an address where the Rust connector answers 400, which reads exactly like the box
+  being down.
+
 ## 3.1.4
 
 ### Patch Changes

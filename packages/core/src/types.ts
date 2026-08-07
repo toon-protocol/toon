@@ -44,7 +44,7 @@ export interface IlpPeerInfo {
   assetCode: string;
   /** Asset scale - number of decimal places (e.g., 9 for XRP, 6 for USD cents) */
   assetScale: number;
-  /** Supported settlement chain identifiers in {blockchain}:{network}:{chainId} format (e.g., ["evm:base:8453", "xrp:mainnet"]) */
+  /** Supported settlement chain identifiers (e.g., ["evm:8453", "solana:devnet", "xrp:mainnet"]). EVM uses the BARE `evm:<numeric chainId>` form — negotiation is a set intersection, so an extra family segment (`evm:base:8453`) matches nothing. See toon#165. */
   supportedChains?: string[];
   /** Maps chain identifier to the peer's settlement address on that chain */
   settlementAddresses?: Record<string, string>;
@@ -96,7 +96,7 @@ export interface Subscription {
 export interface OpenChannelParams {
   /** Connector peer identifier */
   peerId: string;
-  /** Settlement chain identifier (e.g., "evm:base:8453") */
+  /** Settlement chain identifier (e.g., "evm:8453") */
   chain: string;
   /** Token contract address on the chain */
   token?: string;

@@ -100,9 +100,7 @@ describe('resolveNetworkProfile', () => {
       });
       it('the Mina connector provider carries the current zkApp + tokenId', () => {
         const withKey = resolveNetworkProfile(tier, { keyId: '0xkey' });
-        const mina = withKey.chainProviders.find(
-          (c) => c.chainType === 'mina'
-        );
+        const mina = withKey.chainProviders.find((c) => c.chainType === 'mina');
         expect(mina).toBeDefined();
         if (mina && mina.chainType === 'mina') {
           expect(mina.zkAppAddress).toBe(MINA_DEVNET_ZKAPP);
@@ -125,6 +123,19 @@ describe('resolveNetworkProfile', () => {
         const evmRpc = evmKey ? c.chainRpcUrls[evmKey] : undefined;
         expect(evmRpc).toBe('https://base-sepolia-rpc.publicnode.com');
         expect(evmRpc).not.toBe('https://sepolia.base.org');
+      });
+
+      // toon#165: the live fleet's kind:10032 announce carries
+      // tokenNetworks["evm:84532"] and the connector's x402 greeting quotes
+      // chain: "evm:84532" — no `:base` family segment. A preset that emits
+      // `evm:base:84532` intersects with nothing the peer advertises, so
+      // negotiation silently drops EVM and falls through to Solana.
+      it('emits the EVM chain id in the numeric-only form the live announce uses', () => {
+        expect(c.supportedChains).toContain('evm:84532');
+        expect(c.supportedChains).not.toContain('evm:base:84532');
+        expect(c.tokenNetworks['evm:84532']).toBe(
+          '0x1E95493fEF46707E034b4a1945f25a8C76A1823D'
+        );
       });
 
       it('bakes the current Mina zkApp + tokenId into minaChannel', () => {

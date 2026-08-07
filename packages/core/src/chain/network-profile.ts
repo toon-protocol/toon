@@ -332,7 +332,7 @@ export function resolveNetworkProfile(
  *
  * Where {@link NetworkProfile} targets the apex connector + node containers
  * (env overlay + `chainProviders`), this targets the @toon-protocol/client
- * `ToonClientConfig` shape: identifier-keyed maps (`evm:<name>:<chainId>`,
+ * `ToonClientConfig` shape: identifier-keyed maps (`evm:<chainId>`,
  * `solana:<cluster>`, `mina:<network>`) plus the Solana/Mina channel params.
  * It draws from the SAME presets (`CHAIN_PRESETS`, `SOLANA_TIER`, `MINA_TIER`),
  * so node and client default to the identical live contracts — no duplicated
@@ -342,7 +342,7 @@ export function resolveNetworkProfile(
  * client's fully-manual path and is intentionally not handled.
  */
 export interface ClientNetworkPresets {
-  /** Chain identifiers (`evm:base:84532`, `solana:devnet`, `mina:devnet`). */
+  /** Chain identifiers (`evm:84532`, `solana:devnet`, `mina:devnet`). */
   supportedChains: string[];
   /** identifier → JSON-RPC / GraphQL URL. */
   chainRpcUrls: Record<string, string>;
@@ -368,10 +368,17 @@ export interface ClientNetworkPresets {
   status: NetworkFamilyStatus;
 }
 
-/** EVM client identifier: `evm:<family>:<chainId>` (family = base/arbitrum/…). */
+/**
+ * EVM client identifier: `evm:<chainId>` — no family segment. This matches the
+ * convention already used by `resolveCustom` below (which parses `evm:<numeric>`)
+ * and by `buildEvmProviderEntry` in chain-config.ts, as well as what the live
+ * fleet advertises (kind:10032 `tokenNetworks["evm:84532"]`, the connector's
+ * x402 `chain: "evm:84532"`). toon#165: an `evm:base:<id>` form here does not
+ * intersect with the peer's `evm:<id>` and silently drops EVM out of settlement
+ * negotiation.
+ */
 function evmClientId(preset: ChainPreset): string {
-  const family = preset.name.split('-')[0] ?? preset.name;
-  return `evm:${family}:${preset.chainId}`;
+  return `evm:${preset.chainId}`;
 }
 
 /**
