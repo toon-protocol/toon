@@ -7,7 +7,7 @@ type ConsoleMethodSpy<TMethod extends (...args: never[]) => unknown> =
   MockInstance<Parameters<TMethod>, ReturnType<TMethod>>;
 
 describe('createLogger', () => {
-  let consoleSpy: {
+  let consoleSpy:     {
     log: ConsoleMethodSpy<typeof console.log>;
     error: ConsoleMethodSpy<typeof console.error>;
     warn: ConsoleMethodSpy<typeof console.warn>;
