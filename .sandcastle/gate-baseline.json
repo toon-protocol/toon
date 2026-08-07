@@ -4,9 +4,10 @@
   "capturedAt": "2026-07-22",
   "capturedFromCommit": "76dc9f0b36679d073502086a56bbadffc9e1c391",
   "capturedFromRef": "main",
-  "timingsRecapturedAt": "2026-08-05",
-  "timingsRecapturedFromCommit": "982f219fab60151d9072b6a2aab70aede5470cc4",
-  "timingsRecaptureMethod": "toon#151. `gateSpeed` and `gatePerformance.runnerMinutes` were re-measured against the workflow's CURRENT job set, via `gh api repos/toon-protocol/toon/actions/runs/<id>/attempts/1/jobs` for the 5 most recent `push`-to-`main` runs of ci.yml as of 2026-08-05 (run ids in `sampleRuns`; the same 5-most-recent-push-runs rule as the original capture). Only the two GATED jobs are counted — `build` and `Devbox Environment Validation`. The `Gate speed/performance no-regression guard` job itself is excluded: it observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API. Note that `Build sandcastle agent image` belongs to a DIFFERENT workflow (agent-image.yml) with its own run id, so it has never appeared in this run's job list and does not affect these figures — its size is gated separately by `dockerImageSize`. The recaptured summed runner-seconds (154.6) came out identical to the 2026-07-22 capture, i.e. the gate's compute has not drifted; only the wall-clock figure needed replacing, and it was replaced by a queue-immune metric rather than re-averaged.",
+  "timingsRecapturedAt": "2026-08-07",
+  "timingsRecapturedFromCommit": "430a358d8b52a9bc78edaa7b5165882c46ec747c",
+  "timingsRecaptureMethod": "HISTORICAL (superseded by timingsRecaptureMethodUpdate below; kept for how the 2026-08-05 generation under supersededSampleRuns was produced). toon#151. `gateSpeed` and `gatePerformance.runnerMinutes` were re-measured against the workflow's CURRENT job set, via `gh api repos/toon-protocol/toon/actions/runs/<id>/attempts/1/jobs` for the 5 most recent `push`-to-`main` runs of ci.yml as of 2026-08-05 (run ids in `sampleRuns`; the same 5-most-recent-push-runs rule as the original capture). Only the two GATED jobs are counted — `build` and `Devbox Environment Validation`. The `Gate speed/performance no-regression guard` job itself is excluded: it observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API. Note that `Build sandcastle agent image` belongs to a DIFFERENT workflow (agent-image.yml) with its own run id, so it has never appeared in this run's job list and does not affect these figures — its size is gated separately by `dockerImageSize`. The recaptured summed runner-seconds (154.6) came out identical to the 2026-07-22 capture, i.e. the gate's compute has not drifted; only the wall-clock figure needed replacing, and it was replaced by a queue-immune metric rather than re-averaged.",
+  "timingsRecaptureMethodUpdate": "toon#173. The 2026-08-05 capture above sampled only `push`-to-`main` runs, but `gate-regression-guard` gates every `pull_request` run too (ci.yml:3-6 triggers the workflow `on: pull_request` as well as `push` to `main`; the guard job at ci.yml:135 carries no event filter of its own and its `needs: [build, devbox-validate]` at ci.yml:137 both run on either event -- `build` is unconditional, `devbox-validate` is `if: github.event_name == 'push' || github.event_name == 'pull_request'` at ci.yml:112) -- so that sample undercounted real variance. Proof: the PR run that actually gated #157 (run 31187288497, head 7b125eb, merged as 430a358) measured a 120.0s longest job / 164.0s summed runner-seconds, both above every 2026-08-05 sampleRun, yet was never eligible for inclusion under the push-only rule. Re-recaptured 2026-08-07 from the 5 most recent COMPLETED ci.yml runs of EITHER event type (`gh run list --workflow=ci.yml --json databaseId,headSha,createdAt,event,conclusion --limit 15`, most recent first, skipping non-`success` runs), via the same per-run `gh api .../attempts/1/jobs` read as before. See `sampleRuns[].event` for which of the 5 were `push` vs `pull_request`.",
   "gateShape": {
     "lint": "eslint . --max-warnings 940",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -17,24 +18,26 @@
   "gateSpeed": {
     "description": "Execution time of the ci.yml workflow's gated jobs (`build` and `Devbox Environment Validation`; the `Gate speed/performance no-regression guard` job is excluded because it measures the run rather than being part of it). The GATED figure is `averageLongestJobDurationSeconds`: the measured jobs run in parallel, so on a free runner pool the longest of them IS the run's wall-clock, and unlike the raw span it cannot be inflated by runner queue depth.",
     "unit": "seconds",
-    "averageLongestJobDurationSeconds": 106.6,
-    "averageBuildJobDurationSeconds": 106.6,
-    "averageDevboxValidateJobDurationSeconds": 48,
-    "averageTotalRunDurationSeconds": 106.6,
-    "averageTotalRunDurationSecondsNote": "INFORMATIONAL, NOT GATED (toon#151). max(job completed_at) - min(job started_at). All five recaptured runs were scheduled onto free runners (7.8s average total queue), so the span happens to equal the longest job here — that coincidence is exactly why the previous 112s span baseline looked sound and then false-FAILed the moment the org's runner pool was saturated (toon#150 measured a 402.0s span for 147.0s of compute). The guard prints this number for context and never compares against it.",
-    "averageQueueSecondsPerRun": 7.8,
+    "averageLongestJobDurationSeconds": 114,
+    "averageBuildJobDurationSeconds": 114,
+    "averageDevboxValidateJobDurationSeconds": 49.2,
+    "averageTotalRunDurationSeconds": 114,
+    "averageTotalRunDurationSecondsNote": "INFORMATIONAL, NOT GATED (toon#151). max(job completed_at) - min(job started_at). All five recaptured runs were scheduled onto free runners (6.4s average total queue), so the span happens to equal the longest job here — that coincidence is exactly why the previous 112s span baseline looked sound and then false-FAILed the moment the org's runner pool was saturated (toon#150 measured a 402.0s span for 147.0s of compute). The guard prints this number for context and never compares against it.",
+    "averageQueueSecondsPerRun": 6.4,
     "sampleSize": 5,
     "regressionTolerance": 0.2,
-    "regressionToleranceRationale": "toon#153. The 50% band inherited from the retired span metric (toon#151) was sized for a queue-inflated quantity that could swing tens of seconds run-to-run; averageLongestJobDurationSeconds is a job duration and is far steadier. The 5 sampleRuns' longestJobSeconds (104, 100, 108, 112, 109) deviate at most 6.2% from the 106.6s mean (the 100s low outlier). 20% is roughly 3x that observed spread -- enough headroom that no sampleRun would ever false-FAIL -- while still catching a genuine 40% compute regression (106.6s -> 149.2s exceeds the 127.9s allowance)."
+    "regressionToleranceRationale": "toon#153, corrected by toon#173. The 50% band inherited from the retired span metric (toon#151) was sized for a queue-inflated quantity that could swing tens of seconds run-to-run; averageLongestJobDurationSeconds is a job duration and is far steadier. toon#173 re-recaptured sampleRuns to include pull_request-gated runs (see timingsRecaptureMethodUpdate) after discovering the #153 rationale's push-only sample had missed the run that actually gated #157. Over the current 5 sampleRuns, longestJobSeconds (104, 120, 115, 115, 116) deviate at most 8.8% from the new 114.0s mean (observedMaxDeviationFraction; the 104s low outlier). 20% is roughly 2.3x that observed spread -- tighter than the 3x toon#153 claimed, but still enough that no sampleRun would false-FAIL -- while still catching a genuine 40% compute regression (114.0s -> 159.6s exceeds the 136.8s allowance). Real headroom above the top observed sample (120s) is ~14.0%, under the ~15% comfort margin toon#173 asked to flag rather than silently tolerate.",
+    "observedMaxDeviationFraction": 0.0877192982
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
     "runnerMinutes": {
       "unit": "raw job-seconds summed across both gated ci.yml jobs (build + Devbox Environment Validation), NOT GitHub-billed minutes",
-      "averagePerRunSeconds": 154.6,
-      "recapturedNote": "toon#151 re-measured this against the current job set on 2026-08-05 and got 154.6 again (per-run: 158, 149, 153, 156, 157), so the figure is unchanged. Summed job-seconds is execution time only and never included queue time, which is why this metric passed throughout the toon#150 incident while the span-based speed metric failed.",
+      "averagePerRunSeconds": 163.2,
+      "recapturedNote": "toon#151 re-measured this against the current job set on 2026-08-05 and got 154.6 again (per-run: 158, 149, 153, 156, 157), unchanged from the 2026-07-22 capture. toon#173 then re-recaptured on 2026-08-07 with a push+pull_request sample (see timingsRecaptureMethodUpdate) and got 163.2 (per-run: 158, 164, 159, 167, 168) -- summed job-seconds is still execution time only and never includes queue time, which is why this metric passed throughout the toon#150 incident while the span-based speed metric failed; the increase from 154.6 to 163.2 reflects the broadened, more representative sample, not a regression.",
       "regressionTolerance": 0.15,
-      "regressionToleranceRationale": "toon#153. The 5 sampleRuns' sumRunnerSeconds (158, 149, 153, 156, 157) deviate at most 3.6% from the 154.6s mean (the 149s low outlier) -- tighter than gateSpeed's spread, so this figure gets a tighter band than gateSpeed.regressionTolerance. 15% is roughly 4x that observed spread, comfortably covering the top observed sample (158s, +2.2%) while still catching a genuine 40% compute regression (154.6s -> 216.4s exceeds the 177.8s allowance).",
+      "regressionToleranceRationale": "toon#153, corrected by toon#173. Over the current 5 sampleRuns, sumRunnerSeconds (158, 164, 159, 167, 168) deviate at most 3.2% from the new 163.2s mean (observedMaxDeviationFraction; the 158s low outlier) -- still tighter than gateSpeed's spread, so this figure keeps the tighter band. 15% is roughly 4.7x that observed spread, comfortably clearing the top observed sample (168s, +2.9%), while still catching a genuine 40% compute regression (163.2s -> 228.5s exceeds the 187.7s allowance). Real headroom above the top observed sample (168s) is ~11.7%, under the ~15% comfort margin -- flagged per toon#173 rather than silently widened.",
+      "observedMaxDeviationFraction": 0.0318627451,
       "billedMinutes": 0,
       "billedMinutesNote": "Public repo — GitHub-hosted Actions minutes are free; the Actions API always reports billable.UBUNTU.total_ms=0 for this repo regardless of actual runner time."
     },
@@ -82,20 +85,35 @@
     }
   },
   "sampleRuns": [
-    { "runId": 30655195940, "commit": "982f219", "longestJobSeconds": 104, "sumRunnerSeconds": 158, "buildJobSeconds": 104, "devboxJobSeconds": 54, "totalRunSpanSeconds": 104, "queueSeconds": 10 },
-    { "runId": 30654949560, "commit": "f3ae203", "longestJobSeconds": 100, "sumRunnerSeconds": 149, "buildJobSeconds": 100, "devboxJobSeconds": 49, "totalRunSpanSeconds": 100, "queueSeconds": 4 },
-    { "runId": 30459572572, "commit": "63c39cd", "longestJobSeconds": 108, "sumRunnerSeconds": 153, "buildJobSeconds": 108, "devboxJobSeconds": 45, "totalRunSpanSeconds": 108, "queueSeconds": 11 },
-    { "runId": 30423562085, "commit": "3787568", "longestJobSeconds": 112, "sumRunnerSeconds": 156, "buildJobSeconds": 112, "devboxJobSeconds": 44, "totalRunSpanSeconds": 112, "queueSeconds": 10 },
-    { "runId": 30423296593, "commit": "4821c2d", "longestJobSeconds": 109, "sumRunnerSeconds": 157, "buildJobSeconds": 109, "devboxJobSeconds": 48, "totalRunSpanSeconds": 109, "queueSeconds": 4 }
+    { "runId": 31187584360, "commit": "430a358", "event": "push", "longestJobSeconds": 104, "sumRunnerSeconds": 158, "buildJobSeconds": 104, "devboxJobSeconds": 54, "totalRunSpanSeconds": 104, "queueSeconds": 11 },
+    { "runId": 31187288497, "commit": "7b125eb", "event": "pull_request", "longestJobSeconds": 120, "sumRunnerSeconds": 164, "buildJobSeconds": 120, "devboxJobSeconds": 44, "totalRunSpanSeconds": 120, "queueSeconds": 4, "note": "toon#173: the PR run that actually gated #157; excluded from the toon#151 push-only sample despite being subject to the same gate (ci.yml:135-137)." },
+    { "runId": 31186848879, "commit": "f0fb42e", "event": "push", "longestJobSeconds": 115, "sumRunnerSeconds": 159, "buildJobSeconds": 115, "devboxJobSeconds": 44, "totalRunSpanSeconds": 115, "queueSeconds": 5 },
+    { "runId": 31186034892, "commit": "ad0373c", "event": "pull_request", "longestJobSeconds": 115, "sumRunnerSeconds": 167, "buildJobSeconds": 115, "devboxJobSeconds": 52, "totalRunSpanSeconds": 115, "queueSeconds": 6 },
+    { "runId": 31185599496, "commit": "6fc451b", "event": "pull_request", "longestJobSeconds": 116, "sumRunnerSeconds": 168, "buildJobSeconds": 116, "devboxJobSeconds": 52, "totalRunSpanSeconds": 116, "queueSeconds": 6 }
   ],
   "supersededSampleRuns": {
-    "note": "The 2026-07-22 capture's raw per-run figures, kept for history. `totalRunDurationSeconds` there is the span metric toon#151 retired.",
-    "runs": [
-      { "runId": 29953906825, "commit": "76dc9f0", "totalRunDurationSeconds": 103, "buildJobSeconds": 99, "devboxJobSeconds": 56, "pnpmCacheHit": true },
-      { "runId": 29951193583, "commit": "19c334a", "totalRunDurationSeconds": 105, "buildJobSeconds": 101, "devboxJobSeconds": 42, "pnpmCacheHit": true },
-      { "runId": 29945828463, "commit": "ea21347", "totalRunDurationSeconds": 117, "buildJobSeconds": 113, "devboxJobSeconds": 46, "pnpmCacheHit": true },
-      { "runId": 29935884552, "commit": "e4f8728", "totalRunDurationSeconds": 119, "buildJobSeconds": 114, "devboxJobSeconds": 47, "pnpmCacheHit": false },
-      { "runId": 29873378048, "commit": "264e73d", "totalRunDurationSeconds": 116, "buildJobSeconds": 105, "devboxJobSeconds": 50, "pnpmCacheHit": true }
+    "note": "Prior captures' raw per-run figures, kept for history, oldest first. The 2026-07-22 generation's `totalRunDurationSeconds` is the span metric toon#151 retired. The 2026-08-05 generation is the push-only job-duration sample toon#173 superseded after finding it missed the pull_request-gated runs the guard also enforces (see the live `sampleRuns` above and `timingsRecaptureMethodUpdate`).",
+    "generations": [
+      {
+        "capturedAt": "2026-07-22",
+        "runs": [
+          { "runId": 29953906825, "commit": "76dc9f0", "totalRunDurationSeconds": 103, "buildJobSeconds": 99, "devboxJobSeconds": 56, "pnpmCacheHit": true },
+          { "runId": 29951193583, "commit": "19c334a", "totalRunDurationSeconds": 105, "buildJobSeconds": 101, "devboxJobSeconds": 42, "pnpmCacheHit": true },
+          { "runId": 29945828463, "commit": "ea21347", "totalRunDurationSeconds": 117, "buildJobSeconds": 113, "devboxJobSeconds": 46, "pnpmCacheHit": true },
+          { "runId": 29935884552, "commit": "e4f8728", "totalRunDurationSeconds": 119, "buildJobSeconds": 114, "devboxJobSeconds": 47, "pnpmCacheHit": false },
+          { "runId": 29873378048, "commit": "264e73d", "totalRunDurationSeconds": 116, "buildJobSeconds": 105, "devboxJobSeconds": 50, "pnpmCacheHit": true }
+        ]
+      },
+      {
+        "capturedAt": "2026-08-05",
+        "runs": [
+          { "runId": 30655195940, "commit": "982f219", "event": "push", "longestJobSeconds": 104, "sumRunnerSeconds": 158, "buildJobSeconds": 104, "devboxJobSeconds": 54, "totalRunSpanSeconds": 104, "queueSeconds": 10 },
+          { "runId": 30654949560, "commit": "f3ae203", "event": "push", "longestJobSeconds": 100, "sumRunnerSeconds": 149, "buildJobSeconds": 100, "devboxJobSeconds": 49, "totalRunSpanSeconds": 100, "queueSeconds": 4 },
+          { "runId": 30459572572, "commit": "63c39cd", "event": "push", "longestJobSeconds": 108, "sumRunnerSeconds": 153, "buildJobSeconds": 108, "devboxJobSeconds": 45, "totalRunSpanSeconds": 108, "queueSeconds": 11 },
+          { "runId": 30423562085, "commit": "3787568", "event": "push", "longestJobSeconds": 112, "sumRunnerSeconds": 156, "buildJobSeconds": 112, "devboxJobSeconds": 44, "totalRunSpanSeconds": 112, "queueSeconds": 10 },
+          { "runId": 30423296593, "commit": "4821c2d", "event": "push", "longestJobSeconds": 109, "sumRunnerSeconds": 157, "buildJobSeconds": 109, "devboxJobSeconds": 48, "totalRunSpanSeconds": 109, "queueSeconds": 4 }
+        ]
+      }
     ]
   }
 }

@@ -21,12 +21,19 @@ export interface GateBaseline {
     // spelling out the derivation). The guard enforces the constant below; a
     // test pins the two in sync so neither can be edited alone.
     regressionTolerance?: number;
+    // DOCUMENTATION (toon#173): computeMaxDeviationFraction(sampleRuns'
+    // longestJobSeconds), recorded so a test can recompute it from the
+    // committed sampleRuns and fail if this drifts out of sync with them --
+    // the failure mode that shipped a stale 3x/4x claim in toon#153.
+    observedMaxDeviationFraction?: number;
   };
   gatePerformance: {
     runnerMinutes: {
       averagePerRunSeconds: number;
       // DOCUMENTATION only, as above.
       regressionTolerance?: number;
+      // DOCUMENTATION (toon#173), as above.
+      observedMaxDeviationFraction?: number;
     };
     dockerImageSize: {
       bytes?: number;
@@ -43,6 +50,12 @@ export interface GateBaseline {
   sampleRuns?: ReadonlyArray<{
     longestJobSeconds: number;
     sumRunnerSeconds: number;
+    // toon#173: which trigger produced this run. gate-regression-guard gates
+    // pull_request runs too, not just push-to-main (ci.yml:135-137 -- the
+    // guard job has no event filter of its own, and the workflow triggers on
+    // both events), so the sample set is no longer push-only -- recorded so
+    // that is legible from the data instead of asserted in prose.
+    event?: string;
   }>;
 }
 
@@ -70,19 +83,35 @@ export interface GuardResult {
 export const IMAGE_SIZE_REGRESSION_TOLERANCE = 0.5;
 
 // toon#153: averageLongestJobDurationSeconds is a job duration, not a
-// queue-inflated span, so it is far steadier than the metric 50% was sized for.
-// The five sampleRuns' longestJobSeconds (104, 100, 108, 112, 109) deviate at
-// most 6.2% from the 106.6s mean. 20% is roughly 3x that spread -- no sample
-// run could false-FAIL -- and still catches a genuine 40% compute regression
-// (106.6s -> 149.2s exceeds the 127.9s allowance).
+// queue-inflated span, so it is far steadier than the metric 50% was sized
+// for. toon#173: the actual spread-to-tolerance ratio is COMPUTED from the
+// committed sampleRuns, not hand-copied into this comment where it could
+// silently drift out of sync with them (as it did in toon#153, whose "3x"/
+// "4x" claim had gone stale by the time this fix landed) -- see
+// gate-baseline.json's gateSpeed.regressionToleranceRationale for the current
+// numbers and gate-guard.test.ts's "regressionToleranceRationale is
+// falsifiable" block for the check that recomputes it every run.
 export const SPEED_REGRESSION_TOLERANCE = 0.2;
 
-// toon#153: the five sampleRuns' sumRunnerSeconds (158, 149, 153, 156, 157)
-// deviate at most 3.6% from the 154.6s mean -- steadier still than the
-// longest-job figure, so this metric gets a tighter band. 15% is roughly 4x
-// that spread, comfortably clearing the top observed sample (158s, +2.2%),
-// and still catches a 40% regression (154.6s -> 216.4s exceeds 177.8s).
+// toon#153: runner-seconds' observed spread is steadier than the longest-job
+// figure's, so it earns the tighter of the two bands. toon#173: see
+// SPEED_REGRESSION_TOLERANCE's comment above -- same falsifiability fix,
+// same reason the ratio itself isn't restated here.
 export const PERFORMANCE_REGRESSION_TOLERANCE = 0.15;
+
+// toon#173: the max fractional deviation of any sample from the mean of all
+// samples -- the "observed spread" that regressionToleranceRationale strings
+// describe in prose. Computed from data so the claim can be checked against
+// gate-baseline.json's sampleRuns instead of trusted as an assertion, which is
+// how toon#153's rationale went stale (recorded a real 2026-08-05 ratio, then
+// kept asserting it after the underlying sampleRuns no longer supported it).
+export function computeMaxDeviationFraction(samples: readonly number[]): number {
+  if (samples.length === 0) {
+    throw new Error('computeMaxDeviationFraction requires at least one sample');
+  }
+  const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+  return Math.max(...samples.map((value) => Math.abs(value - mean) / mean));
+}
 
 const MAX_WARNINGS_PATTERN = /--max-warnings[= ](\d+)/;
 
