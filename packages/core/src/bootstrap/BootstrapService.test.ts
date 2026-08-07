@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
+import type { Filter } from 'nostr-tools/filter';
 import { BootstrapService, BootstrapError } from './BootstrapService.js';
 import type {
   ConnectorAdminClient,
@@ -21,6 +22,8 @@ import type {
 } from './types.js';
 import type { IlpPeerInfo } from '../types.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
+import { GenesisPeerLoader } from '../discovery/index.js';
+import type { GenesisPeer } from '../discovery/index.js';
 
 // ============================================================================
 // Mock: WebSocket transport (the only true boundary mock)
@@ -130,6 +133,13 @@ function createMockIlpClient(result: Partial<IlpSendResult> = {}): IlpClient & {
 /**
  * Simulate the relay responding with a kind:10032 event for the peer.
  * Must be called after a WebSocket connection is established.
+ *
+ * The response honours the REQ's `authors` filter the way a real relay
+ * does: an event whose author is absent from `authors` is never delivered,
+ * so the subscription sees only EOSE with zero events. A REQ without
+ * `authors` (e.g. the `discoverPeersViaRelay` filter) restricts nothing.
+ * That fidelity is what lets the toon#175 self-heal tests prove the author
+ * filter is load-bearing rather than incidental.
  */
 function simulateRelayResponse(
   peerInfo: IlpPeerInfo,
@@ -144,11 +154,11 @@ function simulateRelayResponse(
   // Trigger WS open → service sends REQ
   capturedWs.onOpen();
 
-  // Build a fake kind:10032 event with peer info in content
-  const subId = JSON.parse(
+  const [, subId, filter] = JSON.parse(
     (capturedWs.send.mock.calls[0]?.[0] as string) ?? '["REQ","unknown",{}]'
-  )[1] as string;
+  ) as [string, string, Filter];
 
+  // Build a fake kind:10032 event with peer info in content
   const event = {
     id: 'ee'.repeat(32),
     pubkey,
@@ -159,8 +169,10 @@ function simulateRelayResponse(
     sig: 'ff'.repeat(64),
   };
 
-  // Send EVENT then EOSE
-  capturedWs.onMessage(Buffer.from(JSON.stringify(['EVENT', subId, event])));
+  // Send EVENT (only if the filter would have matched it) then EOSE
+  if (!filter.authors || filter.authors.includes(pubkey)) {
+    capturedWs.onMessage(Buffer.from(JSON.stringify(['EVENT', subId, event])));
+  }
   capturedWs.onMessage(Buffer.from(JSON.stringify(['EOSE', subId])));
 }
 
@@ -912,6 +924,127 @@ describe('BootstrapService', () => {
       (e) => e.type === 'bootstrap:announce-failed'
     );
     expect(failEvents).toHaveLength(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Self-heal: a stale genesis seed must resolve to the announced endpoints
+  // (toon#175 / toon-meta#310). The apex-retirement design rests on
+  // `queryPeerInfo` filtering `{kinds:[10032], authors:[seededPubkey]}`
+  // against the seeded `relayUrl` -- so `pubkey`/`relayUrl` are load-bearing
+  // while a seeded `ilpAddress`/`btpEndpoint` are only starting hints,
+  // superseded by whatever the live announcement carries. If a stale seed
+  // did NOT resolve to the live announcement, retiring the apex would
+  // strand every already-deployed client.
+  // ---------------------------------------------------------------------------
+
+  describe('self-heal: stale seed resolves to announced endpoints', () => {
+    // Arbitrary but fixed valid pubkey standing in for the adopted announce
+    // key (toon-meta#310 names its real prefix as `30fdd01d…`). What matters
+    // for this test is that it is the SAME author on both the seed and the
+    // announcement -- not that it match production.
+    const APEX_PUBKEY = 'ab'.repeat(32);
+    // A different valid pubkey, used only to prove the author filter matters.
+    const IMPOSTER_PUBKEY = 'cd'.repeat(32);
+
+    // The stale genesis entry an already-deployed client would still be
+    // holding: apex pubkey + apex relayUrl (both load-bearing, unchanged by
+    // the retirement), plus ilpAddress/btpEndpoint pointing at the
+    // now-retired apex (stale hints, expected to be superseded).
+    const STALE_SEED: GenesisPeer = {
+      pubkey: APEX_PUBKEY,
+      // Correct because toon-meta#310 keeps this hostname pointed at the
+      // relay box across the cutover, specifically so old clients can still
+      // reach *something* at the address they already trust.
+      relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
+      // Correct because this is what the (now-retired) apex used to
+      // advertise -- a stale hint the client must NOT end up using.
+      ilpAddress: 'g.toon.apex',
+      // Same reasoning as ilpAddress above.
+      btpEndpoint: 'wss://apex.devnet.toonprotocol.dev/btp',
+    };
+
+    // The live kind:10032 the relay box announces post-cutover, authored by
+    // the same adopted key. These are the values the client must end up
+    // using instead of the seed's stale ones.
+    const ANNOUNCED_PEER_INFO: IlpPeerInfo = {
+      // Correct because toon-meta#310 has the relay box own `g.toon.relay`
+      // outright post-cutover.
+      ilpAddress: 'g.toon.relay',
+      // Correct because this is the relay box's real BTP endpoint, distinct
+      // from the apex's retired one above.
+      btpEndpoint: 'wss://relay-ws.devnet.toonprotocol.dev/btp',
+      assetCode: 'USD',
+      assetScale: 6,
+    };
+
+    it('resolves the client to the announced endpoints, not the stale seeded ones', async () => {
+      vi.mocked(GenesisPeerLoader.loadAllPeers).mockReturnValueOnce([
+        STALE_SEED,
+      ]);
+
+      const service = new BootstrapService(
+        { knownPeers: [], ardriveEnabled: false },
+        secretKey,
+        ownIlpInfo
+      );
+
+      const bootstrapPromise = service.bootstrap();
+      await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+
+      // The relay enforces its own REQ filter (authors: [APEX_PUBKEY]) the
+      // way a real relay would -- the announcement is delivered because its
+      // author matches the seeded pubkey.
+      simulateRelayResponse(ANNOUNCED_PEER_INFO, APEX_PUBKEY);
+
+      const results = await bootstrapPromise;
+
+      expect(results).toHaveLength(1);
+      const result = results[0];
+      if (!result) {
+        throw new Error('unreachable: asserted results.toHaveLength(1) above');
+      }
+
+      // relayUrl and pubkey are what the client actually used to find the
+      // peer -- load-bearing, unchanged from the seed.
+      expect(result.knownPeer.relayUrl).toBe(STALE_SEED.relayUrl);
+      expect(result.knownPeer.pubkey).toBe(STALE_SEED.pubkey);
+
+      // The endpoints the client ends up using come from the LIVE
+      // announcement, not the stale seed -- this is the self-heal claim.
+      expect(result.peerInfo.ilpAddress).toBe(ANNOUNCED_PEER_INFO.ilpAddress);
+      expect(result.peerInfo.btpEndpoint).toBe(ANNOUNCED_PEER_INFO.btpEndpoint);
+      expect(result.peerInfo.ilpAddress).not.toBe(STALE_SEED.ilpAddress);
+      expect(result.peerInfo.btpEndpoint).not.toBe(STALE_SEED.btpEndpoint);
+    });
+
+    it('does not resolve when the announcement is authored by a different pubkey', async () => {
+      // Proves the author filter -- not just the relayUrl -- is what makes
+      // self-heal work: an identical announcement signed by anyone other
+      // than the seeded pubkey must NOT be treated as authoritative.
+      vi.mocked(GenesisPeerLoader.loadAllPeers).mockReturnValueOnce([
+        STALE_SEED,
+      ]);
+
+      const service = new BootstrapService(
+        { knownPeers: [], ardriveEnabled: false },
+        secretKey,
+        ownIlpInfo
+      );
+
+      const bootstrapPromise = service.bootstrap();
+      await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+
+      // Same announced endpoints, but authored by IMPOSTER_PUBKEY. A relay
+      // honoring `authors: [APEX_PUBKEY]` would never deliver this event.
+      simulateRelayResponse(ANNOUNCED_PEER_INFO, IMPOSTER_PUBKEY);
+
+      const results = await bootstrapPromise;
+
+      // No event matched the filter, so queryPeerInfo saw 0 events at EOSE,
+      // bootstrapWithPeer rejected, and bootstrap()'s per-peer try/catch
+      // swallowed it -- no result for this peer.
+      expect(results).toHaveLength(0);
+    });
   });
 
   // ---------------------------------------------------------------------------
