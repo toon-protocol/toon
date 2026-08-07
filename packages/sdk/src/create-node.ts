@@ -426,6 +426,47 @@ export interface ServiceNode {
 }
 
 /**
+ * Build the settlement announcement a node advertises when the caller did not
+ * supply an explicit `settlementInfo`.
+ *
+ * The EVM chain identifier is the BARE `evm:<numeric chainId>` form — no
+ * family/network segment. That is what the live fleet advertises in its
+ * kind:10032 (`tokenNetworks["evm:84532"]`), what the connector's x402 greeting
+ * sends (`chain: "evm:84532"`), what `buildEvmProviderEntry` in core's
+ * chain-config.ts emits, and what `resolveClientNetwork` produces for preset
+ * clients. Settlement negotiation is a plain set intersection over these
+ * strings, so an `evm:base:<id>` key here shares NO chain with a peer speaking
+ * `evm:<id>`: EVM silently drops out and negotiation falls through to the next
+ * family. See toon#165 — the same class of bug PR #168 fixed in
+ * `resolveClientNetwork`, still live on the SDK-default node side.
+ *
+ * Note the connector's own `chainProviders` entry built further down in
+ * `createNode` already used `evm:${chainId}`, so this also removes an
+ * announce-vs-provider divergence inside a single node.
+ *
+ * @param chainConfig Resolved chain preset (see `resolveChainConfig`).
+ * @returns SettlementConfig keyed by the canonical wire chain identifier.
+ */
+export function buildDefaultSettlementInfo(
+  chainConfig: ReturnType<typeof resolveChainConfig>
+): SettlementConfig {
+  const chainKey = `evm:${chainConfig.chainId}`;
+  const preferredTokens: Record<string, string> = {
+    [chainKey]: chainConfig.usdcAddress,
+  };
+  const tokenNetworks: Record<string, string> | undefined =
+    chainConfig.tokenNetworkAddress
+      ? { [chainKey]: chainConfig.tokenNetworkAddress }
+      : undefined;
+
+  return {
+    supportedChains: [chainKey],
+    preferredTokens,
+    ...(tokenNetworks && { tokenNetworks }),
+  };
+}
+
+/**
  * Creates a fully wired ServiceNode from configuration.
  *
  * The returned node has the full ILP packet processing pipeline wired in the
@@ -463,24 +504,8 @@ export function createNode(config: NodeConfig): ServiceNode {
 
   // 0b. Resolve chain config and auto-populate settlementInfo if not set
   const chainConfig = resolveChainConfig(config.chain);
-  let effectiveSettlementInfo = config.settlementInfo;
-  if (!effectiveSettlementInfo) {
-    const chainKey = `evm:base:${chainConfig.chainId}`;
-    const supportedChains = [chainKey];
-    const preferredTokens: Record<string, string> = {
-      [chainKey]: chainConfig.usdcAddress,
-    };
-    const tokenNetworks: Record<string, string> | undefined =
-      chainConfig.tokenNetworkAddress
-        ? { [chainKey]: chainConfig.tokenNetworkAddress }
-        : undefined;
-
-    effectiveSettlementInfo = {
-      supportedChains,
-      preferredTokens,
-      ...(tokenNetworks && { tokenNetworks }),
-    };
-  }
+  const effectiveSettlementInfo =
+    config.settlementInfo ?? buildDefaultSettlementInfo(chainConfig);
 
   // 1. Derive identity from secretKey
   let identity;
