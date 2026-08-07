@@ -291,9 +291,11 @@ describe('the committed gate-baseline.json', () => {
     expect(checkPerformanceRegression(baselineSumRunnerSeconds * 1.4, committed).pass).toBe(false);
   });
 
-  // toon#153: the highest individual sampleRuns figures (112s longest job,
-  // 158s summed runner-seconds) must still pass -- the ratcheted tolerances
-  // must never false-FAIL on the normal variance they were calibrated against.
+  // toon#153: the highest individual sampleRuns figures must still pass -- the
+  // ratcheted tolerances must never false-FAIL on the normal variance they
+  // were calibrated against. The figures are read from the committed
+  // sampleRuns rather than named here, so a recapture (as in toon#173) cannot
+  // leave this comment asserting a maximum the data no longer contains.
   it('passes at the top of the observed sampleRuns variance', () => {
     const sampleRuns = committed.sampleRuns ?? [];
     expect(sampleRuns.length).toBeGreaterThan(0);
@@ -337,6 +339,23 @@ describe('the committed gate-baseline.json', () => {
       );
       expect(PERFORMANCE_REGRESSION_TOLERANCE).toBeGreaterThan(observed);
     });
+
+    // The averages the guard gates against must themselves be the mean of the
+    // committed sampleRuns. Without this, observedMaxDeviationFraction could
+    // still agree with the samples while the mean it is a spread AROUND had
+    // drifted away from them -- the same class of defect one level up.
+    it('gates against averages that are the mean of the committed sampleRuns', () => {
+      const mean = (values: readonly number[]) =>
+        values.reduce((sum, value) => sum + value, 0) / values.length;
+      expect(baselineLongestJobSeconds).toBeCloseTo(
+        mean(sampleRuns.map((run) => run.longestJobSeconds)),
+        6,
+      );
+      expect(baselineSumRunnerSeconds).toBeCloseTo(
+        mean(sampleRuns.map((run) => run.sumRunnerSeconds)),
+        6,
+      );
+    });
   });
 });
 
@@ -362,8 +381,11 @@ describe('the ratcheted regression tolerances', () => {
     expect(SPEED_REGRESSION_TOLERANCE).toBe(0.2);
   });
 
-  // Runner-seconds' observed spread (~3.6%) is tighter than the longest-job
-  // figure's (~6.2%), so it earns the tighter of the two bands.
+  // Runner-seconds' observed spread is tighter than the longest-job figure's,
+  // so it earns the tighter of the two bands. The two spreads themselves live
+  // in gate-baseline.json as observedMaxDeviationFraction and are recomputed
+  // from sampleRuns by the "falsifiable" block above (toon#173) rather than
+  // quoted here, where they would go stale on the next recapture.
   it('gates runner-seconds tighter still, at 15%', () => {
     expect(PERFORMANCE_REGRESSION_TOLERANCE).toBe(0.15);
     expect(PERFORMANCE_REGRESSION_TOLERANCE).toBeLessThan(SPEED_REGRESSION_TOLERANCE);

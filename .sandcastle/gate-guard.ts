@@ -51,9 +51,10 @@ export interface GateBaseline {
     longestJobSeconds: number;
     sumRunnerSeconds: number;
     // toon#173: which trigger produced this run. gate-regression-guard gates
-    // pull_request runs too (ci.yml:112), not just push-to-main, so the
-    // sample set is no longer push-only -- recorded so that is legible from
-    // the data instead of asserted in prose.
+    // pull_request runs too, not just push-to-main (ci.yml:135-137 -- the
+    // guard job has no event filter of its own, and the workflow triggers on
+    // both events), so the sample set is no longer push-only -- recorded so
+    // that is legible from the data instead of asserted in prose.
     event?: string;
   }>;
 }
