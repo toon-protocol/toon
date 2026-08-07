@@ -799,8 +799,12 @@ export function createNode(config: NodeConfig): ServiceNode {
     ilpAddress: resolvedIlpAddress,
     ilpAddresses: resolvedIlpAddresses,
     btpEndpoint: config.btpEndpoint ?? '',
-    ...(config.httpEndpoint !== undefined && { httpEndpoint: config.httpEndpoint }),
-    ...(config.supportsUpgrade !== undefined && { supportsUpgrade: config.supportsUpgrade }),
+    ...(config.httpEndpoint !== undefined && {
+      httpEndpoint: config.httpEndpoint,
+    }),
+    ...(config.supportsUpgrade !== undefined && {
+      supportsUpgrade: config.supportsUpgrade,
+    }),
     assetCode: config.assetCode ?? 'USD',
     assetScale: config.assetScale ?? 6,
     feePerByte: String(config.feePerByte ?? 0n),

@@ -9,7 +9,7 @@ import type { X402PricingConfig } from './types.js';
  */
 export function computeX402RequiredAmount(
   payloadBytes: number,
-  config: X402PricingConfig,
+  config: X402PricingConfig
 ): bigint {
   return BigInt(payloadBytes) * config.basePricePerByte + config.routingBuffer;
 }

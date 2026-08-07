@@ -86,13 +86,34 @@ describe('v2 EIP-712 digest — domain binding (finding #1: replay closed)', () 
   const vc = hexToBytes(VERIFYING_CONTRACT);
 
   it('[P0] changing chainId changes the claim digest (cross-chain replay closed)', () => {
-    const a = balanceProofHashEvm(channelId, CUMULATIVE, NONCE, recipient, 8453n, vc);
-    const b = balanceProofHashEvm(channelId, CUMULATIVE, NONCE, recipient, 10n, vc);
+    const a = balanceProofHashEvm(
+      channelId,
+      CUMULATIVE,
+      NONCE,
+      recipient,
+      8453n,
+      vc
+    );
+    const b = balanceProofHashEvm(
+      channelId,
+      CUMULATIVE,
+      NONCE,
+      recipient,
+      10n,
+      vc
+    );
     expect(bytesToHex(a)).not.toBe(bytesToHex(b));
   });
 
   it('[P0] changing verifyingContract changes the claim digest (cross-deployment replay closed)', () => {
-    const a = balanceProofHashEvm(channelId, CUMULATIVE, NONCE, recipient, CHAIN_ID, vc);
+    const a = balanceProofHashEvm(
+      channelId,
+      CUMULATIVE,
+      NONCE,
+      recipient,
+      CHAIN_ID,
+      vc
+    );
     const b = balanceProofHashEvm(
       channelId,
       CUMULATIVE,
@@ -105,20 +126,41 @@ describe('v2 EIP-712 digest — domain binding (finding #1: replay closed)', () 
   });
 
   it('[P0] claim vs coop-close never collide under the same domain (distinct type hashes)', () => {
-    const claim = balanceProofHashEvm(channelId, CUMULATIVE, NONCE, recipient, CHAIN_ID, vc);
+    const claim = balanceProofHashEvm(
+      channelId,
+      CUMULATIVE,
+      NONCE,
+      recipient,
+      CHAIN_ID,
+      vc
+    );
     const coop = coopCloseHashEvm(channelId, CUMULATIVE, NONCE, CHAIN_ID, vc);
     expect(bytesToHex(claim)).not.toBe(bytesToHex(coop));
   });
 
   it('[P0] rejects a non-32-byte channelId', () => {
     expect(() =>
-      balanceProofHashEvm(hexToBytes('0x1234'), CUMULATIVE, NONCE, recipient, CHAIN_ID, vc)
+      balanceProofHashEvm(
+        hexToBytes('0x1234'),
+        CUMULATIVE,
+        NONCE,
+        recipient,
+        CHAIN_ID,
+        vc
+      )
     ).toThrow(/channelId must be 32 bytes/);
   });
 
   it('[P0] rejects a non-20-byte recipient', () => {
     expect(() =>
-      balanceProofHashEvm(channelId, CUMULATIVE, NONCE, hexToBytes('0x1234'), CHAIN_ID, vc)
+      balanceProofHashEvm(
+        channelId,
+        CUMULATIVE,
+        NONCE,
+        hexToBytes('0x1234'),
+        CHAIN_ID,
+        vc
+      )
     ).toThrow(/recipient must be 20 bytes/);
   });
 

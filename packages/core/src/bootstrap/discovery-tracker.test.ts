@@ -326,7 +326,9 @@ describe('createDiscoveryTracker', () => {
       true
     );
 
-    const failure = events.find((e) => e.type === 'bootstrap:settlement-failed');
+    const failure = events.find(
+      (e) => e.type === 'bootstrap:settlement-failed'
+    );
     expect(failure).toBeDefined();
     if (failure && failure.type === 'bootstrap:settlement-failed') {
       expect(failure.reason).toContain('evm:84532');

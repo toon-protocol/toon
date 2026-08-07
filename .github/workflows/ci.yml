@@ -56,6 +56,20 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Blocking gate (toon-protocol/toon#169): `pnpm format:check` existed as
+      # a script but was never referenced anywhere in this workflow, so no PR
+      # had ever had to pass it and 15 files on `main` were already flagged
+      # before this step was added (repaired in a separate commit on the same
+      # PR). A step in `build` for the same reasons as Typecheck above --
+      # `build` is gated by `CI OK`, and this reuses the job's install.
+      #
+      # The glob (`packages/*/src/**/*.ts`, package.json) deliberately covers
+      # no `**/*.md` and nothing outside `packages/*/src`; widening it is a
+      # separate decision with its own argument, not a drive-by of this
+      # gate's wiring.
+      - name: Format check
+        run: pnpm format:check
+
       - name: Gate correctness no-regression guard (lint ceiling)
         run: npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling
 
