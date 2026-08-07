@@ -369,13 +369,13 @@ export interface ClientNetworkPresets {
 }
 
 /**
- * EVM client identifier: `evm:<chainId>` — no family segment. This matches
- * both the wire convention used elsewhere in this file (`buildEvmProviderEntry`
- * in chain-config.ts, `resolveCustom`'s `evm:<numeric>` parsing) and what the
- * live fleet actually advertises (kind:10032 `tokenNetworks["evm:84532"]`,
- * the connector's x402 `chain: "evm:84532"`). toon#165: a `evm:base:<id>`
- * form here does not intersect with the peer's `evm:<id>` and silently drops
- * EVM out of settlement negotiation.
+ * EVM client identifier: `evm:<chainId>` — no family segment. This matches the
+ * convention already used by `resolveCustom` below (which parses `evm:<numeric>`)
+ * and by `buildEvmProviderEntry` in chain-config.ts, as well as what the live
+ * fleet advertises (kind:10032 `tokenNetworks["evm:84532"]`, the connector's
+ * x402 `chain: "evm:84532"`). toon#165: an `evm:base:<id>` form here does not
+ * intersect with the peer's `evm:<id>` and silently drops EVM out of settlement
+ * negotiation.
  */
 function evmClientId(preset: ChainPreset): string {
   return `evm:${preset.chainId}`;

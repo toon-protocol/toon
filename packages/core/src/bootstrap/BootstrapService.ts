@@ -432,7 +432,7 @@ export class BootstrapService {
             `No shared settlement chain with ${registeredPeerId}: ` +
             `we support [${this.settlementInfo.supportedChains.join(', ')}], ` +
             `peer supports [${peerInfo.supportedChains.join(', ')}]`;
-          console.warn(`[Bootstrap] %s`, reason);
+          console.warn(`[Bootstrap] ${reason}`);
           this.emit({
             type: 'bootstrap:settlement-failed',
             peerId: registeredPeerId,
