@@ -122,7 +122,7 @@ describe('GenesisPeerLoader', () => {
     // core 2.0.0 shipped a seed pointing at a rotated/dead devnet identity
     // (and 1.6.0 shipped an empty one) with no test to catch either (toon#56).
     //
-    // These three assert on the *bundled* genesis-peers.json, so they must
+    // These all assert on the *bundled* genesis-peers.json, so they must
     // read it directly rather than whatever TOON_GENESIS_PEERS happens to be
     // in the ambient environment. Test runners set that override to `[]` to
     // keep zero-peer fixtures hermetic (toon#144), and a developer may export
@@ -144,8 +144,14 @@ describe('GenesisPeerLoader', () => {
       }
     });
 
-    it('is non-empty', () => {
-      expect(GenesisPeerLoader.loadGenesisPeers().length).toBeGreaterThan(0);
+    it('has exactly two entries: relay and store', () => {
+      // toon-meta#310 retired the devnet apex: the fleet is now two
+      // independent boxes, so the seed needs exactly one entry per surviving
+      // node. A future edit that empties the array or drops one node back to
+      // a single entry must fail here, not surface as a bootstrap 404 (the
+      // failure mode toon#56 already had once with a single-entry seed).
+      const peers = GenesisPeerLoader.loadGenesisPeers();
+      expect(peers).toHaveLength(2);
     });
 
     it('has no entries silently dropped by validation', () => {
@@ -155,18 +161,35 @@ describe('GenesisPeerLoader', () => {
       expect(loaded.length).toBe(genesisPeersJson.length);
     });
 
-    it('pins the live devnet apex identity', () => {
-      // The devnet apex box identity + endpoints, verified against the live
-      // kind:10032 self-announces on wss://relay-ws.devnet.toonprotocol.dev.
-      // If the box identity rotates on a redeploy, this test forces the seed
-      // to be refreshed deliberately rather than shipping a dead peer again.
+    it('pins the relay box identity', () => {
+      // The relay box adopts the retired apex's announce identity
+      // (30fdd01d…, toon-meta#310/#311) so already-deployed clients repair
+      // themselves against the same author. relayUrl/btpEndpoint are the
+      // relay box's own endpoints, verified against its live kind:10032
+      // self-announce on wss://relay-ws.devnet.toonprotocol.dev.
       const peers = GenesisPeerLoader.loadGenesisPeers();
       expect(peers).toContainEqual({
         pubkey:
           '30fdd01d55c3efeb4c19c2cbeda8247cbc40ae9b15c026e9a301a263001fa7a9',
         relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
-        ilpAddress: 'g.toon',
-        btpEndpoint: 'wss://proxy.devnet.toonprotocol.dev/ilp/btp',
+        ilpAddress: 'g.toon.relay',
+        btpEndpoint: 'wss://proxy.relay.devnet.toonprotocol.dev/ilp/btp',
+      });
+    });
+
+    it('pins the store box identity', () => {
+      // The store keeps its own announce identity (unaffected by the
+      // cutover — only its publish path moves to the relay box) and, since
+      // relayUrl is a required field but the store fronts no relay of its
+      // own, names the relay box's relay-ws URL. Verified against the
+      // store's live kind:10032 self-announce.
+      const peers = GenesisPeerLoader.loadGenesisPeers();
+      expect(peers).toContainEqual({
+        pubkey:
+          '499cdd71c7c3eab8d9b35f88ec9cde29018461e4bef86389004abcd7cfa1108a',
+        relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
+        ilpAddress: 'g.toon.ario',
+        btpEndpoint: 'wss://proxy.ario.devnet.toonprotocol.dev/ilp/btp',
       });
     });
   });
