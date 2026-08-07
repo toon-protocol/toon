@@ -91,7 +91,9 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     throw new InvalidEventError('Invalid field: httpEndpoint must be a string');
   }
   if (supportsUpgrade !== undefined && typeof supportsUpgrade !== 'boolean') {
-    throw new InvalidEventError('Invalid field: supportsUpgrade must be a boolean');
+    throw new InvalidEventError(
+      'Invalid field: supportsUpgrade must be a boolean'
+    );
   }
 
   if (typeof assetCode !== 'string' || assetCode.length === 0) {

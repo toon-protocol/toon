@@ -418,7 +418,9 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
       );
       expect(b.usdcAddress).toBe('0x49beE1Bca5d15Fb0963117923403F9498119a9Ce');
       // The retired 18-decimal e2e token must NOT resurface.
-      expect(b.usdcAddress).not.toBe('0xac80670b86db1eeb5c18c82e18a6bda98fcb4504');
+      expect(b.usdcAddress).not.toBe(
+        '0xac80670b86db1eeb5c18c82e18a6bda98fcb4504'
+      );
     });
 
     it('base-mainnet has no TOON settlement contracts yet (unconfigured)', () => {

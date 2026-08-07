@@ -97,7 +97,10 @@ function createPeerInfoEvent(relayPubkey: string): NostrEvent {
 function createMockVerifier(
   state: 'valid' | 'invalid' | 'missing' | 'expired'
 ): {
-  verify: Mock<Parameters<MockVerifierConfig['verify']>, ReturnType<MockVerifierConfig['verify']>>;
+  verify: Mock<
+    Parameters<MockVerifierConfig['verify']>,
+    ReturnType<MockVerifierConfig['verify']>
+  >;
   getState: Mock<
     Parameters<NonNullable<MockVerifierConfig['getState']>>,
     ReturnType<NonNullable<MockVerifierConfig['getState']>>
@@ -105,7 +108,10 @@ function createMockVerifier(
 } {
   return {
     verify: vi
-      .fn<Parameters<MockVerifierConfig['verify']>, ReturnType<MockVerifierConfig['verify']>>()
+      .fn<
+        Parameters<MockVerifierConfig['verify']>,
+        ReturnType<MockVerifierConfig['verify']>
+      >()
       .mockResolvedValue(state === 'valid'),
     getState: vi
       .fn<

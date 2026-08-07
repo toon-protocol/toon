@@ -100,9 +100,7 @@ describe('resolveNetworkProfile', () => {
       });
       it('the Mina connector provider carries the current zkApp + tokenId', () => {
         const withKey = resolveNetworkProfile(tier, { keyId: '0xkey' });
-        const mina = withKey.chainProviders.find(
-          (c) => c.chainType === 'mina'
-        );
+        const mina = withKey.chainProviders.find((c) => c.chainType === 'mina');
         expect(mina).toBeDefined();
         if (mina && mina.chainType === 'mina') {
           expect(mina.zkAppAddress).toBe(MINA_DEVNET_ZKAPP);
