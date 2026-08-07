@@ -122,7 +122,7 @@ describe('GenesisPeerLoader', () => {
     // core 2.0.0 shipped a seed pointing at a rotated/dead devnet identity
     // (and 1.6.0 shipped an empty one) with no test to catch either (toon#56).
     //
-    // These three assert on the *bundled* genesis-peers.json, so they must
+    // These all assert on the *bundled* genesis-peers.json, so they must
     // read it directly rather than whatever TOON_GENESIS_PEERS happens to be
     // in the ambient environment. Test runners set that override to `[]` to
     // keep zero-peer fixtures hermetic (toon#144), and a developer may export
@@ -151,7 +151,7 @@ describe('GenesisPeerLoader', () => {
       // a single entry must fail here, not surface as a bootstrap 404 (the
       // failure mode toon#56 already had once with a single-entry seed).
       const peers = GenesisPeerLoader.loadGenesisPeers();
-      expect(peers.length).toBe(2);
+      expect(peers).toHaveLength(2);
     });
 
     it('has no entries silently dropped by validation', () => {
