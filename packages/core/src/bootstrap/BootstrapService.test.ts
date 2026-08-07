@@ -133,6 +133,13 @@ function createMockIlpClient(result: Partial<IlpSendResult> = {}): IlpClient & {
 /**
  * Simulate the relay responding with a kind:10032 event for the peer.
  * Must be called after a WebSocket connection is established.
+ *
+ * The response honours the REQ's `authors` filter the way a real relay
+ * does: an event whose author is absent from `authors` is never delivered,
+ * so the subscription sees only EOSE with zero events. A REQ without
+ * `authors` (e.g. the `discoverPeersViaRelay` filter) restricts nothing.
+ * That fidelity is what lets the toon#175 self-heal tests prove the author
+ * filter is load-bearing rather than incidental.
  */
 function simulateRelayResponse(
   peerInfo: IlpPeerInfo,
@@ -147,11 +154,11 @@ function simulateRelayResponse(
   // Trigger WS open → service sends REQ
   capturedWs.onOpen();
 
-  // Build a fake kind:10032 event with peer info in content
-  const subId = JSON.parse(
+  const [, subId, filter] = JSON.parse(
     (capturedWs.send.mock.calls[0]?.[0] as string) ?? '["REQ","unknown",{}]'
-  )[1] as string;
+  ) as [string, string, Filter];
 
+  // Build a fake kind:10032 event with peer info in content
   const event = {
     id: 'ee'.repeat(32),
     pubkey,
@@ -162,50 +169,8 @@ function simulateRelayResponse(
     sig: 'ff'.repeat(64),
   };
 
-  // Send EVENT then EOSE
-  capturedWs.onMessage(Buffer.from(JSON.stringify(['EVENT', subId, event])));
-  capturedWs.onMessage(Buffer.from(JSON.stringify(['EOSE', subId])));
-}
-
-/**
- * Simulate a relay that actually enforces the REQ's `authors` filter, the
- * way a real Nostr relay does. Unlike `simulateRelayResponse` above (which
- * delivers unconditionally), this only forwards the EVENT when
- * `eventAuthorPubkey` is in the filter's `authors` list -- otherwise the
- * subscription sees only EOSE with zero events, exactly as it would if the
- * relay had filtered a wrongly-authored event out server-side.
- *
- * This is what lets the toon#175 self-heal tests prove the author filter is
- * load-bearing: the shared helper above can't, because it never checks it.
- */
-function simulateAuthorFilteredRelayResponse(
-  peerInfo: IlpPeerInfo,
-  eventAuthorPubkey: string
-): void {
-  if (!capturedWs?.onOpen || !capturedWs?.onMessage) {
-    throw new Error(
-      'WebSocket handlers not captured — call after BootstrapService triggers connection'
-    );
-  }
-
-  capturedWs.onOpen();
-
-  const [, subId, filter] = JSON.parse(
-    (capturedWs.send.mock.calls[0]?.[0] as string) ?? '["REQ","unknown",{}]'
-  ) as [string, string, Filter];
-
-  const event = {
-    id: 'ee'.repeat(32),
-    pubkey: eventAuthorPubkey,
-    created_at: TEST_CREATED_AT,
-    kind: ILP_PEER_INFO_KIND,
-    tags: [],
-    content: JSON.stringify(peerInfo),
-    sig: 'ff'.repeat(64),
-  };
-
-  const filterAuthors = filter.authors ?? [];
-  if (filterAuthors.includes(eventAuthorPubkey)) {
+  // Send EVENT (only if the filter would have matched it) then EOSE
+  if (!filter.authors || filter.authors.includes(pubkey)) {
     capturedWs.onMessage(Buffer.from(JSON.stringify(['EVENT', subId, event])));
   }
   capturedWs.onMessage(Buffer.from(JSON.stringify(['EOSE', subId])));
@@ -1029,7 +994,7 @@ describe('BootstrapService', () => {
       // The relay enforces its own REQ filter (authors: [APEX_PUBKEY]) the
       // way a real relay would -- the announcement is delivered because its
       // author matches the seeded pubkey.
-      simulateAuthorFilteredRelayResponse(ANNOUNCED_PEER_INFO, APEX_PUBKEY);
+      simulateRelayResponse(ANNOUNCED_PEER_INFO, APEX_PUBKEY);
 
       const results = await bootstrapPromise;
 
@@ -1071,7 +1036,7 @@ describe('BootstrapService', () => {
 
       // Same announced endpoints, but authored by IMPOSTER_PUBKEY. A relay
       // honoring `authors: [APEX_PUBKEY]` would never deliver this event.
-      simulateAuthorFilteredRelayResponse(ANNOUNCED_PEER_INFO, IMPOSTER_PUBKEY);
+      simulateRelayResponse(ANNOUNCED_PEER_INFO, IMPOSTER_PUBKEY);
 
       const results = await bootstrapPromise;
 
