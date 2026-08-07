@@ -699,6 +699,69 @@ describe('BootstrapService', () => {
     expect(announced).toBeDefined();
   });
 
+  it('emits bootstrap:settlement-failed naming both chain sets when there is no overlap', async () => {
+    // toon#165: a convention mismatch between the local preset and the peer's
+    // announce can drop the intended chain out of the intersection entirely.
+    // That must be loud, not a silent no-op.
+    const admin = createMockConnectorAdmin();
+    const runtime = createMockIlpClient();
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const mockChannelClient = {
+      openChannel: vi.fn().mockResolvedValue({ channelId: '0xchannel123' }),
+      getChannelState: vi.fn(),
+    };
+
+    const events: BootstrapEvent[] = [];
+    const service = new BootstrapService(
+      {
+        knownPeers: [createKnownPeer()],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        basePricePerByte: 10n,
+        settlementInfo: {
+          supportedChains: ['evm:84532'],
+        },
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setConnectorAdmin(admin);
+    service.setIlpClient(runtime);
+    service.setChannelClient(mockChannelClient);
+    service.setClaimSigner(async (_channelId: string, _amount: bigint) => ({
+      type: 'mock-claim',
+    }));
+    service.on((event) => events.push(event));
+
+    const bootstrapPromise = service.bootstrap();
+    await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+
+    const peerInfoNoOverlap: IlpPeerInfo = {
+      ...VALID_PEER_INFO,
+      supportedChains: ['solana:devnet'],
+      settlementAddresses: { 'solana:devnet': 'Sol1234' },
+    };
+    simulateRelayResponse(peerInfoNoOverlap);
+
+    await bootstrapPromise;
+
+    const failure = events.find(
+      (e) => e.type === 'bootstrap:settlement-failed'
+    );
+    expect(failure).toBeDefined();
+    if (failure && failure.type === 'bootstrap:settlement-failed') {
+      expect(failure.reason).toContain('evm:84532');
+      expect(failure.reason).toContain('solana:devnet');
+    }
+    expect(mockChannelClient.openChannel).not.toHaveBeenCalled();
+  });
+
   it('should emit bootstrap:announce-failed on announce rejection', async () => {
     const admin = createMockConnectorAdmin();
     // Announce ILP send is rejected

@@ -427,6 +427,17 @@ export class BootstrapService {
               });
             }
           }
+        } else {
+          const reason =
+            `No shared settlement chain with ${registeredPeerId}: ` +
+            `we support [${this.settlementInfo.supportedChains.join(', ')}], ` +
+            `peer supports [${peerInfo.supportedChains.join(', ')}]`;
+          console.warn(`[Bootstrap] ${reason}`);
+          this.emit({
+            type: 'bootstrap:settlement-failed',
+            peerId: registeredPeerId,
+            reason,
+          });
         }
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'Unknown error';

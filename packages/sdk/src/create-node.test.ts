@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
-import { createNode } from './create-node.js';
+import { createNode, buildDefaultSettlementInfo } from './create-node.js';
 import { NodeError } from './errors.js';
 import type { Handler } from './handler-registry.js';
 import type {
@@ -19,7 +19,13 @@ import type {
   BootstrapEventListener,
   BootstrapEvent,
 } from '@toon-protocol/core';
-import { deriveChildAddress, ILP_ROOT_PREFIX } from '@toon-protocol/core';
+import {
+  deriveChildAddress,
+  ILP_ROOT_PREFIX,
+  resolveChainConfig,
+  resolveClientNetwork,
+  CHAIN_PRESETS,
+} from '@toon-protocol/core';
 import type { SendPacketParams, SendPacketResult } from '@toon-protocol/core';
 import type { RegisterPeerParams } from '@toon-protocol/core';
 
@@ -850,5 +856,69 @@ describe('createNode() unit tests', () => {
 
     // Cleanup
     await node.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toon#165: default settlementInfo chain-identifier format
+//
+// The auto-populated settlementInfo flows straight into BootstrapService and
+// DiscoveryTracker, i.e. into the kind:10032 announce and into settlement
+// negotiation — which is a plain set intersection over these strings. The
+// live fleet and the connector's x402 greeting both use the BARE
+// `evm:<numeric chainId>` form, and PR #168 moved `resolveClientNetwork` to
+// match. A node still announcing `evm:base:<chainId>` would share NO EVM
+// chain with a preset client, silently dropping EVM out of negotiation.
+// These tests pin the format so that regression is visible to the gate.
+// ---------------------------------------------------------------------------
+
+describe('default settlementInfo chain identifiers (toon#165)', () => {
+  it('announces the bare evm:<chainId> form, never evm:base:<chainId>', () => {
+    const chainConfig = resolveChainConfig('base-sepolia');
+    const info = buildDefaultSettlementInfo(chainConfig);
+
+    expect(info.supportedChains).toEqual(['evm:84532']);
+    expect(info.supportedChains).not.toContain('evm:base:84532');
+  });
+
+  it('keys preferredTokens and tokenNetworks by the same bare identifier', () => {
+    const chainConfig = resolveChainConfig('base-sepolia');
+    const info = buildDefaultSettlementInfo(chainConfig);
+
+    expect(Object.keys(info.preferredTokens ?? {})).toEqual(['evm:84532']);
+    expect(info.preferredTokens?.['evm:84532']).toBe(chainConfig.usdcAddress);
+    if (chainConfig.tokenNetworkAddress) {
+      expect(Object.keys(info.tokenNetworks ?? {})).toEqual(['evm:84532']);
+      expect(info.tokenNetworks?.['evm:84532']).toBe(
+        chainConfig.tokenNetworkAddress
+      );
+    }
+  });
+
+  it('uses the bare form for every chain preset, not just base-sepolia', () => {
+    for (const name of Object.keys(CHAIN_PRESETS)) {
+      const chainConfig = resolveChainConfig(name);
+      const info = buildDefaultSettlementInfo(chainConfig);
+      const keys = [
+        ...(info.supportedChains ?? []),
+        ...Object.keys(info.preferredTokens ?? {}),
+        ...Object.keys(info.tokenNetworks ?? {}),
+      ];
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) {
+        expect(key, `preset ${name} emitted ${key}`).toMatch(/^evm:\d+$/);
+      }
+    }
+  });
+
+  it('shares an EVM chain with the preset client network (the #165 intersection)', () => {
+    const nodeChains = new Set(
+      buildDefaultSettlementInfo(resolveChainConfig('base-sepolia'))
+        .supportedChains ?? []
+    );
+    const clientChains = resolveClientNetwork('devnet').supportedChains;
+    const shared = clientChains.filter((c) => nodeChains.has(c));
+
+    expect(shared).toContain('evm:84532');
   });
 });

@@ -127,6 +127,19 @@ describe('resolveNetworkProfile', () => {
         expect(evmRpc).not.toBe('https://sepolia.base.org');
       });
 
+      // toon#165: the live fleet's kind:10032 announce carries
+      // tokenNetworks["evm:84532"] and the connector's x402 greeting quotes
+      // chain: "evm:84532" — no `:base` family segment. A preset that emits
+      // `evm:base:84532` intersects with nothing the peer advertises, so
+      // negotiation silently drops EVM and falls through to Solana.
+      it('emits the EVM chain id in the numeric-only form the live announce uses', () => {
+        expect(c.supportedChains).toContain('evm:84532');
+        expect(c.supportedChains).not.toContain('evm:base:84532');
+        expect(c.tokenNetworks['evm:84532']).toBe(
+          '0x1E95493fEF46707E034b4a1945f25a8C76A1823D'
+        );
+      });
+
       it('bakes the current Mina zkApp + tokenId into minaChannel', () => {
         expect(c.minaChannel).toBeDefined();
         expect(c.minaChannel?.zkAppAddress).toBe(MINA_DEVNET_ZKAPP);
