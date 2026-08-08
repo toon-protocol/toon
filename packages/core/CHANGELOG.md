@@ -11,15 +11,26 @@
   described the apex — a fresh install would bootstrap against a box that no
   longer exists.
 
-  The seed now carries one entry per surviving node, both read from their live
-  kind:10032 self-announces on `wss://relay-ws.devnet.toonprotocol.dev`:
+  The seed now carries one entry per surviving node. All values were checked
+  against the live kind:10032 announces on
+  `wss://relay-ws.devnet.toonprotocol.dev`, but note the relay entry describes
+  the fleet as it will be after the cutover, not as it is today:
   - **relay** — pubkey `30fdd01d…`, the apex's announce identity, which the
     relay box adopts (toon-meta#310/#311) so already-deployed clients repair
     themselves against the same author; ILP address `g.toon.relay`; its own BTP
-    endpoint `wss://proxy.relay.devnet.toonprotocol.dev/ilp/btp`.
+    endpoint `wss://proxy.relay.devnet.toonprotocol.dev/ilp/btp`. **No single
+    live announce carries this pairing yet**: pre-cutover `30fdd01d…` still
+    announces the apex's `g.toon` / `proxy.devnet…`, while `g.toon.relay` /
+    `proxy.relay.devnet…` is announced by the relay box under its own pubkey
+    `915d2990…`. The two halves converge into one announce when the relay box
+    adopts the identity. The entry is nonetheless correct today, because
+    `pubkey` and `relayUrl` are the only load-bearing fields — `ilpAddress`
+    and `btpEndpoint` are starting hints, superseded by whatever the live
+    announcement carries (proven in `BootstrapService.test.ts`, toon#175).
   - **store** — its own announce pubkey `499cdd71…` (unaffected by the
     cutover); ILP address `g.toon.ario`; its own BTP endpoint
-    `wss://proxy.ario.devnet.toonprotocol.dev/ilp/btp`.
+    `wss://proxy.ario.devnet.toonprotocol.dev/ilp/btp`. This entry does match
+    the store's live self-announce field for field, before and after.
 
   `relayUrl` is a required field on every entry and the store fronts no relay,
   so both entries name the relay box's `relay-ws` URL — unchanged through the
