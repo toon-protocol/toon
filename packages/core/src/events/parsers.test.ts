@@ -1069,6 +1069,22 @@ describe('parseIlpPeerInfo() notice (toon#183)', () => {
     expect(parseIlpPeerInfo(event).notice).toBeUndefined();
   });
 
+  it('drops a notice whose fields are present but empty strings', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: '',
+          severity: 'info',
+          summary: 'Empty id.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
   it('drops a non-object notice (e.g. a string)', () => {
     const event = createMockEvent(
       ILP_PEER_INFO_KIND,
@@ -1095,6 +1111,25 @@ describe('parseIlpPeerInfo() notice (toon#183)', () => {
           id: 'n1',
           severity: 'critical-future-value',
           summary: 'From a future client.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeDefined();
+    expect(parsed.notice?.severity).toBe('info');
+  });
+
+  it('a non-string severity degrades to info', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 42,
+          summary: 'Severity is not a string.',
           url: 'https://example.com/notice',
         },
       })

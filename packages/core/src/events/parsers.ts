@@ -33,6 +33,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
  * fail the whole announce — it is dropped instead, and an unrecognized
  * `severity` degrades to `'info'` rather than being rejected. This keeps a
  * typo in an operator notice from costing a client its ability to route.
+ *
+ * `id`, `summary`, and `url` are required; an empty string counts as missing,
+ * since a blank pointer is no more useful to a consumer than no pointer at all.
+ * `severity` is the sole exception — missing or unrecognized, it becomes
+ * `'info'`, so a value minted by a future client cannot brick an old one.
  */
 function parseNotice(raw: unknown): IlpPeerInfo['notice'] {
   if (!isObject(raw)) {
