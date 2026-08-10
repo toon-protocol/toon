@@ -678,3 +678,74 @@ describe('buildIlpPeerInfoEvent - prefixPricing (Story 7.6)', () => {
     expect(parsed.prefixPricing).toEqual({ basePrice: '500000' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// toon#183: optional, leniently-parsed `notice` field on kind:10032
+// ---------------------------------------------------------------------------
+
+describe('buildIlpPeerInfoEvent - notice (toon#183)', () => {
+  it('emits notice in the serialized content when present', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      notice: {
+        id: 'n1',
+        severity: 'action-required',
+        summary: 'Repoint to the new boxes.',
+        url: 'https://example.com/notice',
+      },
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const content = JSON.parse(event.content);
+
+    // Assert
+    expect(content.notice).toEqual({
+      id: 'n1',
+      severity: 'action-required',
+      summary: 'Repoint to the new boxes.',
+      url: 'https://example.com/notice',
+    });
+  });
+
+  it('omits the notice key entirely when absent', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = createTestIlpPeerInfo();
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const content = JSON.parse(event.content);
+
+    // Assert
+    expect('notice' in content).toBe(false);
+  });
+
+  it('roundtrips a well-formed notice through build -> parse', () => {
+    // Arrange
+    const secretKey = generateSecretKey();
+    const info: IlpPeerInfo = {
+      ...createTestIlpPeerInfo(),
+      notice: {
+        id: 'n1',
+        severity: 'info',
+        summary: 'Informational only.',
+        url: 'https://example.com/notice',
+      },
+    };
+
+    // Act
+    const event = buildIlpPeerInfoEvent(info, secretKey);
+    const parsed = parseIlpPeerInfo(event);
+
+    // Assert
+    expect(parsed.notice).toEqual({
+      id: 'n1',
+      severity: 'info',
+      summary: 'Informational only.',
+      url: 'https://example.com/notice',
+    });
+  });
+});

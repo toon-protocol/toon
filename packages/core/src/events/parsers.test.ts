@@ -957,3 +957,229 @@ describe('parseIlpPeerInfo() prefixPricing (Story 7.6, T-7.7-09)', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// toon#183: optional, leniently-parsed `notice` field on kind:10032
+// ---------------------------------------------------------------------------
+
+describe('parseIlpPeerInfo() notice (toon#183)', () => {
+  function baseContent(extra: Record<string, unknown>): string {
+    return JSON.stringify({
+      ilpAddress: 'g.toon.genesis',
+      btpEndpoint: 'wss://btp.toon.dev',
+      assetCode: 'USD',
+      assetScale: 6,
+      ...extra,
+    });
+  }
+
+  it('round-trips a well-formed notice', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: '2026-08-10-devnet-cutover',
+          severity: 'action-required',
+          summary: 'The devnet apex is retiring; repoint to the new boxes.',
+          url: 'https://github.com/toon-protocol/toon-meta/blob/main/docs/operators/2026-08-10-devnet-cutover.md',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toEqual({
+      id: '2026-08-10-devnet-cutover',
+      severity: 'action-required',
+      summary: 'The devnet apex is retiring; repoint to the new boxes.',
+      url: 'https://github.com/toon-protocol/toon-meta/blob/main/docs/operators/2026-08-10-devnet-cutover.md',
+    });
+  });
+
+  it('an announce with no notice parses exactly as it does today', () => {
+    const event = createMockEvent(ILP_PEER_INFO_KIND, baseContent({}));
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeUndefined();
+  });
+
+  it('drops a notice missing id, leaving the rest of IlpPeerInfo intact', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          severity: 'info',
+          summary: 'Missing id.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeUndefined();
+    expect(parsed.ilpAddress).toBe('g.toon.genesis');
+    expect(parsed.assetCode).toBe('USD');
+  });
+
+  it('drops a notice missing summary', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 'info',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('drops a notice missing url', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 'info',
+          summary: 'No url.',
+        },
+      })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('drops a notice whose fields have the wrong types', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 42,
+          severity: 'info',
+          summary: ['not', 'a', 'string'],
+          url: null,
+        },
+      })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('drops a notice whose fields are present but empty strings', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: '',
+          severity: 'info',
+          summary: 'Empty id.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('drops a non-object notice (e.g. a string)', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({ notice: 'not-an-object' })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('drops a notice that is an array', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({ notice: [] })
+    );
+
+    expect(parseIlpPeerInfo(event).notice).toBeUndefined();
+  });
+
+  it('an unrecognized severity degrades to info rather than being rejected', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 'critical-future-value',
+          summary: 'From a future client.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeDefined();
+    expect(parsed.notice?.severity).toBe('info');
+  });
+
+  it('a non-string severity degrades to info', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 42,
+          summary: 'Severity is not a string.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeDefined();
+    expect(parsed.notice?.severity).toBe('info');
+  });
+
+  it('a missing severity degrades to info', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          summary: 'No severity given.',
+          url: 'https://example.com/notice',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toBeDefined();
+    expect(parsed.notice?.severity).toBe('info');
+  });
+
+  it('unknown keys inside notice are ignored', () => {
+    const event = createMockEvent(
+      ILP_PEER_INFO_KIND,
+      baseContent({
+        notice: {
+          id: 'n1',
+          severity: 'info',
+          summary: 'Has an extra key.',
+          url: 'https://example.com/notice',
+          futureField: 'ignored',
+        },
+      })
+    );
+
+    const parsed = parseIlpPeerInfo(event);
+
+    expect(parsed.notice).toEqual({
+      id: 'n1',
+      severity: 'info',
+      summary: 'Has an extra key.',
+      url: 'https://example.com/notice',
+    });
+  });
+});

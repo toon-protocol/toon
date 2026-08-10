@@ -58,6 +58,21 @@ export interface IlpPeerInfo {
   prefixPricing?: { basePrice: string };
   /** Token pairs this peer can swap, with current rates. Absent = no swap support. */
   swapPairs?: SwapPair[];
+  /**
+   * Optional operator notice. A POINTER, not the payload: the durable text lives
+   * in the operator's repo and this carries only enough to decide whether to go
+   * read it. Absent on almost every announce. Parsed leniently — a malformed or
+   * partial notice is dropped rather than failing the whole announce (toon#183).
+   */
+  notice?: {
+    /** Stable per notice, so a consumer can show it once and never again. */
+    id: string;
+    severity: 'info' | 'action-required';
+    /** One line, plain. Not the notice — the reason to open it. */
+    summary: string;
+    /** Where the durable text lives. Carried as-is; core performs no I/O on it. */
+    url: string;
+  };
 }
 
 /**
