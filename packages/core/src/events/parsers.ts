@@ -28,6 +28,39 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
+ * Parses the optional `notice` pointer leniently (toon#183). Unlike every
+ * other field on `IlpPeerInfo`, a malformed or partial `notice` must never
+ * fail the whole announce — it is dropped instead, and an unrecognized
+ * `severity` degrades to `'info'` rather than being rejected. This keeps a
+ * typo in an operator notice from costing a client its ability to route.
+ */
+function parseNotice(raw: unknown): IlpPeerInfo['notice'] {
+  if (!isObject(raw)) {
+    return undefined;
+  }
+
+  const { id, severity, summary, url } = raw;
+
+  if (
+    typeof id !== 'string' ||
+    id.length === 0 ||
+    typeof summary !== 'string' ||
+    summary.length === 0 ||
+    typeof url !== 'string' ||
+    url.length === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    id,
+    severity: severity === 'action-required' ? 'action-required' : 'info',
+    summary,
+    url,
+  };
+}
+
+/**
  * Parses a kind:10032 Nostr event into an IlpPeerInfo object.
  *
  * @param event - The Nostr event to parse
@@ -215,6 +248,10 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     prefixPricing = { basePrice };
   }
 
+  // notice validation (toon#183) — lenient: drop, never throw
+  const { notice: rawNotice } = parsed;
+  const notice = parseNotice(rawNotice);
+
   // swapPairs validation (Story 12.1)
   const { swapPairs: rawSwapPairs } = parsed;
   let swapPairs: SwapPair[] | undefined;
@@ -280,5 +317,6 @@ export function parseIlpPeerInfo(event: NostrEvent): IlpPeerInfo {
     feePerByte,
     ...(prefixPricing !== undefined && { prefixPricing }),
     ...(swapPairs !== undefined && { swapPairs }),
+    ...(notice !== undefined && { notice }),
   };
 }
