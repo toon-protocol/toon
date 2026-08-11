@@ -247,7 +247,34 @@ describe('createDirectIlpClient', () => {
       ).rejects.toThrow(BootstrapError);
     });
 
-    it('should not pass executionCondition to connector', async () => {
+    it('forwards a caller-supplied executionCondition to the connector verbatim', async () => {
+      const toonData = Buffer.from('test-toon-data');
+      const condition = Buffer.from(new Uint8Array(32).fill(7));
+
+      const connector = mockConnector({
+        type: 'fulfill',
+      });
+
+      const client = createDirectIlpClient(connector);
+      await client.sendIlpPacket({
+        destination: 'g.peer1',
+        amount: '100',
+        data: toonData.toString('base64'),
+        executionCondition: condition.toString('base64'),
+      });
+
+      const callArgs = (connector.sendPacket as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as SendPacketParams | undefined;
+      if (callArgs?.executionCondition === undefined) {
+        throw new Error(
+          'expected sendPacket call to include executionCondition'
+        );
+      }
+      expect(callArgs.executionCondition).toBeInstanceOf(Uint8Array);
+      expect(Buffer.from(callArgs.executionCondition)).toEqual(condition);
+    });
+
+    it('sends no executionCondition when the caller supplies none', async () => {
       const toonData = Buffer.from('test-toon-data');
 
       const connector = mockConnector({

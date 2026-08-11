@@ -1,0 +1,516 @@
+/**
+ * The vector-replay harness — the acceptance test for `envelope.ts` and
+ * `giftwrap.ts`, ported from toon-client's `wire-vectors.test.ts`
+ * (toon#143).
+ *
+ * The committed vector file is the contract (connector ADR 0021), not the
+ * prose describing it and not this file's own opinions. Everything below is
+ * data-driven off `vectors/wire-vectors.json`: no expectation is written out
+ * by hand, so a vector the file gains is a test this suite gains, and a
+ * vector it loses cannot leave a silently-passing assertion behind.
+ *
+ * Only `envelope`, `giftwrap` and `fulfilment` are replayed here — the
+ * sections this package's `./wire` subpath actually implements. `claim` and
+ * `channel_control_declaration` are replayed against toon-client's
+ * `signing/evm-signer.ts` (EIP-712 balance proofs and BTP auth
+ * declarations), which is client-signing surface `core` does not carry;
+ * `peer_carriage` is the connector-to-connector wire no client SDK speaks.
+ * All three are declared, not silently dropped — see "accounts for every
+ * section the file carries" below.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import {
+  WIRE_VECTOR_SECTIONS,
+  bytesToHex,
+  hexToBytes,
+  loadWireVectors,
+  loadWireVectorsProvenance,
+  wireVectorsSha256,
+  type EnvelopeInvalidVector,
+  type EnvelopeValidVector,
+  type FulfilmentVector,
+  type GiftWrapVector,
+  type VectorEnvelope,
+} from './vectors/load.js';
+import {
+  EnvelopeError,
+  decodeEnvelope,
+  encodeEnvelope,
+  type Envelope,
+} from './envelope.js';
+import {
+  GiftWrapError,
+  GiftWrapErrorKind,
+  deriveCondition,
+  deriveFulfillment,
+  looksLikeSealedResponse,
+  openRequest,
+  openResponse,
+  sealRequestWithRandomness,
+  sealResponseWithRandomness,
+} from './giftwrap.js';
+import { fulfillmentMatchesCondition } from './condition.js';
+
+const vectors = loadWireVectors();
+const provenance = loadWireVectorsProvenance();
+
+/** Sections this harness replays, out of everything the vendored file carries. */
+const SECTIONS_REPLAYED_HERE = ['envelope', 'giftwrap', 'fulfilment'];
+
+describe('the vendored vector file', () => {
+  it('has not been edited since it was vendored', () => {
+    // The one thing vendoring costs is that the copy can be "fixed" to make a
+    // failing replay pass. It cannot: the hash is recorded in the provenance
+    // file, and changing both is a reviewable act rather than a silent one.
+    expect(wireVectorsSha256()).toBe(provenance.sha256);
+  });
+
+  it('is the schema version this harness understands', () => {
+    expect(vectors.schema_version).toBe(provenance.schemaVersion);
+    expect(vectors.schema_version).toBe(1);
+  });
+
+  it('records which connector commit it came from', () => {
+    expect(provenance.connectorCommit).toMatch(/^[0-9a-f]{40}$/);
+    expect(provenance.sourceRepo).toBe('toon-protocol/connector');
+  });
+
+  it('carries the seal sections, now replayed below', () => {
+    expect(vectors.giftwrap).toBeDefined();
+    expect(vectors.fulfilment).toBeDefined();
+  });
+
+  it('accounts for every section the file carries', () => {
+    // The failure mode this exists to prevent: the connector adds a section,
+    // the vendored copy is refreshed, and the harness sails past the new
+    // bytes because nothing looks at them. A section this repo has not been
+    // taught must break the build, not be ignored.
+    const sections = Object.keys(vectors).filter((k) => k !== 'schema_version');
+    expect(new Set(sections)).toEqual(new Set(WIRE_VECTOR_SECTIONS));
+
+    // Every taught section is either replayed HERE, or is one of the
+    // sections toon-client replays (client-signing surface / the
+    // connector-to-connector wire) that this package deliberately does not
+    // carry. Nothing may fall between the two.
+    const notReplayedHere = WIRE_VECTOR_SECTIONS.filter(
+      (s) => !SECTIONS_REPLAYED_HERE.includes(s)
+    );
+    expect(new Set([...SECTIONS_REPLAYED_HERE, ...notReplayedHere])).toEqual(
+      new Set(WIRE_VECTOR_SECTIONS)
+    );
+  });
+});
+
+// ─── envelope ───────────────────────────────────────────────────────────────
+
+/**
+ * Rebuild the codec's own `Envelope` from the file's tagged envelope shape.
+ * Shared with the `giftwrap` section, whose cases carry the same shape for the
+ * plaintext inside a wrap.
+ */
+function envelopeFromVectorEnvelope(decoded: VectorEnvelope): Envelope {
+  const headers = decoded.headers.map(
+    ([name, value]) => [name, value] as const
+  );
+  const body = hexToBytes(decoded.body_hex);
+  return decoded.direction === 'request'
+    ? {
+        direction: 'request',
+        method: decoded.method,
+        target: decoded.target,
+        headers,
+        body,
+      }
+    : {
+        direction: 'response',
+        status: decoded.status,
+        headers,
+        body,
+      };
+}
+
+/** The same, for a vector that wraps its envelope under a `decoded` key. */
+function envelopeFromVector(vector: EnvelopeValidVector): Envelope {
+  return envelopeFromVectorEnvelope(vector.decoded);
+}
+
+describe('envelope.valid — every vector round-trips in both directions', () => {
+  const valid = vectors.envelope.valid;
+
+  it('replays all five vectors the connector publishes', () => {
+    expect(valid).toHaveLength(5);
+  });
+
+  it.each(valid.map((v) => [v.name, v] as const))(
+    'decodes %s to exactly the published `decoded`',
+    (_name, vector) => {
+      const bytes = hexToBytes(vector.encoded_hex);
+      const decoded = decodeEnvelope(bytes, vector.decoded.direction);
+      expect(decoded).toEqual(envelopeFromVector(vector));
+    }
+  );
+
+  it.each(valid.map((v) => [v.name, v] as const))(
+    're-encodes %s to exactly the published `encoded_hex`',
+    (_name, vector) => {
+      const encoded = encodeEnvelope(envelopeFromVector(vector));
+      expect(bytesToHex(encoded)).toBe(vector.encoded_hex);
+    }
+  );
+
+  it.each(valid.map((v) => [v.name, v] as const))(
+    'round-trips %s through decode → encode without drift',
+    (_name, vector) => {
+      const bytes = hexToBytes(vector.encoded_hex);
+      const decoded = decodeEnvelope(bytes, vector.decoded.direction);
+      expect(bytesToHex(encodeEnvelope(decoded))).toBe(vector.encoded_hex);
+    }
+  );
+
+  it('preserves header order and duplicate names, because both are meaningful', () => {
+    // The two vectors that exist precisely to prove this. Asserted explicitly
+    // as well as via the round trips: a codec that sorted or de-duplicated
+    // headers would still round-trip its OWN output, and only fail here.
+    const duplicates = valid.filter((v) =>
+      v.decoded.headers.some(
+        ([name], i, all) => all.findIndex(([n]) => n === name) !== i
+      )
+    );
+    expect(duplicates.length).toBeGreaterThan(0);
+
+    for (const vector of duplicates) {
+      const decoded = decodeEnvelope(
+        hexToBytes(vector.encoded_hex),
+        vector.decoded.direction
+      );
+      expect(decoded.headers.map(([n, v]) => [n, v])).toEqual(
+        vector.decoded.headers
+      );
+    }
+  });
+});
+
+describe('envelope.invalid — every vector is refused for its named reason', () => {
+  const invalid = vectors.envelope.invalid;
+
+  it('replays all eight rejection vectors', () => {
+    expect(invalid).toHaveLength(8);
+  });
+
+  it('covers every error variant the schema names', () => {
+    // Guards against a rejection case being silently dropped connector-side:
+    // if a variant stops being exercised, this repo notices.
+    expect(new Set(invalid.map((v) => v.expected_error))).toEqual(
+      new Set([
+        'invalid_type',
+        'buffer_underflow',
+        'trailing_bytes',
+        'invalid_utf8',
+        'non_canonical_length',
+        'length_determinant_overflow',
+      ])
+    );
+  });
+
+  it.each(invalid.map((v) => [v.name, v] as const))(
+    'refuses %s with exactly its expected_error',
+    (_name, vector: EnvelopeInvalidVector) => {
+      let thrown: unknown;
+      let succeeded = false;
+      try {
+        decodeEnvelope(hexToBytes(vector.bytes_hex), vector.direction);
+        succeeded = true;
+      } catch (error) {
+        thrown = error;
+      }
+      // Never succeed, never panic, never fail differently.
+      expect(succeeded, 'decoded successfully — it must be refused').toBe(
+        false
+      );
+      expect(thrown).toBeInstanceOf(EnvelopeError);
+      expect((thrown as EnvelopeError).kind).toBe(vector.expected_error);
+    }
+  );
+});
+
+// ─── giftwrap ───────────────────────────────────────────────────────────────
+
+/**
+ * Replayed against `wire/giftwrap.ts`. Every random input a real seal draws is
+ * pinned in the file, so these are exact-byte reproductions, not round trips:
+ * a seal that hashed the ECDH output, salted the HKDF, chose a different
+ * `info` string or framed the wrap differently would still open its own output
+ * and would only fail here.
+ */
+describe('giftwrap — the seal around the envelope (connector ADR 0018)', () => {
+  const section = vectors.giftwrap;
+  const cases: GiftWrapVector[] = section?.cases ?? [];
+  const identitySecret = hexToBytes(
+    section?.receiver_identity_secret_hex ?? ''
+  );
+  const identityPublic = hexToBytes(
+    section?.receiver_identity_public_hex ?? ''
+  );
+
+  it('carries a fixture identity and at least one case to replay', () => {
+    expect(section).toBeDefined();
+    expect(cases.length).toBeGreaterThan(0);
+    expect(identitySecret).toHaveLength(32);
+    // 65-byte uncompressed — the shape a real `GET /ilp/identity` reports.
+    expect(identityPublic).toHaveLength(65);
+    expect(identityPublic[0]).toBe(0x04);
+  });
+
+  it("derives the fixture's published public key from its published secret", () => {
+    expect(bytesToHex(secp256k1.getPublicKey(identitySecret, false))).toBe(
+      section?.receiver_identity_public_hex
+    );
+  });
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    'seals %s to exactly the published request_wrap_hex',
+    (_name, vector) => {
+      const wrapped = sealRequestWithRandomness(
+        hexToBytes(vector.request_envelope_hex),
+        identityPublic,
+        hexToBytes(vector.ephemeral_secret_hex),
+        hexToBytes(vector.shared_secret_hex),
+        hexToBytes(vector.request_nonce_hex)
+      );
+      expect(bytesToHex(wrapped)).toBe(vector.request_wrap_hex);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "opens %s's request with the fixture secret, recovering envelope AND secret",
+    (_name, vector) => {
+      const opened = openRequest(
+        hexToBytes(vector.request_wrap_hex),
+        identitySecret
+      );
+      expect(bytesToHex(opened.envelopeBytes)).toBe(
+        vector.request_envelope_hex
+      );
+      expect(bytesToHex(opened.sharedSecret)).toBe(vector.shared_secret_hex);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "decodes %s's recovered plaintext to the published request envelope",
+    (_name, vector) => {
+      // Not just "the bytes match": the seal and the codec compose, which is
+      // the whole point of sealing an ENCODED envelope rather than text.
+      const { envelopeBytes } = openRequest(
+        hexToBytes(vector.request_wrap_hex),
+        identitySecret
+      );
+      expect(decodeEnvelope(envelopeBytes, 'request')).toEqual(
+        envelopeFromVectorEnvelope(vector.request_envelope)
+      );
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    'seals %s to exactly the published response_wrap_hex',
+    (_name, vector) => {
+      const wrapped = sealResponseWithRandomness(
+        hexToBytes(vector.shared_secret_hex),
+        hexToBytes(vector.response_envelope_hex),
+        hexToBytes(vector.response_nonce_hex)
+      );
+      expect(bytesToHex(wrapped)).toBe(vector.response_wrap_hex);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "opens %s's response under the request's own secret, with no second exchange",
+    (_name, vector) => {
+      // The secret comes from OPENING the request, not from the vector file
+      // directly — that is what "no second key exchange" has to mean.
+      const { sharedSecret } = openRequest(
+        hexToBytes(vector.request_wrap_hex),
+        identitySecret
+      );
+      const opened = openResponse(
+        sharedSecret,
+        hexToBytes(vector.response_wrap_hex)
+      );
+      expect(bytesToHex(opened)).toBe(vector.response_envelope_hex);
+      expect(decodeEnvelope(opened, 'response')).toEqual(
+        envelopeFromVectorEnvelope(vector.response_envelope)
+      );
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "refuses %s's response under any other secret",
+    (_name, vector) => {
+      const wrong = hexToBytes(vector.shared_secret_hex);
+      wrong[0] = (wrong[0] ?? 0) ^ 0xff;
+      expect(() =>
+        openResponse(wrong, hexToBytes(vector.response_wrap_hex))
+      ).toThrow(GiftWrapError);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "refuses %s's request under a different identity",
+    (_name, vector) => {
+      // A forwarding hop holds no identity secret for this destination and
+      // must see opaque bytes, which is the entire privacy claim of the seal.
+      const forwardingHop = hexToBytes(vector.ephemeral_secret_hex);
+      let thrown: unknown;
+      try {
+        openRequest(hexToBytes(vector.request_wrap_hex), forwardingHop);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(GiftWrapError);
+      expect((thrown as GiftWrapError).kind).toBe(GiftWrapErrorKind.OpenFailed);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    'refuses a tampered %s rather than yielding plaintext',
+    (_name, vector) => {
+      for (const wrap of [vector.request_wrap_hex, vector.response_wrap_hex]) {
+        const bytes = hexToBytes(wrap);
+        bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 0xff;
+        let thrown: unknown;
+        try {
+          if (bytes[0] === 1) {
+            openRequest(bytes, identitySecret);
+          } else {
+            openResponse(hexToBytes(vector.shared_secret_hex), bytes);
+          }
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBeInstanceOf(GiftWrapError);
+        expect((thrown as GiftWrapError).kind).toBe(
+          GiftWrapErrorKind.OpenFailed
+        );
+      }
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    'distinguishes %s sealed from unsealed by the leading type byte alone',
+    (_name, vector) => {
+      expect(
+        looksLikeSealedResponse(hexToBytes(vector.response_wrap_hex))
+      ).toBe(true);
+      // A sealed REQUEST is not a sealed response, so neither can be fed to
+      // the other's `open_*` by mistake.
+      expect(looksLikeSealedResponse(hexToBytes(vector.request_wrap_hex))).toBe(
+        false
+      );
+      // Empty `Reject.data` — what every reject raised short of the
+      // termination carries — is never read as sealed.
+      expect(looksLikeSealedResponse(new Uint8Array(0))).toBe(false);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    'binds %s to its receiver: the same inputs to another key seal differently',
+    (_name, vector) => {
+      const otherReceiver = secp256k1.getPublicKey(
+        hexToBytes(vector.shared_secret_hex),
+        false
+      );
+      const elsewhere = sealRequestWithRandomness(
+        hexToBytes(vector.request_envelope_hex),
+        otherReceiver,
+        hexToBytes(vector.ephemeral_secret_hex),
+        hexToBytes(vector.shared_secret_hex),
+        hexToBytes(vector.request_nonce_hex)
+      );
+      expect(bytesToHex(elsewhere)).not.toBe(vector.request_wrap_hex);
+    }
+  );
+});
+
+// ─── fulfilment ─────────────────────────────────────────────────────────────
+
+describe('fulfilment — the preimage a shared secret derives (connector ADR 0019)', () => {
+  const cases: FulfilmentVector[] = vectors.fulfilment?.cases ?? [];
+
+  it('carries both a matching and a non-matching case', () => {
+    expect(cases.length).toBeGreaterThan(0);
+    expect(new Set(cases.map((c) => c.matches))).toEqual(
+      new Set([true, false])
+    );
+  });
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "derives %s's published fulfilment from its shared secret",
+    (_name, vector) => {
+      expect(
+        bytesToHex(deriveFulfillment(hexToBytes(vector.shared_secret_hex)))
+      ).toBe(vector.fulfilment_hex);
+    }
+  );
+
+  it.each(cases.map((c) => [c.name, c] as const))(
+    "holds %s's `matches` flag against its published condition",
+    (_name, vector) => {
+      const fulfilment = deriveFulfillment(
+        hexToBytes(vector.shared_secret_hex)
+      );
+      expect(
+        fulfillmentMatchesCondition(
+          fulfilment,
+          hexToBytes(vector.condition_hex)
+        )
+      ).toBe(vector.matches);
+    }
+  );
+
+  it('mints the condition as sha256 of the derived fulfilment', () => {
+    // The one case whose condition WAS minted from its own secret. `sha256`
+    // is asserted directly here, not merely implied by `matches`, because
+    // `derive_condition` is a connector-side choice this repo must copy
+    // (`crates/connector-domain/src/condition.rs:27`) rather than assume.
+    const matching = cases.find((c) => c.matches);
+    expect(matching).toBeDefined();
+    const fulfilment = deriveFulfillment(
+      hexToBytes(matching?.shared_secret_hex ?? '')
+    );
+    expect(bytesToHex(deriveCondition(fulfilment))).toBe(
+      matching?.condition_hex
+    );
+    expect(bytesToHex(sha256(fulfilment))).toBe(matching?.condition_hex);
+  });
+
+  it("does not accept a different secret's fulfilment for that condition", () => {
+    const matching = cases.find((c) => c.matches);
+    const other = cases.find((c) => !c.matches);
+    expect(other?.condition_hex).toBe(matching?.condition_hex);
+    expect(
+      fulfillmentMatchesCondition(
+        deriveFulfillment(hexToBytes(other?.shared_secret_hex ?? '')),
+        hexToBytes(matching?.condition_hex ?? '')
+      )
+    ).toBe(false);
+  });
+
+  it('agrees with the giftwrap section on the secret they share', () => {
+    // The `giftwrap` case and the matching `fulfilment` case are built from
+    // the same shared secret, so the packet a sender seals and the condition
+    // it mints are demonstrably the same transaction — not two fixtures that
+    // happen to sit in one file.
+    const wrapSecret = vectors.giftwrap?.cases[0]?.shared_secret_hex;
+    expect(cases.find((c) => c.matches)?.shared_secret_hex).toBe(wrapSecret);
+
+    const { sharedSecret } = openRequest(
+      hexToBytes(vectors.giftwrap?.cases[0]?.request_wrap_hex ?? ''),
+      hexToBytes(vectors.giftwrap?.receiver_identity_secret_hex ?? '')
+    );
+    expect(bytesToHex(deriveCondition(deriveFulfillment(sharedSecret)))).toBe(
+      cases.find((c) => c.matches)?.condition_hex
+    );
+  });
+});

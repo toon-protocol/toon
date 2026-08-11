@@ -17,6 +17,9 @@ export type {
   IlpSendResult,
   DiscoveredPeer,
   SettlementConfig,
+  ConnectorEdgeLookup,
+  ConnectorEdgeIdentity,
+  ConnectorEdgeRoutePrice,
 } from './types.js';
 
 // Service and errors

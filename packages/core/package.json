@@ -18,6 +18,10 @@
     "./toon": {
       "types": "./dist/toon/index.d.ts",
       "import": "./dist/toon/index.js"
+    },
+    "./wire": {
+      "types": "./dist/wire/index.d.ts",
+      "import": "./dist/wire/index.js"
     }
   },
   "files": [
@@ -50,6 +54,8 @@
   },
   "dependencies": {
     "@ardrive/turbo-sdk": "^1.21.0",
+    "@noble/ciphers": "^2.0.0",
+    "@noble/curves": "^2.0.0",
     "@noble/hashes": "^2.0.0",
     "@scure/bip32": "^2.0.0",
     "@scure/bip39": "^2.0.0",

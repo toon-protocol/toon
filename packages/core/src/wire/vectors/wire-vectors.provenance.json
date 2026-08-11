@@ -1,0 +1,21 @@
+{
+  "$comment": "Where the vendored wire-vectors.json came from. Machine-read by wire-vectors.test.ts (integrity) and scripts/refresh-wire-vectors.mjs (drift). The provenance fields are written by that script — hand-edit none of them. The two 'sections' lists are the exception: they describe THIS repo's harness, not the source file, so they are maintained by hand alongside wire-vectors.test.ts, which asserts they partition every section the file carries.",
+  "sourceRepo": "toon-protocol/connector",
+  "sourcePath": "vectors/wire-vectors.json",
+  "sourceRawUrl": "https://raw.githubusercontent.com/toon-protocol/connector/{ref}/vectors/wire-vectors.json",
+  "connectorCommit": "33f10e2a00beae51d745409b6f29f9e5c19e20a1",
+  "connectorCommitDate": "2026-08-05T22:26:16Z",
+  "connectorCommitSubject": "The auth channel-control declaration has no wire vector, and toon-client must match it byte for byte (#795)",
+  "schemaVersion": 1,
+  "sha256": "d9596ac5c07d87c5df767bbf4aa3cc4b6b4839b150c978ce07c7675df3fa7c40",
+  "sectionsReplayed": [
+    "envelope",
+    "giftwrap",
+    "fulfilment",
+    "claim",
+    "channel_control_declaration"
+  ],
+  "sectionsPresentNotYetReplayed": [
+    "peer_carriage"
+  ]
+}

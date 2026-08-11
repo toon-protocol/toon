@@ -59,6 +59,7 @@ import type {
   IlpClient,
   ConnectorAdminClient,
   DiscoveryTracker,
+  ConnectorEdgeLookup,
 } from '@toon-protocol/core';
 import {
   shallowParseToon,
@@ -176,6 +177,13 @@ export interface NodeConfig {
    * A 1KB event costs 10,240 micro-USDC = ~$0.01.
    */
   basePricePerByte?: bigint;
+  /**
+   * Identity + price lookup for the connector terminating a peer's
+   * `ilpAddress` (toon#143). Required for the bootstrap announce phase to
+   * seal its packet (ADR 0018/0019/0020); when absent, the announce phase
+   * is skipped rather than sending an unsealed packet with no condition.
+   */
+  connectorEdgeLookup?: ConnectorEdgeLookup;
   /**
    * Routing fee per byte charged by this node as an intermediary (default: 0n = free routing).
    * Advertised in kind:10032 peer info events as a non-negative integer string.
@@ -842,7 +850,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       relayUrl: config.relayUrl,
       knownPeers: config.knownPeers,
       settlementInfo: effectiveSettlementInfo,
-      basePricePerByte: config.basePricePerByte,
+      connectorEdgeLookup: config.connectorEdgeLookup,
       ardriveEnabled: config.ardriveEnabled,
     });
 
@@ -872,7 +880,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         ownIlpAddress: ilpInfo.ilpAddress,
         toonEncoder: encoder,
         toonDecoder: decoder,
-        basePricePerByte: config.basePricePerByte ?? 10n,
+        connectorEdgeLookup: config.connectorEdgeLookup,
       },
       config.secretKey,
       ilpInfo
@@ -987,7 +995,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         relayUrl: config.relayUrl,
         knownPeers: config.knownPeers,
         settlementInfo: effectiveSettlementInfo,
-        basePricePerByte: config.basePricePerByte,
+        connectorEdgeLookup: config.connectorEdgeLookup,
         ardriveEnabled: config.ardriveEnabled,
       });
 
@@ -1058,7 +1066,7 @@ export function createNode(config: NodeConfig): ServiceNode {
         ownIlpAddress: ilpInfo.ilpAddress,
         toonEncoder: encoder,
         toonDecoder: decoder,
-        basePricePerByte: config.basePricePerByte ?? 10n,
+        connectorEdgeLookup: config.connectorEdgeLookup,
       },
       config.secretKey,
       ilpInfo
