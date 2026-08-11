@@ -331,10 +331,12 @@ try {
     // DETERMINISTIC (no agent) — see toon-meta#235. The former open-pr agent
     // (open-pr-prompt.md) reported COMPLETE without reliably running the push
     // (only 4/19 PRs landed on the 2026-07-23 gate re-run wave). git push +
-    // gh pr create are pure plumbing: push from INSIDE the sandbox (commits live
-    // there; gh auth setup-git wired the credential helper in onSandboxReady),
-    // open the PR from the authenticated HOST. sandbox.exec() surfaces a
-    // non-zero exitCode (it does NOT throw) — check it and fail loud.
+    // gh pr create are pure plumbing: push from INSIDE the sandbox (that is
+    // where the commits live) via pushBranch(), which brings its own one-shot
+    // credential helper and resets the container-global one `gh auth setup-git`
+    // wired in onSandboxReady; open the PR from the authenticated HOST.
+    // sandbox.exec() surfaces a non-zero exitCode (it does NOT throw) — check
+    // it and fail loud.
     //
     // The credential is minted fresh here, immediately before the push, so the
     // run's total length is irrelevant (toon-meta#248). This also refreshes

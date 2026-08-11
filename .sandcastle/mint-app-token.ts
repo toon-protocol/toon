@@ -105,7 +105,13 @@ async function githubJson(path: string, jwt: string, method: "GET" | "POST"): Pr
 }
 
 /**
- * Mint a fresh installation token scoped to this repository.
+ * Mint a fresh token for the App installation that covers this repository.
+ *
+ * SCOPE, stated rather than implied: the mint request sends no `repositories`
+ * filter, so the token carries the installation's FULL access — org-wide, not
+ * just this repo — where the `actions/create-github-app-token@v2` token minted
+ * at job start is repo-scoped by default. Only the repo lookup below is
+ * repo-specific. Narrow it with a `repositories` body if that ever matters.
  *
  * Requires `APP_ID` + `APP_PRIVATE_KEY` on the host. Falls back to the ambient
  * `GH_TOKEN` when they are absent. Throws if neither is available, since every
