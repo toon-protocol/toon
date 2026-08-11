@@ -174,6 +174,14 @@ export interface IlpClient {
      * the transport applies its default (timeout-derived).
      */
     expiresAt?: string;
+    /**
+     * The PREPARE's execution condition, base64-encoded (32 bytes) — the
+     * transport MUST forward it verbatim onto the outgoing packet. An absent
+     * or all-zero condition is refused outright by a Rust connector (toon#143),
+     * so a caller sending a sealed-wire packet (see `@toon-protocol/core/wire`)
+     * always sets this.
+     */
+    executionCondition?: string;
   }): Promise<IlpSendResult>;
 
   /**
@@ -188,6 +196,8 @@ export interface IlpClient {
       timeout?: number;
       /** Per-packet expiry as an ISO 8601 string (see sendIlpPacket). */
       expiresAt?: string;
+      /** The PREPARE's execution condition, base64-encoded (see sendIlpPacket). */
+      executionCondition?: string;
     },
     claim: unknown // EVMClaimMessage type from client package
   ): Promise<IlpSendResult>;
@@ -197,6 +207,45 @@ export interface IlpClient {
  * @deprecated Use IlpClient instead
  */
 export type AgentRuntimeClient = IlpClient;
+
+/**
+ * The terminating connector's own identity, as `GET /ilp/identity` reports it.
+ */
+export interface ConnectorEdgeIdentity {
+  /** Uncompressed secp256k1 public key — exactly 65 raw bytes, leading 0x04. */
+  publicKey: Uint8Array;
+}
+
+/**
+ * What a locally-terminated route costs, as `GET /ilp/routes/price` reports it.
+ */
+export interface ConnectorEdgeRoutePrice {
+  /** The price in ILP base units of the route asked about. */
+  price: bigint;
+}
+
+/**
+ * A sibling port to {@link IlpClient} (toon#143): who a destination's
+ * terminating connector is, and what it charges. ADR 0018 makes holding that
+ * connector's public key a precondition of forming a packet at all — a
+ * sealed-wire payload (`@toon-protocol/core/wire`'s `sealExchange`) cannot be
+ * built without it — and ADR 0020 makes the price something to ASK for, never
+ * computed locally.
+ *
+ * Structural, like every other port in this file: a caller's own
+ * `ConnectorEdgeClient` (resolving `destination` to the terminating
+ * connector's client-edge endpoint first, per ADR 0022) satisfies this
+ * without `core` importing it.
+ */
+export interface ConnectorEdgeLookup {
+  /** The identity of the connector that terminates `destination`. */
+  getIdentity(destination: string): Promise<ConnectorEdgeIdentity>;
+  /**
+   * What sending to `destination` costs, flat per handler (ADR 0020), or
+   * `null` when nothing terminated here matches it.
+   */
+  getRoutePrice(destination: string): Promise<ConnectorEdgeRoutePrice | null>;
+}
 
 /**
  * Own settlement configuration for local chain selection during registration.
@@ -240,6 +289,19 @@ export interface BootstrapServiceConfig extends BootstrapConfig {
   toonDecoder?: (bytes: Uint8Array) => NostrEvent;
   /** Static BTP secret for initial peer registration (before settlement) */
   btpSecret?: string;
-  /** Base price per byte for ILP packet pricing (default: 10n) */
+  /**
+   * @deprecated No longer multiplied by the announce payload's byte length
+   * (toon#143 — ADR 0020 makes the announce packet's amount something ASKED
+   * for via {@link connectorEdgeLookup}, not computed locally). When set, it
+   * is used verbatim as an explicit override of the announce amount instead
+   * of the asked-for route price; leave unset to always ask.
+   */
   basePricePerByte?: bigint;
+  /**
+   * Identity + price lookup for the connector terminating a peer's
+   * `ilpAddress` (toon#143). Required for `announceViaIlp` to seal its
+   * packet (ADR 0018/0019/0020); when absent, the announce phase is skipped
+   * entirely rather than sending an unsealed packet with no condition.
+   */
+  connectorEdgeLookup?: ConnectorEdgeLookup;
 }

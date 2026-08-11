@@ -13,6 +13,7 @@ import type {
   KnownPeer,
   BootstrapResult,
   SettlementConfig,
+  ConnectorEdgeLookup,
 } from './bootstrap/types.js';
 import type {
   SendPacketParams,
@@ -174,8 +175,17 @@ export interface ToonNodeConfig {
   knownPeers?: KnownPeer[];
   /** Optional settlement preferences for peer registration */
   settlementInfo?: SettlementConfig;
-  /** Base price per byte for ILP packet pricing (default: 10n) */
+  /**
+   * @deprecated No longer multiplied by the announce payload's byte length
+   * (toon#143). See {@link BootstrapServiceConfig.basePricePerByte}.
+   */
   basePricePerByte?: bigint;
+  /**
+   * Identity + price lookup for the connector terminating a peer's
+   * `ilpAddress` (toon#143). Required for the bootstrap announce phase to
+   * seal its packet; when absent, the announce phase is skipped.
+   */
+  connectorEdgeLookup?: ConnectorEdgeLookup;
   /** Enable ArDrive peer lookup (default: true) */
   ardriveEnabled?: boolean;
   /** Default relay URL for ArDrive-sourced peers that lack relay URLs (default: '') */
@@ -310,7 +320,8 @@ export function createToonNode(config: ToonNodeConfig): ToonNode {
       ownIlpAddress: config.ilpInfo.ilpAddress,
       toonEncoder: config.toonEncoder,
       toonDecoder: config.toonDecoder,
-      basePricePerByte: config.basePricePerByte ?? 10n,
+      basePricePerByte: config.basePricePerByte,
+      connectorEdgeLookup: config.connectorEdgeLookup,
     },
     config.secretKey,
     config.ilpInfo

@@ -34,6 +34,7 @@ export function createHttpIlpClient(connectorUrl: string): IlpClient {
       data: string;
       timeout?: number;
       expiresAt?: string;
+      executionCondition?: string;
     }): Promise<IlpSendResult> {
       try {
         const response = await fetch(`${baseUrl}/send-packet`, {
@@ -45,6 +46,9 @@ export function createHttpIlpClient(connectorUrl: string): IlpClient {
             data: params.data,
             ...(params.expiresAt !== undefined && {
               expiresAt: params.expiresAt,
+            }),
+            ...(params.executionCondition !== undefined && {
+              executionCondition: params.executionCondition,
             }),
           }),
           signal: params.timeout

@@ -35,7 +35,10 @@ import type {
   BootstrapEventListener,
   IlpClient,
   IlpSendResult,
+  ConnectorEdgeLookup,
 } from './types.js';
+import { sealExchange, readExchangeOutcome } from '../wire/sealed-exchange.js';
+import type { EnvelopeRequest } from '../wire/envelope.js';
 
 /**
  * Error thrown when bootstrap operations fail.
@@ -73,7 +76,9 @@ export class BootstrapService {
   private readonly ownIlpAddress?: string;
   private readonly toonEncoder?: BootstrapServiceConfig['toonEncoder'];
   private readonly toonDecoder?: BootstrapServiceConfig['toonDecoder'];
-  private readonly basePricePerByte: bigint;
+  /** @deprecated see {@link BootstrapServiceConfig.basePricePerByte}. */
+  private readonly basePricePerByte?: bigint;
+  private readonly connectorEdgeLookup?: BootstrapServiceConfig['connectorEdgeLookup'];
 
   // Event emitter
   private listeners: BootstrapEventListener[] = [];
@@ -109,7 +114,8 @@ export class BootstrapService {
     this.ownIlpAddress = config.ownIlpAddress;
     this.toonEncoder = config.toonEncoder;
     this.toonDecoder = config.toonDecoder;
-    this.basePricePerByte = config.basePricePerByte ?? 10n;
+    this.basePricePerByte = config.basePricePerByte;
+    this.connectorEdgeLookup = config.connectorEdgeLookup;
   }
 
   /**
@@ -474,10 +480,41 @@ export class BootstrapService {
   }
 
   /**
+   * What the announce PREPARE should carry as its amount.
+   *
+   * ASKED for (ADR 0020, flat per handler), never computed as bytes × rate.
+   * `basePricePerByte`, when a caller still sets it, is a deprecated explicit
+   * override rather than a per-byte rate — see its doc comment on
+   * {@link BootstrapServiceConfig}.
+   *
+   * @throws {BootstrapError} when nothing terminated here prices `destination`.
+   */
+  private async resolveAnnounceAmount(
+    lookup: ConnectorEdgeLookup,
+    destination: string
+  ): Promise<string> {
+    if (this.basePricePerByte !== undefined) {
+      return String(this.basePricePerByte);
+    }
+
+    const routePrice = await lookup.getRoutePrice(destination);
+    if (routePrice === null) {
+      throw new BootstrapError(
+        `No locally-terminated route price for ${destination}`
+      );
+    }
+    return String(routePrice.price);
+  }
+
+  /**
    * Announce own kind:10032 as paid ILP PREPARE (Phase 2).
    */
   private async announceViaIlp(result: BootstrapResult): Promise<void> {
-    if (!this.ilpClient || !this.toonEncoder) {
+    // A connectorEdgeLookup is required to seal the packet (ADR 0018/0019):
+    // without it there is no terminating connector identity to seal to, so
+    // the announce phase is skipped entirely rather than sending an unsealed
+    // packet with no execution condition (toon#143).
+    if (!this.ilpClient || !this.toonEncoder || !this.connectorEdgeLookup) {
       return;
     }
 
@@ -486,10 +523,34 @@ export class BootstrapService {
 
     // TOON-encode the event
     const toonBytes = this.toonEncoder(ilpInfoEvent);
-    const base64Toon = Buffer.from(toonBytes).toString('base64');
 
-    // Calculate amount: base price per byte * TOON byte length
-    const amount = String(BigInt(toonBytes.length) * this.basePricePerByte);
+    // The identity of the connector that TERMINATES this peer's ilpAddress —
+    // `data` is sealed to that key, and sealing to any other key is a
+    // confidentiality failure that presents as an undeliverable packet
+    // (ADR 0018).
+    const identity = await this.connectorEdgeLookup.getIdentity(
+      result.peerInfo.ilpAddress
+    );
+
+    const amount = await this.resolveAnnounceAmount(
+      this.connectorEdgeLookup,
+      result.peerInfo.ilpAddress
+    );
+
+    // One call mints the envelope's seal and the condition that matches it
+    // (ADR 0018/0019), so the two can never drift apart — the packet
+    // announceViaIlp used to send had neither.
+    const request: EnvelopeRequest = {
+      method: 'POST',
+      target: '',
+      headers: [['content-type', 'application/json']],
+      body: toonBytes,
+    };
+    const exchange = sealExchange(request, identity.publicKey);
+    const data = Buffer.from(exchange.data).toString('base64');
+    const executionCondition = Buffer.from(exchange.condition).toString(
+      'base64'
+    );
 
     // Send announce via ILP — use claim-attached path when available
     let ilpResult: IlpSendResult;
@@ -500,18 +561,42 @@ export class BootstrapService {
     ) {
       const claim = await this.claimSigner(result.channelId, BigInt(amount));
       ilpResult = await this.ilpClient.sendIlpPacketWithClaim(
-        { destination: result.peerInfo.ilpAddress, amount, data: base64Toon },
+        {
+          destination: result.peerInfo.ilpAddress,
+          amount,
+          data,
+          executionCondition,
+        },
         claim
       );
     } else {
       ilpResult = await this.ilpClient.sendIlpPacket({
         destination: result.peerInfo.ilpAddress,
         amount,
-        data: base64Toon,
+        data,
+        executionCondition,
       });
     }
 
-    if (ilpResult.accepted) {
+    // Open the answer with the secret this exchange sealed. A REJECT sealed
+    // with that same secret proves the DESTINATION refused; a plaintext one
+    // means somebody on the path did (ADR 0018) — both are reported as
+    // announce-failed, but the reason names which.
+    const responseData =
+      ilpResult.data !== undefined
+        ? Uint8Array.from(Buffer.from(ilpResult.data, 'base64'))
+        : undefined;
+    const outcome = readExchangeOutcome(
+      {
+        accepted: ilpResult.accepted,
+        code: ilpResult.code,
+        message: ilpResult.message,
+      },
+      responseData,
+      exchange.sharedSecret
+    );
+
+    if (outcome.kind === 'answered') {
       console.log(
         `[Bootstrap] Announced to ${result.registeredPeerId} via ILP (eventId: ${ilpInfoEvent.id})`
       );
@@ -521,17 +606,20 @@ export class BootstrapService {
         eventId: ilpInfoEvent.id,
         amount,
       });
-    } else {
-      const reason = `${ilpResult.code} ${ilpResult.message}`;
-      this.emit({
-        type: 'bootstrap:announce-failed',
-        peerId: result.registeredPeerId,
-        reason,
-      });
-      console.warn(
-        `[Bootstrap] Announce rejected by ${result.registeredPeerId}: ${reason}`
-      );
+      return;
     }
+
+    const refusedBy =
+      outcome.kind === 'destination-refused' ? 'destination' : 'path';
+    const reason = `${outcome.code} ${outcome.message} (${refusedBy} refused)`;
+    this.emit({
+      type: 'bootstrap:announce-failed',
+      peerId: result.registeredPeerId,
+      reason,
+    });
+    console.warn(
+      `[Bootstrap] Announce rejected by ${result.registeredPeerId}: ${reason}`
+    );
   }
 
   /**

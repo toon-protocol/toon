@@ -12,6 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent } from 'nostr-tools/pure';
 import type { Filter } from 'nostr-tools/filter';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { BootstrapService, BootstrapError } from './BootstrapService.js';
 import type {
   ConnectorAdminClient,
@@ -19,11 +20,18 @@ import type {
   BootstrapEvent,
   IlpSendResult,
   KnownPeer,
+  ConnectorEdgeLookup,
 } from './types.js';
 import type { IlpPeerInfo } from '../types.js';
 import { ILP_PEER_INFO_KIND } from '../constants.js';
 import { GenesisPeerLoader } from '../discovery/index.js';
 import type { GenesisPeer } from '../discovery/index.js';
+import {
+  openRequest,
+  sealResponse,
+  encodeEnvelopeResponse,
+  localGiftWrapEcdh,
+} from '../wire/index.js';
 
 // ============================================================================
 // Mock: WebSocket transport (the only true boundary mock)
@@ -114,19 +122,94 @@ function createMockConnectorAdmin(): ConnectorAdminClient & {
   };
 }
 
-function createMockIlpClient(result: Partial<IlpSendResult> = {}): IlpClient & {
+// A fixed, obviously-test terminating-connector identity for the sealed-wire
+// announce path (toon#143). `announceViaIlp` now seals to whatever identity
+// `connectorEdgeLookup.getIdentity` reports; using a real key pair here lets
+// the default mock IlpClient genuinely open what was sealed to it and seal a
+// real answer back, rather than hand-writing FULFILL bytes a fix could
+// "pass" without actually opening.
+const FAKE_CONNECTOR_SECRET = new Uint8Array(32).fill(9);
+const FAKE_CONNECTOR_PUBLIC = secp256k1.getPublicKey(
+  FAKE_CONNECTOR_SECRET,
+  false
+);
+const FAKE_ROUTE_PRICE = 500n;
+
+function createMockConnectorEdgeLookup(
+  overrides: { publicKey?: Uint8Array; price?: bigint | null } = {}
+): ConnectorEdgeLookup & {
+  getIdentity: ReturnType<typeof vi.fn>;
+  getRoutePrice: ReturnType<typeof vi.fn>;
+} {
+  const price =
+    overrides.price === undefined ? FAKE_ROUTE_PRICE : overrides.price;
+  return {
+    getIdentity: vi.fn().mockResolvedValue({
+      publicKey: overrides.publicKey ?? FAKE_CONNECTOR_PUBLIC,
+    }),
+    getRoutePrice: vi.fn().mockResolvedValue(price === null ? null : { price }),
+  };
+}
+
+/**
+ * Opens a base64 sealed PREPARE `data` as the fake terminating connector
+ * would (with {@link FAKE_CONNECTOR_SECRET}), and seals a 200 OK answer back
+ * with the secret it recovered — the minimum a mock FULFILL needs to be
+ * genuinely openable by `readExchangeOutcome`, rather than a bare
+ * `{ accepted: true }` a pre-toon#143 mock could get away with.
+ */
+function fulfillSealedRequest(dataBase64: string): {
+  accepted: true;
+  data: string;
+} {
+  const { sharedSecret } = openRequest(
+    Uint8Array.from(Buffer.from(dataBase64, 'base64')),
+    localGiftWrapEcdh(FAKE_CONNECTOR_SECRET)
+  );
+  const answer = encodeEnvelopeResponse({
+    status: 200,
+    headers: [],
+    body: new Uint8Array(0),
+  });
+  return {
+    accepted: true,
+    data: Buffer.from(sealResponse(sharedSecret, answer)).toString('base64'),
+  };
+}
+
+/**
+ * A mock IlpClient. With no override, it auto-fulfils: it opens whatever the
+ * caller sealed to {@link FAKE_CONNECTOR_PUBLIC} and seals a real answer
+ * back, so `announceViaIlp`'s `readExchangeOutcome` has something genuine to
+ * open. An explicit `result` (typically `{ accepted: false, code, message }`)
+ * overrides that and is returned verbatim instead — how a test drives a
+ * rejection.
+ */
+function createMockIlpClient(result?: Partial<IlpSendResult>): IlpClient & {
   sendIlpPacket: ReturnType<typeof vi.fn>;
   sendIlpPacketWithClaim: ReturnType<typeof vi.fn>;
 } {
-  const defaultResult = {
-    accepted: true,
-    fulfillment: 'test-fulfillment',
-    data: undefined,
-    ...result,
-  };
+  const respond = (params: { data: string }): IlpSendResult =>
+    result === undefined
+      ? fulfillSealedRequest(params.data)
+      : {
+          accepted: true,
+          data: undefined,
+          ...result,
+        };
+
+  const sendIlpPacket = vi.fn();
+  sendIlpPacket.mockImplementation(async (params: { data: string }) =>
+    respond(params)
+  );
+  const sendIlpPacketWithClaim = vi.fn();
+  sendIlpPacketWithClaim.mockImplementation(async (params: { data: string }) =>
+    respond(params)
+  );
+
   return {
-    sendIlpPacket: vi.fn().mockResolvedValue(defaultResult),
-    sendIlpPacketWithClaim: vi.fn().mockResolvedValue(defaultResult),
+    sendIlpPacket,
+    sendIlpPacketWithClaim,
   };
 }
 
@@ -443,6 +526,7 @@ describe('BootstrapService', () => {
   it('should send paid ILP announcement via ilpClient for registered peers', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockIlpClient();
+    const connectorEdgeLookup = createMockConnectorEdgeLookup();
 
     const toonEncoder = vi.fn(
       (_event: NostrEvent) => new Uint8Array([1, 2, 3])
@@ -455,7 +539,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup,
       },
       secretKey,
       ownIlpInfo
@@ -472,20 +556,29 @@ describe('BootstrapService', () => {
     // Phase 2 should send announcement via ILP
     expect(runtime.sendIlpPacket).toHaveBeenCalled();
 
-    // Verify the ILP call used the peer's ILP address as destination
+    // Verify the ILP call used the peer's ILP address as destination, and
+    // carries a non-zero execution condition and sealed (non-plaintext) data
+    // — the toon#143 fix: no path can build an announce packet without both.
     const ilpCall = runtime.sendIlpPacket.mock.calls[0]?.[0] as
       | {
           destination: string;
           amount: string;
           data: string;
+          executionCondition?: string;
         }
       | undefined;
     expect(ilpCall?.destination).toBe('g.test.peer');
+    expect(ilpCall?.executionCondition).toBeDefined();
+    const condition = Buffer.from(ilpCall?.executionCondition ?? '', 'base64');
+    expect(condition).toHaveLength(32);
+    expect(condition.equals(Buffer.alloc(32))).toBe(false);
 
-    // Amount should be toonBytes.length * basePricePerByte
-    const encodedBytes = toonEncoder.mock.results[0]?.value as Uint8Array;
-    const expectedAmount = String(BigInt(encodedBytes.length) * 10n);
-    expect(ilpCall?.amount).toBe(expectedAmount);
+    // Amount is asked for via connectorEdgeLookup.getRoutePrice (ADR 0020),
+    // never computed from the TOON payload's byte length.
+    expect(connectorEdgeLookup.getRoutePrice).toHaveBeenCalledWith(
+      'g.test.peer'
+    );
+    expect(ilpCall?.amount).toBe(String(FAKE_ROUTE_PRICE));
   });
 
   it('should skip Phase 2 when ilpClient not configured', async () => {
@@ -509,6 +602,41 @@ describe('BootstrapService', () => {
     expect(results).toHaveLength(1);
   });
 
+  it('should skip the announce phase when connectorEdgeLookup is not configured', async () => {
+    // toon#143: an announce packet with no sealed identity to seal to would
+    // have no execution condition. Rather than send that broken packet (the
+    // original bug), the phase is skipped entirely until a lookup is wired.
+    const admin = createMockConnectorAdmin();
+    const runtime = createMockIlpClient();
+
+    const toonEncoder = vi.fn(
+      (_event: NostrEvent) => new Uint8Array([1, 2, 3])
+    );
+    const toonDecoder = vi.fn((_bytes: Uint8Array) => ({}) as NostrEvent);
+
+    const service = new BootstrapService(
+      {
+        knownPeers: [createKnownPeer()],
+        ardriveEnabled: false,
+        toonEncoder,
+        toonDecoder,
+        // No connectorEdgeLookup set.
+      },
+      secretKey,
+      ownIlpInfo
+    );
+    service.setConnectorAdmin(admin);
+    service.setIlpClient(runtime);
+
+    const bootstrapPromise = service.bootstrap();
+    await vi.waitFor(() => expect(capturedWs).not.toBeNull());
+    simulateRelayResponse(VALID_PEER_INFO);
+
+    await bootstrapPromise;
+
+    expect(runtime.sendIlpPacket).not.toHaveBeenCalled();
+  });
+
   it('should continue on ILP announce reject (non-fatal)', async () => {
     const admin = createMockConnectorAdmin();
     const runtime = createMockIlpClient({
@@ -529,6 +657,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo
@@ -571,7 +700,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo
@@ -614,7 +743,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo
@@ -666,7 +795,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
         settlementInfo: {
           supportedChains: ['evm:anvil:31337'],
           settlementAddresses: { 'evm:anvil:31337': '0xself' },
@@ -795,6 +924,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo
@@ -833,7 +963,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo
@@ -876,10 +1006,14 @@ describe('BootstrapService', () => {
 
   it('should continue on individual peer failure during republish()', async () => {
     const runtime = createMockIlpClient();
-    // First call fails, second succeeds
+    // First call fails, second succeeds (and returns a genuinely sealed
+    // FULFILL, opened with whatever the caller sealed, so
+    // readExchangeOutcome has something real to open).
     runtime.sendIlpPacket
       .mockRejectedValueOnce(new Error('network error'))
-      .mockResolvedValueOnce({ accepted: true });
+      .mockImplementationOnce(async (params: { data: string }) =>
+        fulfillSealedRequest(params.data)
+      );
 
     const toonEncoder = vi.fn(
       (_event: NostrEvent) => new Uint8Array([1, 2, 3])
@@ -893,7 +1027,7 @@ describe('BootstrapService', () => {
         ardriveEnabled: false,
         toonEncoder,
         toonDecoder,
-        basePricePerByte: 10n,
+        connectorEdgeLookup: createMockConnectorEdgeLookup(),
       },
       secretKey,
       ownIlpInfo

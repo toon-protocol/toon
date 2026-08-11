@@ -25,6 +25,8 @@ export interface SendPacketParams {
    * if needed.
    */
   expiresAt?: Date;
+  /** The PREPARE's execution condition, 32 bytes (not base64 string). */
+  executionCondition?: Uint8Array;
 }
 
 /**
@@ -86,6 +88,7 @@ export function createDirectIlpClient(
       data: string;
       timeout?: number;
       expiresAt?: string;
+      executionCondition?: string;
     }): Promise<IlpSendResult> {
       try {
         // Convert string amount to BigInt
@@ -111,6 +114,11 @@ export function createDirectIlpClient(
           amount,
           data,
           expiresAt,
+          ...(params.executionCondition !== undefined && {
+            executionCondition: Uint8Array.from(
+              Buffer.from(params.executionCondition, 'base64')
+            ),
+          }),
         });
 
         // Map result to IlpSendResult

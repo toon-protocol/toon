@@ -30,6 +30,7 @@ export function createHttpIlpClient(baseUrl: string): IlpClient {
       data: string;
       timeout?: number;
       expiresAt?: string;
+      executionCondition?: string;
     }): Promise<IlpSendResult> {
       let response: Response;
       try {
@@ -43,6 +44,9 @@ export function createHttpIlpClient(baseUrl: string): IlpClient {
             ...(params.timeout !== undefined && { timeout: params.timeout }),
             ...(params.expiresAt !== undefined && {
               expiresAt: params.expiresAt,
+            }),
+            ...(params.executionCondition !== undefined && {
+              executionCondition: params.executionCondition,
             }),
           }),
         });

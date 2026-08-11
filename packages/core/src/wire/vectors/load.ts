@@ -1,0 +1,289 @@
+/**
+ * Load the vendored cross-repo wire vectors.
+ *
+ * The vector FILE is the contract (connector ADR 0021); this module is only the
+ * door to it. It reads from disk rather than `import`ing the JSON so the file
+ * stays a data artefact — vendored, hashed and refreshable — instead of
+ * something the bundler inlines into the published package.
+ *
+ * The shape mirrors `vectors/README.md` on the connector: every section the
+ * file carries is typed and returned, whether or not this repo replays it.
+ * Three of six are replayed here — `envelope`, `giftwrap` and `fulfilment`,
+ * the sections `@toon-protocol/core/wire` implements — each as its own
+ * `describe` block in the harness, so replaying one more is a block to add
+ * rather than a restructure. The other three are EIP-712 signing surface or
+ * the connector-to-connector peer wire, neither of which `core` carries; see
+ * `vectors/README.md` for why each is out of scope.
+ *
+ * `WIRE_VECTOR_SECTIONS` is the closed list of sections this loader has been
+ * taught. The harness asserts the file carries exactly these, so a section the
+ * connector ADDS (as `claim` was added in connector#588) fails loudly here
+ * instead of being quietly ignored by a replay that never looks at it.
+ *
+ * Test-only: nothing in `src/index.ts` reaches here, so it is not published.
+ */
+
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// ─── The file's schema (connector `vectors/README.md`) ──────────────────────
+
+/** A decoded envelope as the vector file spells it: tagged, hex body. */
+export type VectorEnvelope =
+  | {
+      direction: 'request';
+      method: string;
+      target: string;
+      headers: [string, string][];
+      body_hex: string;
+    }
+  | {
+      direction: 'response';
+      status: number;
+      headers: [string, string][];
+      body_hex: string;
+    };
+
+export interface EnvelopeValidVector {
+  name: string;
+  encoded_hex: string;
+  decoded: VectorEnvelope;
+}
+
+/** The six error names the connector's `EnvelopeError` variants map onto. */
+export type VectorEnvelopeError =
+  | 'buffer_underflow'
+  | 'non_canonical_length'
+  | 'length_determinant_overflow'
+  | 'invalid_type'
+  | 'invalid_utf8'
+  | 'trailing_bytes';
+
+export interface EnvelopeInvalidVector {
+  name: string;
+  direction: 'request' | 'response';
+  bytes_hex: string;
+  expected_error: VectorEnvelopeError;
+}
+
+/**
+ * A signed EIP-712 `BalanceProof` (connector ADR 0024) — the digest and
+ * signature scheme both the peer wire and the client edge are checked against.
+ *
+ * Integer fields are JSON numbers in the file; `nonce`, `transferred_amount`
+ * and `locked_amount` are `uint256` on the wire, so widen them to `bigint`
+ * before hashing. Hex fields carry no `0x` prefix (see `hexToBytes`).
+ */
+export interface ClaimVector {
+  name: string;
+  /** EIP-712 domain `chainId` — per channel, never a node-wide default. */
+  chain_id: number;
+  /** EIP-712 domain `verifyingContract`, 20 bytes. */
+  token_network_address_hex: string;
+  /** The channel's on-chain `bytes32` identifier. */
+  channel_id_hex: string;
+  nonce: number;
+  transferred_amount: number;
+  /** Always 0 on the wire today (ADR 0004), still part of the hashed struct. */
+  locked_amount: number;
+  /** Always zero today, still part of the hashed struct. */
+  locks_root_hex: string;
+  /** `keccak256(0x1901 || domainSeparator || structHash)`. */
+  digest_hex: string;
+  signer_secret_hex: string;
+  signer_address_hex: string;
+  /** 65 bytes, `r || s || recovery_id`; `recovery_id` is raw 0/1, not 27/28. */
+  signature_hex: string;
+}
+
+/**
+ * A sealed request/response pair (connector ADR 0018). Every value a real seal
+ * draws at random is pinned, so `request_wrap_hex` and `response_wrap_hex` are
+ * reproducible byte-for-byte rather than merely round-trippable — a seal that
+ * derived its AEAD key differently would still open its own output and would
+ * only fail against these bytes.
+ *
+ * Hex fields carry no `0x` prefix (see `hexToBytes`).
+ */
+export interface GiftWrapVector {
+  name: string;
+  /** The sender's per-packet ephemeral secp256k1 secret, 32 bytes. */
+  ephemeral_secret_hex: string;
+  /** The 32 random bytes sealed inside the request. */
+  shared_secret_hex: string;
+  /** ChaCha20-Poly1305 nonce for the request, 12 bytes. */
+  request_nonce_hex: string;
+  /** ChaCha20-Poly1305 nonce for the response, 12 bytes. */
+  response_nonce_hex: string;
+  request_envelope: VectorEnvelope;
+  /** `request_envelope` encoded — the plaintext the request wrap seals. */
+  request_envelope_hex: string;
+  /** `0x01 ‖ ephemeral_public(65) ‖ nonce(12) ‖ ciphertext`. */
+  request_wrap_hex: string;
+  response_envelope: VectorEnvelope;
+  response_envelope_hex: string;
+  /** `0x02 ‖ nonce(12) ‖ ciphertext`, sealed with `shared_secret_hex`. */
+  response_wrap_hex: string;
+}
+
+export interface GiftWrapVectors {
+  /** The fixture identity secret a replaying SDK opens the request with. */
+  receiver_identity_secret_hex: string;
+  /** 65-byte uncompressed — what a real connector reports at `/ilp/identity`. */
+  receiver_identity_public_hex: string;
+  cases: GiftWrapVector[];
+}
+
+/**
+ * A derived fulfilment and the condition it is checked against (connector ADR
+ * 0019). `matches` is `false` for the case whose fulfilment belongs to a
+ * DIFFERENT secret than the one that minted `condition_hex`, so rejection is
+ * exercised as well as acceptance.
+ */
+export interface FulfilmentVector {
+  name: string;
+  shared_secret_hex: string;
+  /** `HKDF-SHA256(shared_secret, "toon-giftwrap-fulfillment")`. */
+  fulfilment_hex: string;
+  /** The condition a sender mints: `sha256(fulfilment)`. */
+  condition_hex: string;
+  /** Whether `fulfilment_hex` is the preimage of `condition_hex`. */
+  matches: boolean;
+}
+
+/**
+ * The BTP auth greeting's `channelId`/`expires`/`signature` declaration
+ * (connector#795, client-edge-spec.md §1.9 step 1). Typed but NOT replayed
+ * here: `core` sends no BTP greeting and holds no EIP-712 signer. The
+ * signature scheme is the SAME domain-separated `ClaimStateChallenge` EIP-712
+ * type `POST /ilp/claim-state` uses — deliberately distinct from `claim`'s
+ * `BalanceProof` typehash above, so the two can never collide.
+ *
+ * Unlike every other section, `channel_id_hex` and `signature_hex` carry a
+ * `0x` prefix here — the literal strings the auth entry's JSON body carries,
+ * not this file's usual internal byte encoding.
+ */
+export interface ChannelControlDeclarationVector {
+  name: string;
+  peer_id: string;
+  chain_id: number;
+  token_network_address_hex: string;
+  /** `0x`-prefixed, unlike this file's other hex fields. */
+  channel_id_hex: string;
+  expires: number;
+  /** What `signature_hex` must recover to for `signature_verifies` to hold. */
+  counterparty_address_hex: string;
+  signer_secret_hex: string;
+  signer_address_hex: string;
+  digest_hex: string;
+  /** `0x`-prefixed, unlike this file's other hex fields. */
+  signature_hex: string;
+  /** The auth entry's full JSON body — one valid serialization of it, not
+   * byte-replayed here; see `wire-vectors.test.ts` for why. */
+  auth_json: string;
+  btp_message_hex: string;
+  signature_verifies: boolean;
+}
+
+/**
+ * The connector-to-connector peer wire (connector#758, `peer-carriage-spec.md`
+ * §10) — a client SDK's counterpart never speaks this; it is the wire between
+ * two connectors, not between a client and its terminating edge. Carried but
+ * deliberately NOT replayed, same as any section in
+ * `sectionsPresentNotYetReplayed` — see `wire-vectors.test.ts`.
+ */
+export type PeerCarriageVectors = Record<string, unknown>;
+
+export interface WireVectors {
+  schema_version: number;
+  envelope: {
+    valid: EnvelopeValidVector[];
+    invalid: EnvelopeInvalidVector[];
+  };
+  /** Replayed against `src/wire/giftwrap.ts`. */
+  giftwrap?: GiftWrapVectors;
+  /** Replayed against `src/wire/giftwrap.ts`. */
+  fulfilment?: { cases: FulfilmentVector[] };
+  /** NOT replayed — EIP-712 balance proofs, a signing surface `core` lacks. */
+  claim?: { cases: ClaimVector[] };
+  /** NOT replayed — connector-to-connector peer wire, out of client scope. */
+  peer_carriage?: PeerCarriageVectors;
+  /** NOT replayed — BTP auth declarations, a signing surface `core` lacks. */
+  channel_control_declaration?: { cases: ChannelControlDeclarationVector[] };
+}
+
+/**
+ * Every section this loader knows about. The harness asserts the vendored
+ * file's top-level sections are exactly this set (plus `schema_version`), so a
+ * newly-added connector section cannot pass through unreplayed and unnoticed.
+ */
+export const WIRE_VECTOR_SECTIONS = [
+  'envelope',
+  'giftwrap',
+  'fulfilment',
+  'claim',
+  'peer_carriage',
+  'channel_control_declaration',
+] as const;
+
+// ─── Provenance ─────────────────────────────────────────────────────────────
+
+export interface WireVectorsProvenance {
+  sourceRepo: string;
+  sourcePath: string;
+  sourceRawUrl: string;
+  connectorCommit: string;
+  connectorCommitDate: string;
+  connectorCommitSubject: string;
+  schemaVersion: number;
+  /** SHA-256 of the vendored `wire-vectors.json`, exactly as committed. */
+  sha256: string;
+  sectionsReplayed: string[];
+  sectionsPresentNotYetReplayed: string[];
+}
+
+const VECTORS_PATH = fileURLToPath(
+  new URL('./wire-vectors.json', import.meta.url)
+);
+const PROVENANCE_PATH = fileURLToPath(
+  new URL('./wire-vectors.provenance.json', import.meta.url)
+);
+
+/** The vendored file's raw bytes — what the integrity hash is taken over. */
+export function readWireVectorsBytes(): Buffer {
+  return readFileSync(VECTORS_PATH);
+}
+
+/** SHA-256 of the vendored file, lowercase hex. */
+export function wireVectorsSha256(): string {
+  return createHash('sha256').update(readWireVectorsBytes()).digest('hex');
+}
+
+export function loadWireVectors(): WireVectors {
+  return JSON.parse(readWireVectorsBytes().toString('utf8')) as WireVectors;
+}
+
+export function loadWireVectorsProvenance(): WireVectorsProvenance {
+  return JSON.parse(
+    readFileSync(PROVENANCE_PATH, 'utf8')
+  ) as WireVectorsProvenance;
+}
+
+// ─── Hex ────────────────────────────────────────────────────────────────────
+
+/** The vector file's convention: lowercase hex, no `0x`, `""` for empty. */
+export function hexToBytes(hex: string): Uint8Array {
+  if (!/^[0-9a-f]*$/.test(hex) || hex.length % 2 !== 0) {
+    throw new Error(`not a vector hex string: '${hex}'`);
+  }
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+export function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
