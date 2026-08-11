@@ -181,11 +181,13 @@ describe('the fake Rust-like connector itself', () => {
 });
 
 describe('BootstrapService.announceViaIlp against the fake terminating connector', () => {
-  it('is refused F01 by a connector that requires a real condition, if no connectorEdgeLookup is wired', async () => {
-    // Documents the toon#143 defect directly: with no connectorEdgeLookup,
-    // the fix's own guard skips the announce rather than send the broken
-    // packet, so the Rust-like connector is never even asked. This is the
-    // safe half of the fix — see the next test for the sealed, accepted half.
+  it('never reaches the connector at all when no connectorEdgeLookup is wired', async () => {
+    // Red before the fix, for the reason toon#143 reports: the pre-fix code
+    // sent an unsealed, unconditioned packet here, and this Rust-like
+    // connector answers that with F01 — so `events` would carry an
+    // announce-failed. After the fix there is no identity to seal to, so the
+    // guard skips the announce and the connector is never asked. That is the
+    // safe half of the fix; the next test is the sealed, accepted half.
     const connector = createRustLikeConnector();
     const events: BootstrapEvent[] = [];
     const secretKey = generateSecretKey();

@@ -11,14 +11,12 @@
  * here describes the same thing but the bytes decide.
  *
  * ─── Why not HTTP text ─────────────────────────────────────────────────────
- * `utils/store-envelope.ts` builds latin1 HTTP/1.1 request text and
- * `utils/fulfill-http.ts` hand-parses a status line and scans for `\r\n\r\n`,
- * which is how they acquired leniencies nobody chose: a missing header/body
- * separator yielding an empty body, blank header lines skipped, spaces
- * tolerated inside the target. A structured encoding has exactly one
- * representation per message and nothing to smuggle. This module lands BESIDE
- * those two rather than replacing them — the swap is a later child — so it can
- * be reviewed against the vectors in isolation.
+ * The hand-rolled HTTP text this replaces — building latin1 HTTP/1.1 request
+ * text, then parsing a status line and scanning for `\r\n\r\n` — is how such
+ * code acquires leniencies nobody chose: a missing header/body separator
+ * yielding an empty body, blank header lines skipped, spaces tolerated inside
+ * the target. A structured encoding has exactly one representation per message
+ * and nothing to smuggle.
  *
  * ─── Headers are a list, not a map ─────────────────────────────────────────
  * A count prefix then `(name, value)` pairs in order. Both header ORDER and

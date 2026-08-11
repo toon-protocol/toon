@@ -1,0 +1,4 @@
+# Vendored verbatim from toon-protocol/connector and pinned by a SHA-256 in
+# wire-vectors.provenance.json (see packages/core/src/wire/vectors/README.md).
+# Reformatting it changes the hash and fails wire-vectors.test.ts.
+packages/core/src/wire/vectors/wire-vectors.json

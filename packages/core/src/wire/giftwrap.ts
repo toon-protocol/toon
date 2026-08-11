@@ -69,13 +69,14 @@
  * site.
  *
  * ─── Callers ────────────────────────────────────────────────────────────────
- * `ToonClient.publishEvent` (toon-client#450) seals to a connector that
- * TERMINATES the destination and lets it derive the fulfilment (ADR 0019),
- * via `wire/sealed-exchange.ts`. `serve-job.ts`'s `createJobMessageHandler`
- * (toon-client#537) is the other direction: THIS client is the destination,
- * so it opens a request addressed to its own {@link giftWrapPublicKey} and
- * seals the answer back — never a connector-derived fulfilment, since the
- * hashlock preimage there comes from `hashlock-delivery.ts` instead.
+ * In this package, `BootstrapService.announceViaIlp` (toon#143) is the sending
+ * direction: it seals to the connector that TERMINATES the destination and
+ * lets that connector derive the fulfilment (ADR 0019), via
+ * `wire/sealed-exchange.ts`. The receiving direction — a node that is itself
+ * the BTP destination, opening a request addressed to its own
+ * {@link giftWrapPublicKey} and sealing the answer back — is served by
+ * {@link openRequest}/{@link sealResponse} and lives in the consumers of this
+ * subpath rather than here.
  */
 
 import { secp256k1 } from '@noble/curves/secp256k1.js';
@@ -383,11 +384,11 @@ export function sealRequest(
  * envelope and the shared secret carried alongside it.
  *
  * `identity` is either a 32-byte secp256k1 secret key or a {@link GiftWrapEcdh}
- * that never exposes one. `serve-job.ts` calls this for real (toon-client#537):
- * when this client is itself the BTP destination, it is the party that opens
- * the wrap. It also makes the seal testable from both ends — and the vectors'
- * "opening it with the fixture's secret key must recover the envelope and the
- * secret exactly" a check this repo can actually run.
+ * that never exposes one. A node that is itself the BTP destination is the
+ * party that calls this for real. It also makes the seal testable from both
+ * ends — and the vectors' "opening it with the fixture's secret key must
+ * recover the envelope and the secret exactly" a check this repo can actually
+ * run.
  */
 export function openRequest(
   bytes: Uint8Array,

@@ -7,13 +7,13 @@
  * something the bundler inlines into the published package.
  *
  * The shape mirrors `vectors/README.md` on the connector: every section the
- * file carries is typed and returned. Five of six are replayed — `giftwrap`
- * and `fulfilment` arrived against `src/wire/giftwrap.ts` (toon-client#449),
- * `channel_control_declaration` against `src/signing/evm-signer.ts`
- * (toon-client#540) — each as a new `describe` block in the harness rather
- * than a restructure of it, exactly as this module was shaped for.
- * `peer_carriage` is the one deliberate exception: the connector-to-connector
- * peer wire, which no client SDK speaks (see its own doc comment below).
+ * file carries is typed and returned, whether or not this repo replays it.
+ * Three of six are replayed here — `envelope`, `giftwrap` and `fulfilment`,
+ * the sections `@toon-protocol/core/wire` implements — each as its own
+ * `describe` block in the harness, so replaying one more is a block to add
+ * rather than a restructure. The other three are EIP-712 signing surface or
+ * the connector-to-connector peer wire, neither of which `core` carries; see
+ * `vectors/README.md` for why each is out of scope.
  *
  * `WIRE_VECTOR_SECTIONS` is the closed list of sections this loader has been
  * taught. The harness asserts the file carries exactly these, so a section the
@@ -154,11 +154,11 @@ export interface FulfilmentVector {
 
 /**
  * The BTP auth greeting's `channelId`/`expires`/`signature` declaration
- * (connector#795, client-edge-spec.md §1.9 step 1), replayed against
- * `EvmSigner.signClaimStateChallenge`. The signature scheme is the SAME
- * domain-separated `ClaimStateChallenge` EIP-712 type `POST /ilp/claim-state`
- * uses (see `signClaimStateChallenge`'s doc comment) — deliberately distinct
- * from `claim`'s `BalanceProof` typehash above, so the two can never collide.
+ * (connector#795, client-edge-spec.md §1.9 step 1). Typed but NOT replayed
+ * here: `core` sends no BTP greeting and holds no EIP-712 signer. The
+ * signature scheme is the SAME domain-separated `ClaimStateChallenge` EIP-712
+ * type `POST /ilp/claim-state` uses — deliberately distinct from `claim`'s
+ * `BalanceProof` typehash above, so the two can never collide.
  *
  * Unlike every other section, `channel_id_hex` and `signature_hex` carry a
  * `0x` prefix here — the literal strings the auth entry's JSON body carries,
@@ -201,15 +201,15 @@ export interface WireVectors {
     valid: EnvelopeValidVector[];
     invalid: EnvelopeInvalidVector[];
   };
-  /** Replayed against `src/wire/giftwrap.ts` (toon-client#449). */
+  /** Replayed against `src/wire/giftwrap.ts`. */
   giftwrap?: GiftWrapVectors;
-  /** Replayed against `src/wire/giftwrap.ts` (toon-client#449). */
+  /** Replayed against `src/wire/giftwrap.ts`. */
   fulfilment?: { cases: FulfilmentVector[] };
-  /** Replayed against `src/signing/evm-signer.ts`. */
+  /** NOT replayed — EIP-712 balance proofs, a signing surface `core` lacks. */
   claim?: { cases: ClaimVector[] };
   /** NOT replayed — connector-to-connector peer wire, out of client scope. */
   peer_carriage?: PeerCarriageVectors;
-  /** Replayed against `src/signing/evm-signer.ts`. */
+  /** NOT replayed — BTP auth declarations, a signing surface `core` lacks. */
   channel_control_declaration?: { cases: ChannelControlDeclarationVector[] };
 }
 

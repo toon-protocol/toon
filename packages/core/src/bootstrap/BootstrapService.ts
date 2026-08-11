@@ -35,6 +35,7 @@ import type {
   BootstrapEventListener,
   IlpClient,
   IlpSendResult,
+  ConnectorEdgeLookup,
 } from './types.js';
 import { sealExchange, readExchangeOutcome } from '../wire/sealed-exchange.js';
 import type { EnvelopeRequest } from '../wire/envelope.js';
@@ -479,6 +480,33 @@ export class BootstrapService {
   }
 
   /**
+   * What the announce PREPARE should carry as its amount.
+   *
+   * ASKED for (ADR 0020, flat per handler), never computed as bytes × rate.
+   * `basePricePerByte`, when a caller still sets it, is a deprecated explicit
+   * override rather than a per-byte rate — see its doc comment on
+   * {@link BootstrapServiceConfig}.
+   *
+   * @throws {BootstrapError} when nothing terminated here prices `destination`.
+   */
+  private async resolveAnnounceAmount(
+    lookup: ConnectorEdgeLookup,
+    destination: string
+  ): Promise<string> {
+    if (this.basePricePerByte !== undefined) {
+      return String(this.basePricePerByte);
+    }
+
+    const routePrice = await lookup.getRoutePrice(destination);
+    if (routePrice === null) {
+      throw new BootstrapError(
+        `No locally-terminated route price for ${destination}`
+      );
+    }
+    return String(routePrice.price);
+  }
+
+  /**
    * Announce own kind:10032 as paid ILP PREPARE (Phase 2).
    */
   private async announceViaIlp(result: BootstrapResult): Promise<void> {
@@ -504,24 +532,10 @@ export class BootstrapService {
       result.peerInfo.ilpAddress
     );
 
-    // The amount is ASKED for (ADR 0020, flat per handler), never computed
-    // as bytes * rate. `basePricePerByte`, when a caller still sets it, is a
-    // deprecated explicit override rather than a per-byte rate — see its
-    // doc comment on BootstrapServiceConfig.
-    let amount: string;
-    if (this.basePricePerByte !== undefined) {
-      amount = String(this.basePricePerByte);
-    } else {
-      const routePrice = await this.connectorEdgeLookup.getRoutePrice(
-        result.peerInfo.ilpAddress
-      );
-      if (routePrice === null) {
-        throw new BootstrapError(
-          `No locally-terminated route price for ${result.peerInfo.ilpAddress}`
-        );
-      }
-      amount = String(routePrice.price);
-    }
+    const amount = await this.resolveAnnounceAmount(
+      this.connectorEdgeLookup,
+      result.peerInfo.ilpAddress
+    );
 
     // One call mints the envelope's seal and the condition that matches it
     // (ADR 0018/0019), so the two can never drift apart — the packet

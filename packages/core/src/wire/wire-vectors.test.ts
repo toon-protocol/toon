@@ -11,12 +11,12 @@
  *
  * Only `envelope`, `giftwrap` and `fulfilment` are replayed here — the
  * sections this package's `./wire` subpath actually implements. `claim` and
- * `channel_control_declaration` are replayed against toon-client's
- * `signing/evm-signer.ts` (EIP-712 balance proofs and BTP auth
- * declarations), which is client-signing surface `core` does not carry;
+ * `channel_control_declaration` are EIP-712 signing surface (balance proofs
+ * and BTP auth declarations) that lives in toon-client, not in `core`;
  * `peer_carriage` is the connector-to-connector wire no client SDK speaks.
- * All three are declared, not silently dropped — see "accounts for every
- * section the file carries" below.
+ * All three are declared in the provenance file's
+ * `sectionsPresentNotYetReplayed`, not silently dropped — see "accounts for
+ * every section the file carries" below.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -91,15 +91,24 @@ describe('the vendored vector file', () => {
     const sections = Object.keys(vectors).filter((k) => k !== 'schema_version');
     expect(new Set(sections)).toEqual(new Set(WIRE_VECTOR_SECTIONS));
 
-    // Every taught section is either replayed HERE, or is one of the
-    // sections toon-client replays (client-signing surface / the
-    // connector-to-connector wire) that this package deliberately does not
-    // carry. Nothing may fall between the two.
-    const notReplayedHere = WIRE_VECTOR_SECTIONS.filter(
-      (s) => !SECTIONS_REPLAYED_HERE.includes(s)
-    );
-    expect(new Set([...SECTIONS_REPLAYED_HERE, ...notReplayedHere])).toEqual(
-      new Set(WIRE_VECTOR_SECTIONS)
+    // The provenance file's two lists must partition exactly those sections,
+    // so neither can drift from what this harness actually runs.
+    expect(
+      new Set([
+        ...provenance.sectionsReplayed,
+        ...provenance.sectionsPresentNotYetReplayed,
+      ])
+    ).toEqual(new Set(WIRE_VECTOR_SECTIONS));
+    expect(
+      provenance.sectionsReplayed.filter((s) =>
+        provenance.sectionsPresentNotYetReplayed.includes(s)
+      )
+    ).toEqual([]);
+
+    // And `sectionsReplayed` must name the sections this file replays — not
+    // toon-client's larger set, which the vendored copy arrived carrying.
+    expect(new Set(provenance.sectionsReplayed)).toEqual(
+      new Set(SECTIONS_REPLAYED_HERE)
     );
   });
 });
