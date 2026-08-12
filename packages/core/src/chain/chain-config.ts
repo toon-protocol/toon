@@ -364,12 +364,11 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       rpcUrl: 'https://api.mainnet-beta.solana.com',
       programId: '',
       cluster: 'mainnet-beta',
-      // Circle's native USDC mint on Solana mainnet-beta, 6 decimals. This is
-      // the commonly-cited address, recorded here as a starting point per
-      // toon#166 -- it is NOT YET human-verified against mainnet-beta ("Needs
-      // a human before merge" in that issue). Do not carry the devnet mock
-      // mint (see solana-devnet above, which has none) or any other mint
-      // forward as a substitute for that verification.
+      // Circle's native USDC mint on Solana mainnet-beta, 6 decimals -- the
+      // commonly-cited address, recorded per toon#166 as the starting point
+      // for verification, NOT as a verified value. It is still awaiting the
+      // human check that issue requires ("Needs a human before merge"); no
+      // other mint (least of all a mock one) may stand in for it meanwhile.
       tokenMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     },
   };
