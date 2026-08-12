@@ -182,6 +182,16 @@ jobs:
         # see the job-level timeout-minutes comment above for why raising this
         # is only safe now that the push credential is minted fresh at push
         # time rather than once at job start.
+        #
+        # The push is not the only credential that outlived its clock here. The
+        # container's GH_TOKEN is baked in at `docker run -e` time and CANNOT be
+        # re-minted, so anything in-container that needs GitHub after the hour
+        # fails — and the reviewer's `gh issue view` failing would have cost the
+        # Spec axis silently. The runner therefore reads the issue BODY on the
+        # host and passes it to the reviewer through promptArgs
+        # (.sandcastle/review-verdict.ts, guarded by review-spec-context.test.ts).
+        # Anything else added inside the container must not assume a live token
+        # more than an hour into a run.
         timeout-minutes: 170
         env:
           SANDCASTLE_ISSUE_NUMBER: ${{ github.event.issue.number }}

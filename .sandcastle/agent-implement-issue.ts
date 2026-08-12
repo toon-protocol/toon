@@ -91,13 +91,28 @@ if (process.env.SANDCASTLE_AUTO_MERGE !== "true") {
   console.log(`Approver preflight OK: factory-ops is '${preflight.login}'.`);
 }
 
-// Fetch the issue title on the host so we can pass it to the prompts and name
-// the PR. `gh` authenticates via GH_TOKEN in the environment.
-const issueTitle = execFileSync(
-  "gh",
-  ["issue", "view", issueNumber, "--json", "title", "--jq", ".title"],
-  { encoding: "utf8" },
-).trim();
+// Fetch the issue title AND body on the host so we can pass them to the prompts
+// and name the PR. `gh` authenticates via GH_TOKEN in the environment.
+//
+// The BODY is fetched here, on the host, at job start — and handed to the
+// reviewer through promptArgs — because the reviewer runs INSIDE the container,
+// whose GH_TOKEN is baked in at `docker run -e` time (./sandbox-secrets.ts) and
+// cannot be refreshed afterwards. App installation tokens die ONE HOUR after
+// issue, so with the 170-minute step clock a run whose implementer phase
+// crosses the hour would have the reviewer's `gh issue view` fail with
+// `Bad credentials` and produce a verdict that never read the acceptance
+// criteria — the Spec axis silently gone, the review still green-looking.
+// pushBranch()'s fresh mint keeps the HOST's `gh` alive, so the fix is to do
+// this read where a fresh credential is reachable.
+const issue = JSON.parse(
+  execFileSync(
+    "gh",
+    ["issue", "view", issueNumber, "--json", "title,body"],
+    { encoding: "utf8" },
+  ),
+) as { title: string; body: string | null };
+const issueTitle = issue.title.trim();
+const issueBody = issue.body ?? "";
 
 // toon is a pnpm workspace: install with the committed lockfile so the sandbox
 // resolves the exact dependency tree. Mirrors main.ts (we deliberately do NOT
@@ -287,16 +302,18 @@ try {
   await pushBranch(sandbox, "push:early", { bestEffort: true });
 
   // Review (opus, 1 iteration) on the SAME branch, with the structured
-  // verdict REQUIRED (toon-meta#275): the reviewer receives the issue via
-  // promptArgs (Spec axis — it reviews against the issue's acceptance
-  // criteria, not just the diff) and must emit
+  // verdict REQUIRED (toon-meta#275): the reviewer receives the issue's number,
+  // title AND BODY via promptArgs (Spec axis — it reviews against the issue's
+  // acceptance criteria, not just the diff; the body is passed rather than
+  // fetched in-container because the container's credential cannot outlive the
+  // hour this longer clock now permits — see TargetIssue.body) and must emit
   // <review>{"verdict":"clean"|"blocking","blockingFindings":[...]}</review>.
   // A malformed verdict fails the run (one engine-style resume retry, then
   // non-zero exit) — see ./review-verdict.ts. The engine supplies the
   // built-in {{TARGET_BRANCH}} used inside review-prompt.md.
   const review = await runReviewerWithVerdict(sandbox, {
     branch,
-    issue: { number: issueNumber, title: issueTitle },
+    issue: { number: issueNumber, title: issueTitle, body: issueBody },
   });
   const blocking = review.verdict.verdict === "blocking";
 

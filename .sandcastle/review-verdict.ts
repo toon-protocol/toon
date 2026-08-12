@@ -154,6 +154,30 @@ export interface TargetIssue {
   /** Issue number as a string, e.g. "275". */
   number: string;
   title: string;
+  /**
+   * The issue's raw Markdown body, fetched on the HOST and handed to the
+   * reviewer through promptArgs.
+   *
+   * It is passed in rather than looked up in the container because the Spec
+   * axis must not depend on a credential the container cannot refresh. The
+   * container's GH_TOKEN is baked in at `docker run -e` time
+   * (./sandbox-secrets.ts) and a GitHub App installation token dies ONE HOUR
+   * after issue, so on any run whose implementer phase crosses the hour — now
+   * permitted by the 170-minute step clock (toon-meta#248) — an in-container
+   * `gh issue view` returns `Bad credentials` and the reviewer would emit a
+   * verdict having never read the acceptance criteria: a green-looking review
+   * with no Spec axis. `pushBranch()`'s fresh mint keeps the HOST's `gh`
+   * working for exactly this kind of fetch; the container's cannot be fixed
+   * that way, so the dependency is removed instead.
+   *
+   * Inlining issue text into a prompt does not smuggle shell blocks in with
+   * it: the engine marks the prompt FILE's own ``!`cmd` `` blocks with a
+   * sentinel before substitution and strips that sentinel from every promptArg
+   * value, then executes only marked blocks (`substitutePromptArgs` in
+   * @ai-hero/sandcastle@0.12.0's dist) — so a ``!`…` `` written into an issue
+   * body arrives as inert text.
+   */
+  body: string;
 }
 
 /** Mirrors the engine's buildStructuredOutputRetryFeedback() wording. */
@@ -194,6 +218,9 @@ export async function runReviewerWithVerdict(
       BRANCH: options.branch,
       ISSUE_NUMBER: options.issue?.number ?? "none",
       ISSUE_TITLE: options.issue?.title ?? "(no target issue resolved)",
+      ISSUE_BODY: options.issue?.body?.trim()
+        ? options.issue.body
+        : "(no issue body)",
     },
   });
 
@@ -272,16 +299,13 @@ export function resolveIssueFromPrBody(prNumber: string): TargetIssue | null {
   if (!match) return null;
   const number = match[1]!;
   try {
-    const title = gh([
-      "issue",
-      "view",
-      number,
-      "--json",
-      "title",
-      "--jq",
-      ".title",
-    ]).trim();
-    return { number, title };
+    // Title AND body: the body travels to the reviewer through promptArgs so
+    // the Spec axis never depends on the container's un-refreshable credential
+    // (see TargetIssue.body).
+    const issue = JSON.parse(
+      gh(["issue", "view", number, "--json", "title,body"]),
+    ) as { title: string; body: string | null };
+    return { number, title: issue.title.trim(), body: issue.body ?? "" };
   } catch {
     console.warn(
       `PR body references #${number} but the issue could not be read — ` +

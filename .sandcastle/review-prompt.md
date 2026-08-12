@@ -17,12 +17,21 @@ Issue: #{{ISSUE_NUMBER}} — {{ISSUE_TITLE}}
 If the issue number above is `none`, no target issue could be resolved for this
 branch; skip the Spec axis and review the Standards axis only.
 
-Otherwise, BEFORE reading the diff, run:
+Otherwise, BEFORE reading the diff, read the issue body below — especially its
+acceptance criteria. The Spec axis reviews the diff AGAINST THOSE CRITERIA, not
+against the diff itself.
 
-    gh issue view {{ISSUE_NUMBER}}
+The body is supplied here, already fetched on the host. Do NOT run
+`gh issue view` to obtain it: your container's GitHub credential was baked in
+when the container started and expires one hour later, so on a long run that
+call fails with `Bad credentials` — and a Spec axis that silently degrades to
+"no acceptance criteria" is worse than no review at all. If any `gh` command
+you try returns `Bad credentials`, that is why: work from the context below,
+and say so in your verdict rather than reviewing without it.
 
-and read the issue body — especially its acceptance criteria. The Spec axis
-reviews the diff AGAINST THOSE CRITERIA, not against the diff itself.
+### Issue #{{ISSUE_NUMBER}} body
+
+{{ISSUE_BODY}}
 
 ## Branch diff
 
