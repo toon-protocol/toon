@@ -517,6 +517,24 @@ describe('resolveSolanaChainConfig', () => {
     expect(config.rpcUrl).toBe('https://my-solana-rpc.example.com');
     expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
   });
+
+  it('[P0] solana-mainnet preset ships unconfigured (empty programId), not the devnet mock mint', () => {
+    const config = resolveSolanaChainConfig('solana-mainnet');
+    expect(config.chainType).toBe('solana');
+    expect(config.cluster).toBe('mainnet-beta');
+    expect(config.programId).toBe('');
+    expect(config.tokenMint).toBe(
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+    );
+    expect(config.rpcUrl).toBe('https://api.mainnet-beta.solana.com');
+  });
+
+  it('[P1] SOLANA_PROGRAM_ID env override fills the empty solana-mainnet programId', () => {
+    const promoted = 'PromotedProgramId1111111111111111111111111';
+    vi.stubEnv('SOLANA_PROGRAM_ID', promoted);
+    const config = resolveSolanaChainConfig('solana-mainnet');
+    expect(config.programId).toBe(promoted);
+  });
 });
 
 describe('resolveMinaChainConfig', () => {

@@ -3,7 +3,8 @@
  *
  * Provides chain presets for three blockchain families:
  * - **EVM**: Anvil (local dev), Arbitrum Sepolia (staging), Arbitrum One (production)
- * - **Solana**: solana-devnet (local dev)
+ * - **Solana**: solana-devnet (local dev), solana-mainnet (production,
+ *   ships unconfigured until a program id is promoted)
  * - **Mina**: mina-devnet (local dev)
  *
  * Environment variable overrides:
@@ -42,7 +43,7 @@ export type ChainName =
 /**
  * Supported Solana chain preset names.
  */
-export type SolanaChainName = 'solana-devnet';
+export type SolanaChainName = 'solana-devnet' | 'solana-mainnet';
 
 /**
  * Supported Mina chain preset names.
@@ -349,6 +350,27 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       rpcUrl: 'http://localhost:19899',
       programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
       cluster: 'devnet',
+    },
+    // Solana mainnet-beta (public). TOON payment-channel program not deployed
+    // there yet, so this ships unconfigured -- empty programId, promoted only
+    // once connector#834 lands a mainnet deploy (mirrors how base-mainnet
+    // ships with an empty tokenNetworkAddress). NOT wired into
+    // network-profile.ts's public tiers, which already resolve their own
+    // mainnet Solana endpoint (SOLANA_TIER.mainnet) independently of this
+    // low-level, e2e-stack-facing preset table.
+    'solana-mainnet': {
+      name: 'solana-mainnet',
+      chainType: 'solana',
+      rpcUrl: 'https://api.mainnet-beta.solana.com',
+      programId: '',
+      cluster: 'mainnet-beta',
+      // Circle's native USDC mint on Solana mainnet-beta, 6 decimals. This is
+      // the commonly-cited address, recorded here as a starting point per
+      // toon#166 -- it is NOT YET human-verified against mainnet-beta ("Needs
+      // a human before merge" in that issue). Do not carry the devnet mock
+      // mint (see solana-devnet above, which has none) or any other mint
+      // forward as a substitute for that verification.
+      tokenMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     },
   };
 
