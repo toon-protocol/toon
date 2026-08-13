@@ -50,6 +50,11 @@ export interface GateBaseline {
   sampleRuns?: ReadonlyArray<{
     longestJobSeconds: number;
     sumRunnerSeconds: number;
+    // The span/queue pair checkParallelismAssumption consumes (toon#154),
+    // declared here so a test can replay each committed sample through it
+    // without casting its way back to fields the type had omitted.
+    totalRunSpanSeconds: number;
+    queueSeconds: number;
     // toon#173: which trigger produced this run. gate-regression-guard gates
     // pull_request runs too, not just push-to-main (ci.yml:135-137 -- the
     // guard job has no event filter of its own, and the workflow triggers on

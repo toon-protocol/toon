@@ -36,6 +36,13 @@ const baseline: GateBaseline = {
   },
 };
 
+// The frozen file the guard reads at runtime. Tests assert against the
+// committed JSON itself rather than a hand-copied transcription of its numbers,
+// so a recapture cannot leave them asserting figures the data no longer has.
+const committed = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
+) as GateBaseline;
+
 describe('checkLintCeiling', () => {
   it('passes when the ceiling matches the frozen baseline', () => {
     const result = checkLintCeiling('eslint . --max-warnings 940', baseline);
@@ -257,9 +264,6 @@ describe('checkSpeedRegression', () => {
 });
 
 describe('the committed gate-baseline.json', () => {
-  const committed = JSON.parse(
-    readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
-  ) as GateBaseline;
   // `?? 0` never fires in practice — the test below asserts the figure is a
   // number — and a 0 baseline would fail the slowdown expectations loudly.
   const baselineLongestJobSeconds = committed.gateSpeed.averageLongestJobDurationSeconds ?? 0;
@@ -529,18 +533,17 @@ describe('checkParallelismAssumption', () => {
   });
 
   it('passes every sampleRun in the committed gate-baseline.json', () => {
-    const committed = JSON.parse(
-      readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
-    ) as GateBaseline;
-    for (const run of committed.sampleRuns ?? []) {
-      const durations = {
+    const sampleRuns = committed.sampleRuns ?? [];
+    expect(sampleRuns.length).toBeGreaterThan(0);
+    for (const run of sampleRuns) {
+      const result = checkParallelismAssumption({
         byName: {},
         longestJobSeconds: run.longestJobSeconds,
         sumRunnerSeconds: run.sumRunnerSeconds,
-        totalWallClockSeconds: (run as unknown as { totalRunSpanSeconds: number }).totalRunSpanSeconds,
-        totalQueueSeconds: (run as unknown as { queueSeconds: number }).queueSeconds,
-      };
-      expect(checkParallelismAssumption(durations).pass).toBe(true);
+        totalWallClockSeconds: run.totalRunSpanSeconds,
+        totalQueueSeconds: run.queueSeconds,
+      });
+      expect(result.pass).toBe(true);
     }
   });
 });
