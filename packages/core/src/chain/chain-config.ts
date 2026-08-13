@@ -367,13 +367,14 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       // Circle's native USDC mint on Solana mainnet-beta, 6 decimals.
       // VERIFIED 2026-08-13 by Drew Pierson, per toon#166's "Needs a human
       // before merge" criterion, on two independent sources:
-      //   - Circle's published list (developers.circle.com/stablecoins/
-      //     usdc-contract-addresses) gives this address for Solana mainnet.
+      //   - Circle's published list gives this address for Solana mainnet:
+      //     https://developers.circle.com/stablecoins/usdc-contract-addresses
       //     That page names bridged representations separately where they
       //     exist (X Layer's USDC.e); none is listed for Solana.
-      //   - mainnet-beta at slot 439080550: owner TokenkegQfeZyiNwAJbNbGKPF
-      //     XCWuBvf9Ss623VQ5DA (SPL Token, not Token-2022), initialized mint,
-      //     decimals 6, supply ~7.73e9, live mint and freeze authorities.
+      //   - mainnet-beta at slot 439080550: initialized mint, decimals 6,
+      //     supply ~7.73e9, live mint and freeze authorities, owned by the
+      //     SPL Token program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA),
+      //     not Token-2022.
       // Native, not bridged. Two things not to confuse it with: this is the
       // token's MINT ACCOUNT, never a transfer destination; and Circle runs
       // separate CCTP/Gateway pre-mint addresses that are not this one.

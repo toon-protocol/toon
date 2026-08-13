@@ -518,7 +518,7 @@ describe('resolveSolanaChainConfig', () => {
     expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
   });
 
-  it('[P0] solana-mainnet preset ships unconfigured (empty programId) on the native USDC mint, not a mock one', () => {
+  it('[P0] solana-mainnet preset ships unconfigured (empty programId) and carries the native USDC mint', () => {
     const config = resolveSolanaChainConfig('solana-mainnet');
     expect(config.chainType).toBe('solana');
     expect(config.cluster).toBe('mainnet-beta');
