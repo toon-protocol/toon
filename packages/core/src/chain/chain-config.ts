@@ -348,7 +348,14 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       name: 'solana-devnet',
       chainType: 'solana',
       rpcUrl: 'http://localhost:19899',
-      programId: 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG',
+      // Deliberately empty: this preset targets a local `solana-test-validator`
+      // (see rpcUrl), not public devnet -- the public-devnet program id
+      // (2aEVJ8ko…, per connector's packages/solana-program/deployments/
+      // devnet-public.md) does not exist there. A local validator's program id
+      // is a fresh keypair generated per `cargo build-sbf` deploy, so no fixed
+      // default is meaningful; callers must supply the id of whatever they
+      // deployed locally via the `SOLANA_PROGRAM_ID` env override below.
+      programId: '',
       cluster: 'devnet',
     },
     // Solana mainnet-beta (public). TOON payment-channel program not deployed
@@ -404,7 +411,9 @@ export const MINA_CHAIN_PRESETS: Record<MinaChainName, MinaChainPreset> = {
  *
  * Environment variable overrides:
  * - `SOLANA_RPC_URL` overrides the preset's rpcUrl
- * - `SOLANA_PROGRAM_ID` overrides the preset's programId
+ * - `SOLANA_PROGRAM_ID` overrides the preset's programId. Required in practice
+ *   for `solana-devnet`, which ships an empty programId -- see the comment on
+ *   that preset for why no fixed default is meaningful there.
  *
  * @param name - Solana chain preset name
  * @returns Resolved Solana chain preset

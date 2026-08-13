@@ -487,19 +487,25 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
 // Solana and Mina preset resolution
 // ============================================================================
 
-const SOLANA_DEVNET_PROGRAM_ID = 'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG';
 const MINA_DEVNET_ZKAPP_ADDRESS =
   'B62qrH1As4odHiNyKpTZMHaM6tRs6gi5DJ53efZKQBtbaR5CUctbDs6';
+// Pre-cutover self-hosted-validator id, retired by the public-chain cutover
+// (see network-profile.ts's SOLANA_DEPLOYED_DEVNET) -- it MUST NOT be shipped
+// as any preset's default.
+const RETIRED_LOCAL_VALIDATOR_PROGRAM_ID =
+  'EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG';
 
 describe('resolveSolanaChainConfig', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('[P0] solana-devnet preset resolves the deployed programId', () => {
+  // The preset targets a local test-validator, whose deployed program id is a
+  // fresh keypair per `cargo build-sbf` -- the caller must supply it.
+  it('[P0] solana-devnet preset ships no default programId', () => {
     const config = resolveSolanaChainConfig('solana-devnet');
-    expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
-    expect(config.programId).not.toBe('');
+    expect(config.programId).toBe('');
+    expect(config.programId).not.toBe(RETIRED_LOCAL_VALIDATOR_PROGRAM_ID);
     expect(config.chainType).toBe('solana');
     expect(config.cluster).toBe('devnet');
   });
@@ -511,11 +517,11 @@ describe('resolveSolanaChainConfig', () => {
     expect(config.programId).toBe(override);
   });
 
-  it('[P1] SOLANA_RPC_URL env override wins over preset rpcUrl', () => {
+  it('[P1] SOLANA_RPC_URL env override wins over preset rpcUrl and leaves programId empty', () => {
     vi.stubEnv('SOLANA_RPC_URL', 'https://my-solana-rpc.example.com');
     const config = resolveSolanaChainConfig('solana-devnet');
     expect(config.rpcUrl).toBe('https://my-solana-rpc.example.com');
-    expect(config.programId).toBe(SOLANA_DEVNET_PROGRAM_ID);
+    expect(config.programId).toBe('');
   });
 
   it('[P0] solana-mainnet preset ships unconfigured (empty programId) and carries the native USDC mint', () => {
