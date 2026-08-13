@@ -381,13 +381,9 @@ export const MINA_CHAIN_PRESETS: Record<MinaChainName, MinaChainPreset> = {
  *
  * Environment variable overrides:
  * - `SOLANA_RPC_URL` overrides the preset's rpcUrl
- * - `SOLANA_PROGRAM_ID` overrides the preset's programId. Required in
- *   practice for `solana-devnet`, whose preset ships an empty programId --
- *   it targets a local test-validator, whose deployed program id is a fresh
- *   keypair generated per `cargo build-sbf` deploy and cannot be a fixed
- *   default. This is a different program than the public Solana devnet
- *   cluster's deployed program (see network-profile.ts's SOLANA_TIER for
- *   that address).
+ * - `SOLANA_PROGRAM_ID` overrides the preset's programId. Required in practice
+ *   for `solana-devnet`, which ships an empty programId -- see the comment on
+ *   that preset for why no fixed default is meaningful there.
  *
  * @param name - Solana chain preset name
  * @returns Resolved Solana chain preset
