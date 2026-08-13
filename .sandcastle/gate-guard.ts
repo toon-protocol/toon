@@ -152,7 +152,9 @@ export interface JobDurations {
   byName: Record<string, number>;
   // GATING: the longest single job. With no queueing this IS the run's
   // wall-clock (ci.yml's measured jobs run in parallel), and it is immune to
-  // how busy the shared runner pool happens to be.
+  // how busy the shared runner pool happens to be. That parallelism is an
+  // assumption, not something this figure alone can see -- checkParallelismAssumption
+  // (toon#154) checks it using the other figures on this type.
   longestJobSeconds: number;
   // GATING: total compute across the run.
   sumRunnerSeconds: number;
@@ -298,6 +300,71 @@ export function checkSpeedRegression(
   return {
     pass: true,
     reason: `gate speed OK: longest job ${actualLongestJobSeconds.toFixed(1)}s within baseline ${baselineSeconds}s + ${tolerance * 100}% tolerance (${allowedSeconds.toFixed(1)}s)`,
+  };
+}
+
+// toon#154: checkSpeedRegression's validity rests on an assumption it cannot
+// see -- that ci.yml's gated jobs stay mutually independent, so the longest
+// of them really is the run's critical path. The jobs API has no `needs:`
+// field, so this infers the DAG from timings already computed for the other
+// checks rather than parsing the workflow YAML (option 2 of toon#154's three,
+// chosen over parsing ci.yml for `needs:` -- more precise but couples the
+// guard to the workflow file for a check the timings already support -- and
+// over leaving the assumption as a comment only, which stays silent exactly
+// when it matters).
+//
+// Under real parallelism with negligible queue time, the run's wall-clock
+// span is the longest job's own duration: every sampleRun in gate-baseline.json
+// agrees (span - longestJob is exactly 0 in all five). Serialising two gated
+// jobs with `needs:` grows the span by roughly the OTHER job's duration while
+// longestJobSeconds and sumRunnerSeconds both stay flat -- the exact blind
+// spot this check exists to close -- so a span that outgrows the longest job
+// by more than job-start skew, on a run where queueing cannot explain the
+// gap, means the jobs did not overlap.
+//
+// This is deliberately queue-gated: it only evaluates when totalQueueSeconds
+// is small enough that a saturated runner pool (toon#150/toon#151) cannot be
+// the explanation for a wide span. Re-triggering that false FAIL here would
+// undo #151's fix, so an ambiguous run (heavy queueing, or no created_at data
+// to measure queueing at all) is reported as passing rather than guessed at.
+export const PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS = 30;
+
+// How far the span may exceed the longest job once queueing is ruled out --
+// covers ordinary job-start skew (the committed sampleRuns show 0s of it, so
+// this is a comfortable margin, not a fitted one) without being wide enough
+// to also cover a second job's duration if the first job it depends on
+// finished promptly.
+export const PARALLELISM_SLACK_TOLERANCE = 0.1;
+
+export function checkParallelismAssumption(durations: JobDurations): GuardResult {
+  const { longestJobSeconds, totalWallClockSeconds, totalQueueSeconds } = durations;
+
+  if (totalQueueSeconds === undefined) {
+    return {
+      pass: true,
+      reason:
+        'parallelism check skipped -- no created_at data to confirm queue time is negligible enough to trust the span',
+    };
+  }
+
+  if (totalQueueSeconds > PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS) {
+    return {
+      pass: true,
+      reason: `parallelism check skipped -- summed queue time ${totalQueueSeconds.toFixed(1)}s exceeds the ${PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS}s negligible threshold, so a wide span cannot be distinguished from runner queueing (toon#150/toon#151)`,
+    };
+  }
+
+  const allowedSpanSeconds = longestJobSeconds * (1 + PARALLELISM_SLACK_TOLERANCE);
+  if (totalWallClockSeconds > allowedSpanSeconds) {
+    return {
+      pass: false,
+      reason: `gated jobs no longer appear to run in parallel: run span ${totalWallClockSeconds.toFixed(1)}s exceeds the longest job ${longestJobSeconds.toFixed(1)}s + ${PARALLELISM_SLACK_TOLERANCE * 100}% (${allowedSpanSeconds.toFixed(1)}s) while queue time was negligible (${totalQueueSeconds.toFixed(1)}s) -- check whether a \`needs:\` was added between ci.yml's gated jobs, which would make checkSpeedRegression blind to the slowdown (toon#154)`,
+    };
+  }
+
+  return {
+    pass: true,
+    reason: `gated jobs ran in parallel: run span ${totalWallClockSeconds.toFixed(1)}s within longest job ${longestJobSeconds.toFixed(1)}s + ${PARALLELISM_SLACK_TOLERANCE * 100}% (${allowedSpanSeconds.toFixed(1)}s)`,
   };
 }
 

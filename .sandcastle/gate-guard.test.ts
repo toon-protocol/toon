@@ -6,10 +6,12 @@ import {
   checkImageSizeRegression,
   checkLintCeiling,
   checkMeasurementCoverage,
+  checkParallelismAssumption,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
   computeMaxDeviationFraction,
+  PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS,
   PERFORMANCE_REGRESSION_TOLERANCE,
   selectMeasurableJobs,
   SPEED_REGRESSION_TOLERANCE,
@@ -422,5 +424,123 @@ describe('checkImageSizeRegression', () => {
     };
     const result = checkImageSizeRegression(1_200_000_000, measuredBaseline);
     expect(result.pass).toBe(true);
+  });
+});
+
+// toon#154: checkSpeedRegression assumes ci.yml's gated jobs run in parallel.
+// The jobs API has no `needs:` field, so this check infers serialisation from
+// timings the other checks already compute, gated on queue time being
+// negligible so it cannot resurrect the toon#150/toon#151 false FAIL.
+describe('checkParallelismAssumption', () => {
+  it('passes a genuinely parallel run: span equals the longest job, queue negligible', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:03Z',
+        completed_at: '2026-08-13T00:01:57Z',
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:04Z',
+        completed_at: '2026-08-13T00:00:53Z',
+      },
+    ]);
+
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+  });
+
+  // The scenario the issue describes: someone adds `needs:` between the two
+  // gated jobs. Real wall-clock roughly doubles (build then devbox run back
+  // to back) while neither longestJobSeconds nor sumRunnerSeconds moves --
+  // exactly what checkSpeedRegression and checkPerformanceRegression cannot
+  // see on their own.
+  it('fails when the gated jobs run back-to-back instead of in parallel', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:03Z',
+        completed_at: '2026-08-13T00:01:57Z', // 114s
+      },
+      {
+        // GitHub does not create a `needs:`-gated job until its dependency
+        // finishes, so this job's OWN queue gap (created_at -> started_at)
+        // stays small even though it started 114s after build did.
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:01:57Z',
+        started_at: '2026-08-13T00:01:59Z',
+        completed_at: '2026-08-13T00:02:48Z', // 49s
+      },
+    ]);
+
+    // The blind spot toon#154 is about: both gated figures look unchanged...
+    expect(durations.longestJobSeconds).toBe(114);
+    expect(checkSpeedRegression(durations.longestJobSeconds, baseline).pass).toBe(true);
+    expect(checkPerformanceRegression(durations.sumRunnerSeconds, baseline).pass).toBe(true);
+    // ...but the parallelism check catches the doubled span.
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('no longer appear to run in parallel');
+  });
+
+  // toon#150/toon#151's exact regression: a saturated runner pool inflates
+  // the span for a reason that has nothing to do with the job DAG. This must
+  // still pass, or the parallelism check would resurrect the false FAIL #151
+  // fixed.
+  it('passes a queue-saturated parallel run instead of false-FAILing (toon#150/toon#151)', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-05T20:56:24Z',
+        started_at: '2026-08-05T20:57:02Z',
+        completed_at: '2026-08-05T20:58:35Z',
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-05T20:56:24Z',
+        started_at: '2026-08-05T21:02:50Z',
+        completed_at: '2026-08-05T21:03:44Z',
+      },
+    ]);
+
+    expect(durations.totalQueueSeconds).toBeGreaterThan(PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS);
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  it('skips rather than guesses when there is no created_at data to measure queueing', () => {
+    const durations = computeJobDurationsSeconds([
+      { name: 'build', started_at: '2026-08-13T00:00:00Z', completed_at: '2026-08-13T00:01:54Z' },
+      {
+        name: 'Devbox Environment Validation',
+        started_at: '2026-08-13T00:01:54Z',
+        completed_at: '2026-08-13T00:02:43Z',
+      },
+    ]);
+
+    expect(durations.totalQueueSeconds).toBeUndefined();
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  it('passes every sampleRun in the committed gate-baseline.json', () => {
+    const committed = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
+    ) as GateBaseline;
+    for (const run of committed.sampleRuns ?? []) {
+      const durations = {
+        byName: {},
+        longestJobSeconds: run.longestJobSeconds,
+        sumRunnerSeconds: run.sumRunnerSeconds,
+        totalWallClockSeconds: (run as unknown as { totalRunSpanSeconds: number }).totalRunSpanSeconds,
+        totalQueueSeconds: (run as unknown as { queueSeconds: number }).queueSeconds,
+      };
+      expect(checkParallelismAssumption(durations).pass).toBe(true);
+    }
   });
 });
