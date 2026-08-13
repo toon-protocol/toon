@@ -3,7 +3,8 @@
  *
  * Provides chain presets for three blockchain families:
  * - **EVM**: Anvil (local dev), Arbitrum Sepolia (staging), Arbitrum One (production)
- * - **Solana**: solana-devnet (local dev)
+ * - **Solana**: solana-devnet (local dev), solana-mainnet (production,
+ *   ships unconfigured until a program id is promoted)
  * - **Mina**: mina-devnet (local dev)
  *
  * Environment variable overrides:
@@ -42,7 +43,7 @@ export type ChainName =
 /**
  * Supported Solana chain preset names.
  */
-export type SolanaChainName = 'solana-devnet';
+export type SolanaChainName = 'solana-devnet' | 'solana-mainnet';
 
 /**
  * Supported Mina chain preset names.
@@ -356,6 +357,35 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       // deployed locally via the `SOLANA_PROGRAM_ID` env override below.
       programId: '',
       cluster: 'devnet',
+    },
+    // Solana mainnet-beta (public). TOON payment-channel program not deployed
+    // there yet, so this ships unconfigured -- empty programId, promoted only
+    // once connector#834 lands a mainnet deploy (mirrors how base-mainnet
+    // ships with an empty tokenNetworkAddress). NOT wired into
+    // network-profile.ts's public tiers, which already resolve their own
+    // mainnet Solana endpoint (SOLANA_TIER.mainnet) independently of this
+    // low-level, e2e-stack-facing preset table.
+    'solana-mainnet': {
+      name: 'solana-mainnet',
+      chainType: 'solana',
+      rpcUrl: 'https://api.mainnet-beta.solana.com',
+      programId: '',
+      cluster: 'mainnet-beta',
+      // Circle's native USDC mint on Solana mainnet-beta, 6 decimals.
+      // VERIFIED 2026-08-13 by Drew Pierson, per toon#166's "Needs a human
+      // before merge" criterion, on two independent sources:
+      //   - Circle's published list gives this address for Solana mainnet:
+      //     https://developers.circle.com/stablecoins/usdc-contract-addresses
+      //     That page names bridged representations separately where they
+      //     exist (X Layer's USDC.e); none is listed for Solana.
+      //   - mainnet-beta at slot 439080550: initialized mint, decimals 6,
+      //     supply ~7.73e9, live mint and freeze authorities, owned by the
+      //     SPL Token program (TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA),
+      //     not Token-2022.
+      // Native, not bridged. Two things not to confuse it with: this is the
+      // token's MINT ACCOUNT, never a transfer destination; and Circle runs
+      // separate CCTP/Gateway pre-mint addresses that are not this one.
+      tokenMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     },
   };
 
