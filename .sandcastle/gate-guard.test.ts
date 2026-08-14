@@ -433,10 +433,10 @@ describe('checkImageSizeRegression', () => {
 
 // toon#154: checkSpeedRegression assumes ci.yml's gated jobs run in parallel.
 // The jobs API has no `needs:` field, so this check infers serialisation from
-// timings the other checks already compute, gated on queue time being
-// negligible so it cannot resurrect the toon#150/toon#151 false FAIL.
+// how far apart the measured jobs were CREATED -- a figure runner queue depth
+// cannot move, so it cannot resurrect the toon#150/toon#151 false FAIL.
 describe('checkParallelismAssumption', () => {
-  it('passes a genuinely parallel run: span equals the longest job, queue negligible', () => {
+  it('passes a genuinely parallel run: both jobs created together, span equals the longest job', () => {
     const durations = computeJobDurationsSeconds([
       {
         name: 'build',
@@ -560,7 +560,7 @@ describe('checkParallelismAssumption', () => {
     expect(PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS).toBe(15);
   });
 
-  it('skips rather than guesses when there is no created_at data to measure queueing', () => {
+  it('skips rather than guesses when there is no created_at data to measure creation skew', () => {
     const durations = computeJobDurationsSeconds([
       { name: 'build', started_at: '2026-08-13T00:00:00Z', completed_at: '2026-08-13T00:01:54Z' },
       {
@@ -570,17 +570,21 @@ describe('checkParallelismAssumption', () => {
       },
     ]);
 
-    expect(durations.totalQueueSeconds).toBeUndefined();
+    // The fixture is back-to-back, so a span-based check would have FAILED it
+    // on no evidence; without created_at there is nothing to judge.
+    expect(durations.maxCreationSkewSeconds).toBeUndefined();
     const result = checkParallelismAssumption(durations);
     expect(result.pass).toBe(true);
     expect(result.reason).toContain('skipped');
   });
 
-  // The committed samples predate creation-skew capture, so they carry no
-  // maxCreationSkewSeconds and exercise the skip branch: the check must not
-  // fail a run it cannot measure. (Their span/queue figures document that all
-  // five ran parallel: span - longestJob is exactly 0 in each.)
-  it('passes every sampleRun in the committed gate-baseline.json', () => {
+  // The committed samples predate creation-skew capture, so replaying them
+  // exercises the skip branch: a run whose skew cannot be measured must never
+  // fail. Deliberately no span-vs-longest-job assertion here -- the five
+  // samples happen to have identical spans, but a parallel run whose longest
+  // job queued would not, and pinning that equality is the span heuristic
+  // this check exists to avoid.
+  it('skips, rather than fails, every sampleRun in the committed gate-baseline.json', () => {
     const sampleRuns = committed.sampleRuns ?? [];
     expect(sampleRuns.length).toBeGreaterThan(0);
     for (const run of sampleRuns) {
@@ -592,6 +596,7 @@ describe('checkParallelismAssumption', () => {
         totalQueueSeconds: run.queueSeconds,
       });
       expect(result.pass).toBe(true);
+      expect(result.reason).toContain('skipped');
     }
   });
 });

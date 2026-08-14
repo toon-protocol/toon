@@ -50,9 +50,9 @@ export interface GateBaseline {
   sampleRuns?: ReadonlyArray<{
     longestJobSeconds: number;
     sumRunnerSeconds: number;
-    // The span/queue pair checkParallelismAssumption consumes (toon#154),
-    // declared here so a test can replay each committed sample through it
-    // without casting its way back to fields the type had omitted.
+    // The span/queue pair recorded per run (toon#154), declared here so the
+    // parallelism tests can replay each committed sample without casting
+    // their way back to fields the type had omitted.
     totalRunSpanSeconds: number;
     queueSeconds: number;
     // toon#173: which trigger produced this run. gate-regression-guard gates
