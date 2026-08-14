@@ -50,6 +50,11 @@ export interface GateBaseline {
   sampleRuns?: ReadonlyArray<{
     longestJobSeconds: number;
     sumRunnerSeconds: number;
+    // The span/queue pair recorded per run (toon#154), declared here so the
+    // parallelism tests can replay each committed sample without casting
+    // their way back to fields the type had omitted.
+    totalRunSpanSeconds: number;
+    queueSeconds: number;
     // toon#173: which trigger produced this run. gate-regression-guard gates
     // pull_request runs too, not just push-to-main (ci.yml:135-137 -- the
     // guard job has no event filter of its own, and the workflow triggers on
@@ -152,7 +157,9 @@ export interface JobDurations {
   byName: Record<string, number>;
   // GATING: the longest single job. With no queueing this IS the run's
   // wall-clock (ci.yml's measured jobs run in parallel), and it is immune to
-  // how busy the shared runner pool happens to be.
+  // how busy the shared runner pool happens to be. That parallelism is an
+  // assumption, not something this figure alone can see -- checkParallelismAssumption
+  // (toon#154) checks it using the other figures on this type.
   longestJobSeconds: number;
   // GATING: total compute across the run.
   sumRunnerSeconds: number;
@@ -163,6 +170,13 @@ export interface JobDurations {
   // how much of the span was GitHub scheduling rather than this repo's work.
   // Undefined when the fixture/response carries no `created_at`.
   totalQueueSeconds?: number;
+  // GATING (toon#154): max(created_at) - min(created_at) across the measured
+  // jobs. GitHub creates every independent job of an attempt at the same
+  // moment and only delays creating a job that is waiting on `needs:` --
+  // runner queueing delays a job's START, never its creation -- so this skew
+  // is a queue-proof signal that the job DAG serialised the gated jobs.
+  // Undefined when no measured job carries `created_at`.
+  maxCreationSkewSeconds?: number;
 }
 
 // A job that has not finished yet (notably the guard's own job, which is still
@@ -208,6 +222,8 @@ export function computeJobDurationsSeconds(jobs: CiJobTiming[]): JobDurations {
   let sumRunnerSeconds = 0;
   let longestJobSeconds = 0;
   let totalQueueSeconds: number | undefined;
+  let earliestCreated: number | undefined;
+  let latestCreated: number | undefined;
 
   for (const job of jobs) {
     const startedMs = new Date(job.started_at).getTime();
@@ -221,11 +237,18 @@ export function computeJobDurationsSeconds(jobs: CiJobTiming[]): JobDurations {
     }
 
     if (job.created_at !== undefined) {
+      const createdMs = new Date(job.created_at).getTime();
       // A job carried over from an earlier attempt keeps its original
       // start/finish but gets the NEW attempt's created_at, which makes this
       // negative. Clamp at zero: it is a display figure, not a gate.
-      const queueSeconds = Math.max(0, (startedMs - new Date(job.created_at).getTime()) / 1000);
+      const queueSeconds = Math.max(0, (startedMs - createdMs) / 1000);
       totalQueueSeconds = (totalQueueSeconds ?? 0) + queueSeconds;
+      if (earliestCreated === undefined || createdMs < earliestCreated) {
+        earliestCreated = createdMs;
+      }
+      if (latestCreated === undefined || createdMs > latestCreated) {
+        latestCreated = createdMs;
+      }
     }
 
     if (earliestStart === undefined || startedMs < earliestStart) {
@@ -241,7 +264,19 @@ export function computeJobDurationsSeconds(jobs: CiJobTiming[]): JobDurations {
       ? (latestCompletion - earliestStart) / 1000
       : 0;
 
-  return { byName, longestJobSeconds, sumRunnerSeconds, totalWallClockSeconds, totalQueueSeconds };
+  const maxCreationSkewSeconds =
+    earliestCreated !== undefined && latestCreated !== undefined
+      ? (latestCreated - earliestCreated) / 1000
+      : undefined;
+
+  return {
+    byName,
+    longestJobSeconds,
+    sumRunnerSeconds,
+    totalWallClockSeconds,
+    totalQueueSeconds,
+    maxCreationSkewSeconds,
+  };
 }
 
 // Zero measured jobs makes every duration 0, which would sail under every
@@ -298,6 +333,71 @@ export function checkSpeedRegression(
   return {
     pass: true,
     reason: `gate speed OK: longest job ${actualLongestJobSeconds.toFixed(1)}s within baseline ${baselineSeconds}s + ${tolerance * 100}% tolerance (${allowedSeconds.toFixed(1)}s)`,
+  };
+}
+
+// toon#154: checkSpeedRegression's validity rests on an assumption it cannot
+// see -- that ci.yml's gated jobs stay mutually independent, so the longest
+// of them really is the run's critical path. The jobs API has no `needs:`
+// field, so this infers the DAG from timings already computed for the other
+// checks rather than parsing the workflow YAML (option 2 of toon#154's three,
+// chosen over parsing ci.yml for `needs:` -- more precise but couples the
+// guard to the workflow file for a check the timings already support -- and
+// over leaving the assumption as a comment only, which stays silent exactly
+// when it matters).
+//
+// The discriminator is job CREATION time, not the span. GitHub creates every
+// independent job of an attempt at the same instant and only withholds a job
+// that is waiting on `needs:` -- a `needs:`-gated job is created when its
+// dependency finishes. Runner queueing is the opposite shape: the job is
+// created on time and STARTS late. So creation skew across the measured jobs
+// separates the two causes exactly where a span heuristic cannot:
+//
+// - Serialised via `needs:`: the dependent job's created_at lags the others
+//   by roughly its dependency's duration (tens of seconds at minimum -- the
+//   shortest gated job in gate-baseline.json runs ~49s). FAIL, regardless of
+//   how busy the runner pool is.
+// - Queue-saturated parallel run (toon#150/toon#151): all jobs created
+//   together, skew ~0s, however late they start. PASS -- the false FAIL #151
+//   removed cannot recur here because queue depth never moves created_at.
+//
+// An earlier revision of this check compared the span against the longest
+// job with a 10% slack, evaluated only when SUMMED queue time was under 30s.
+// That left a reachable false-FAIL band: a genuinely parallel run whose
+// longest job waited 12-30s for a runner widens the span past the slack while
+// staying under the queue threshold, so the check blamed a `needs:` that did
+// not exist (observed shape: longest job queued 20s -> span 132s vs 125.4s
+// allowed, 22s summed queue). Creation skew has no such band, which is what
+// lets this stay a hard gate instead of a documented assumption (issue #154
+// required option 2 to be queue-proof or to fall back to option 1).
+//
+// Independent jobs of one attempt are created within ~1-2s of each other
+// (jitter of the workflow parser fanning out), while a real `needs:` edge
+// between measured jobs delays creation by its dependency's full runtime.
+// 15s sits comfortably above the former and far below the latter.
+export const PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS = 15;
+
+export function checkParallelismAssumption(durations: JobDurations): GuardResult {
+  const { longestJobSeconds, totalWallClockSeconds, maxCreationSkewSeconds } = durations;
+
+  if (maxCreationSkewSeconds === undefined) {
+    return {
+      pass: true,
+      reason:
+        'parallelism check skipped -- no created_at data to measure job-creation skew (a `needs:`-gated job is created late; a queued job is created on time)',
+    };
+  }
+
+  if (maxCreationSkewSeconds > PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS) {
+    return {
+      pass: false,
+      reason: `gated jobs no longer appear to run in parallel: a measured job was created ${maxCreationSkewSeconds.toFixed(1)}s after the earliest (tolerance ${PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS}s) -- GitHub only delays creating a job that waits on \`needs:\`; runner queueing delays starts, never creation. Check whether a \`needs:\` was added between ci.yml's gated jobs, which would make checkSpeedRegression blind to the slowdown (run span ${totalWallClockSeconds.toFixed(1)}s vs longest job ${longestJobSeconds.toFixed(1)}s) (toon#154)`,
+    };
+  }
+
+  return {
+    pass: true,
+    reason: `gated jobs ran in parallel: job-creation skew ${maxCreationSkewSeconds.toFixed(1)}s within ${PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS}s tolerance (run span ${totalWallClockSeconds.toFixed(1)}s, longest job ${longestJobSeconds.toFixed(1)}s)`,
   };
 }
 

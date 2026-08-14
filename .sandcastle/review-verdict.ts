@@ -29,6 +29,7 @@
 import { execFileSync } from "node:child_process";
 import * as sandcastle from "@ai-hero/sandcastle";
 import { z } from "zod";
+import { shouldClearNeedsHuman } from "./needs-human-evaluator.mjs";
 
 // ---------------------------------------------------------------------------
 // Schema + Output declaration
@@ -316,6 +317,7 @@ export function resolveIssueFromPrBody(prNumber: string): TargetIssue | null {
 }
 
 const NEEDS_HUMAN_LABEL = "needs:human";
+const AGENT_REVIEW_LABEL = "agent:review";
 
 // ---------------------------------------------------------------------------
 // factory-ops formal verdict (toon-meta#282)
@@ -488,6 +490,14 @@ function factoryOpsApprovalBody(issue: TargetIssue | null): string {
  *   clean    → APPROVE
  *   blocking → REQUEST_CHANGES with the findings, plus the `needs:human` label
  *
+ * Either way, `agent:review` — the label that triggered this run — is removed
+ * once the verdict lands (toon-meta#355). Unlike `needs:human`, `agent:review`
+ * is unambiguously a machine trigger, never a human control point, so no
+ * ownership check applies: whoever applied it, a submitted verdict means the
+ * review it asked for is done. That also makes re-review symmetrical with the
+ * first review — apply the label again — instead of the undocumented
+ * remove-then-re-add dance the `labeled`-event trigger otherwise demands.
+ *
  * Resolves the approver identity and re-asserts the self-approval guard
  * itself, so no caller can reach the submission without the guard. After
  * submission the created review's state is verified from the API response —
@@ -499,6 +509,44 @@ function factoryOpsApprovalBody(issue: TargetIssue | null): string {
  * The `needs:human` label logic lives HERE and only here (toon-meta#282 seam:
  * the pre-#282 COMMENT-review path applied it too; that path is gone).
  */
+/**
+ * Whether a CLEAN verdict should clear `needs:human` from this PR
+ * (toon-meta#352).
+ *
+ * The decision itself is pure and lives in
+ * `.sandcastle/needs-human-evaluator.mjs`, unit-tested by
+ * `npm run test:factory` — this is only the I/O that feeds it. That split is
+ * this repo's convention (see the reap/unblock/dispatch evaluators), and it is
+ * the reason the ownership rule is testable at all.
+ *
+ * Reads the TIMELINE, not the label list: the label list says only THAT the
+ * label is present, never WHO applied it, and ownership is the whole
+ * distinction — a machine-applied label is stale state, a human-applied one is
+ * a decision.
+ *
+ * Fails closed on any read error: leaving the label costs a manual edit,
+ * clearing it wrongly overrules a person.
+ */
+function clearsNeedsHuman(prNumber: string, approverLogin: string, token: string): boolean {
+  try {
+    const raw = execFileSync(
+      "gh",
+      ["api", "--paginate", `repos/${repoNwo()}/issues/${prNumber}/timeline`],
+      { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GH_TOKEN: token } },
+    ).toString();
+
+    // `--paginate` concatenates one JSON array per page; normalise to one array.
+    const events = raw
+      .split("\n")
+      .filter((line) => line.trim().startsWith("["))
+      .flatMap((line) => JSON.parse(line) as unknown[]);
+
+    return shouldClearNeedsHuman(events, approverLogin);
+  } catch {
+    return false;
+  }
+}
+
 export function submitFactoryOpsVerdict(
   prNumber: string,
   verdict: ReviewVerdict,
@@ -586,6 +634,92 @@ export function submitFactoryOpsVerdict(
     );
     console.log(
       `Requested changes with the findings and applied '${NEEDS_HUMAN_LABEL}' on PR #${prNumber}.`,
+    );
+  } else if (clearsNeedsHuman(prNumber, approver.login, approver.token)) {
+    // The machine clears what the machine applied, and only that (toon-meta#352).
+    //
+    // The blocking branch above applies `needs:human` as a side effect. Nothing
+    // used to remove it, so a PR that went blocking -> fixed -> clean ended
+    // APPROVED *and* carrying the label — and `auto-merge.yml` refuses on it
+    // ("needs-human: PR carries needs:human"). Once blocked, gated forever.
+    // On 2026-08-12 that held three approved PRs at once, including #333, the
+    // fix for the sibling dead-`agent:implement` wedge.
+    //
+    // The guard is the whole point: `needs:human` is a HUMAN control point
+    // (FACTORY.md). Clearing it unconditionally on a clean verdict would let a
+    // machine overrule a person who applied it deliberately — trading one bug
+    // for a worse one. So we remove it ONLY when the most recent application
+    // was by the approver identity itself. A human's label is never touched,
+    // and a human who re-applies it after a clean verdict keeps it.
+    execFileSync(
+      "gh",
+      [
+        "api",
+        "-X",
+        "DELETE",
+        // The colon MUST stay percent-encoded. `gh api` does not encode path
+        // segments, and an unencoded `needs:human` silently no-ops (200, no
+        // change) rather than erroring.
+        `repos/${nwo}/issues/${prNumber}/labels/${encodeURIComponent(NEEDS_HUMAN_LABEL)}`,
+      ],
+      {
+        stdio: ["ignore", "ignore", "inherit"],
+        env: { ...process.env, GH_TOKEN: approver.token },
+      },
+    );
+    console.log(
+      `Cleared '${NEEDS_HUMAN_LABEL}' on PR #${prNumber} — it was applied by ` +
+        `${approver.login} on a previous blocking verdict, and this verdict is clean.`,
+    );
+  }
+
+  // Clear the trigger label now that the verdict it requested has been
+  // submitted — see the function doc comment (toon-meta#355). No ownership
+  // check (unlike needs:human above): agent:review is a pure trigger, so
+  // whoever applied it, "a verdict was just submitted" is reason enough to
+  // remove it.
+  //
+  // The label is legitimately ABSENT on two paths: the implement runner's
+  // verdict (agent-implement-issue.ts submits a verdict on a PR that was
+  // never labelled agent:review) and a re-run of an already-cleared review.
+  // GitHub answers a DELETE of an absent label with 404, which `gh api`
+  // surfaces as a non-zero exit — so a 404 here is the expected no-op and
+  // must not fail the run. Any OTHER error still throws: silently losing
+  // the removal on the review-runner path would re-create the exact
+  // stale-label unreadability this function exists to fix.
+  try {
+    execFileSync(
+      "gh",
+      [
+        "api",
+        "-X",
+        "DELETE",
+        // Same encoding gotcha as NEEDS_HUMAN_LABEL above: the colon MUST stay
+        // percent-encoded or this silently no-ops (200, label untouched).
+        `repos/${nwo}/issues/${prNumber}/labels/${encodeURIComponent(AGENT_REVIEW_LABEL)}`,
+      ],
+      {
+        // "pipe" (not inherit) so the catch below can read gh's stderr to
+        // tell the benign 404 apart from a real failure.
+        stdio: "pipe",
+        env: { ...process.env, GH_TOKEN: approver.token },
+      },
+    );
+    console.log(
+      `Cleared '${AGENT_REVIEW_LABEL}' on PR #${prNumber} — the review verdict is submitted.`,
+    );
+  } catch (error) {
+    const stderr =
+      error instanceof Error && "stderr" in error
+        ? String((error as { stderr?: unknown }).stderr ?? "")
+        : "";
+    if (!/\b404\b|Not Found/i.test(stderr)) {
+      if (stderr) process.stderr.write(stderr);
+      throw error;
+    }
+    console.log(
+      `'${AGENT_REVIEW_LABEL}' was not on PR #${prNumber} — nothing to clear. ` +
+        `Expected on the implement runner's verdict path and on re-runs.`,
     );
   }
 }
