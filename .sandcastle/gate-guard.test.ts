@@ -11,7 +11,7 @@ import {
   checkSpeedRegression,
   computeJobDurationsSeconds,
   computeMaxDeviationFraction,
-  PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS,
+  PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS,
   PERFORMANCE_REGRESSION_TOLERANCE,
   selectMeasurableJobs,
   SPEED_REGRESSION_TOLERANCE,
@@ -493,7 +493,9 @@ describe('checkParallelismAssumption', () => {
   // toon#150/toon#151's exact regression: a saturated runner pool inflates
   // the span for a reason that has nothing to do with the job DAG. This must
   // still pass, or the parallelism check would resurrect the false FAIL #151
-  // fixed.
+  // fixed. Both jobs were created at the same instant -- queueing delayed
+  // their starts, not their creation -- so the skew gate sees a parallel run
+  // no matter how deep the queue got.
   it('passes a queue-saturated parallel run instead of false-FAILing (toon#150/toon#151)', () => {
     const durations = computeJobDurationsSeconds([
       {
@@ -510,10 +512,52 @@ describe('checkParallelismAssumption', () => {
       },
     ]);
 
-    expect(durations.totalQueueSeconds).toBeGreaterThan(PARALLELISM_QUEUE_NEGLIGIBLE_SECONDS);
+    expect(durations.maxCreationSkewSeconds).toBe(0);
     const result = checkParallelismAssumption(durations);
     expect(result.pass).toBe(true);
-    expect(result.reason).toContain('skipped');
+  });
+
+  // The band the span-with-queue-threshold revision of this check got wrong:
+  // a genuinely parallel run whose LONGEST job waits 12-30s for a runner. The
+  // span outgrows longestJob * 1.1 (132s vs 125.4s here) while summed queue
+  // time (22s) stays under the old 30s skip threshold, so the span heuristic
+  // hard-FAILed an unrelated commit and blamed a `needs:` that does not
+  // exist. Creation skew is 0 -- both jobs were created together -- so the
+  // check must pass this run.
+  it('passes a parallel run whose longest job queued 12-30s (the span-heuristic false-FAIL band)', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:20Z',
+        completed_at: '2026-08-13T00:02:14Z', // 114s, queued 20s
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:02Z',
+        completed_at: '2026-08-13T00:00:51Z', // 49s, queued 2s
+      },
+    ]);
+
+    // The exact shape of the band: span exceeds longestJob * 1.1 while
+    // summed queue sits between the 10%-of-longest slack and the old 30s
+    // threshold. Fully overlapping executions nonetheless.
+    expect(durations.totalWallClockSeconds).toBe(132);
+    expect(durations.longestJobSeconds).toBe(114);
+    expect(durations.totalQueueSeconds).toBe(22);
+    expect(durations.maxCreationSkewSeconds).toBe(0);
+
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+  });
+
+  // The skew tolerance separates fan-out jitter (~1-2s) from a real `needs:`
+  // edge (creation delayed by the dependency's full runtime). Pin it so an
+  // edit cannot quietly widen it past the shortest gated job's duration,
+  // which would let a real serialisation hide inside the tolerance.
+  it('keeps the creation-skew tolerance above jitter and far below a gated job duration', () => {
+    expect(PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS).toBe(15);
   });
 
   it('skips rather than guesses when there is no created_at data to measure queueing', () => {
@@ -532,6 +576,10 @@ describe('checkParallelismAssumption', () => {
     expect(result.reason).toContain('skipped');
   });
 
+  // The committed samples predate creation-skew capture, so they carry no
+  // maxCreationSkewSeconds and exercise the skip branch: the check must not
+  // fail a run it cannot measure. (Their span/queue figures document that all
+  // five ran parallel: span - longestJob is exactly 0 in each.)
   it('passes every sampleRun in the committed gate-baseline.json', () => {
     const sampleRuns = committed.sampleRuns ?? [];
     expect(sampleRuns.length).toBeGreaterThan(0);
