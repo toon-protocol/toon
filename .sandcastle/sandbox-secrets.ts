@@ -41,6 +41,12 @@
 // the formal review verdict on agent PRs (toon-meta#282), and the sandboxed
 // agent must never hold the credential that approves its own output. It stays
 // host-only (read by .sandcastle/review-verdict.ts after the sandbox closes).
+//
+// APP_ID / APP_PRIVATE_KEY are DELIBERATELY absent for the same reason: the
+// App's private key mints push credentials on demand (toon-meta#248, see
+// .sandcastle/mint-app-token.ts) and stays host-only. The container never sees
+// the key — only the GH_TOKEN below, plus the single freshly-minted token
+// pushBranch() stages there for the duration of one push and then deletes.
 const PASSTHROUGH_KEYS = [
   "CLAUDE_CODE_OAUTH_TOKEN", // Claude Max-plan credential -> authenticates claude-code
   "GH_TOKEN", // in-sandbox `git push` / `gh pr create` / `gh issue list`
