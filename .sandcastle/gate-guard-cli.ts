@@ -6,9 +6,12 @@
 //                                    --max-warnings ceiling exceeds the frozen
 //                                    baseline (the ceiling must never silently rise).
 //   speed-performance <jobsJson>  - fails if this run's longest job or summed
-//                                    runner-seconds regress vs the frozen baseline.
-//                                    <jobsJson> is the path to a file containing
-//                                    the `gh api .../actions/runs/<id>/attempts/<n>/jobs`
+//                                    runner-seconds regress vs the frozen baseline,
+//                                    or if the gated jobs no longer appear to run
+//                                    in parallel (toon#154 -- see
+//                                    checkParallelismAssumption). <jobsJson> is
+//                                    the path to a file containing the
+//                                    `gh api .../actions/runs/<id>/attempts/<n>/jobs`
 //                                    response. Both gated figures are per-job
 //                                    execution time, so neither can be inflated by
 //                                    runner queue depth (toon#151).
@@ -30,6 +33,7 @@ import {
   checkImageSizeRegression,
   checkLintCeiling,
   checkMeasurementCoverage,
+  checkParallelismAssumption,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
@@ -124,8 +128,9 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
     'performance',
     checkPerformanceRegression(durations.sumRunnerSeconds, baseline),
   );
+  const parallelismPass = report('parallelism', checkParallelismAssumption(durations));
 
-  return coveragePass && speedPass && performancePass;
+  return coveragePass && speedPass && performancePass && parallelismPass;
 }
 
 function runImageSize(bytesArg: string | undefined): boolean {

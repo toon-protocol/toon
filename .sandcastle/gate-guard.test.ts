@@ -6,10 +6,12 @@ import {
   checkImageSizeRegression,
   checkLintCeiling,
   checkMeasurementCoverage,
+  checkParallelismAssumption,
   checkPerformanceRegression,
   checkSpeedRegression,
   computeJobDurationsSeconds,
   computeMaxDeviationFraction,
+  PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS,
   PERFORMANCE_REGRESSION_TOLERANCE,
   selectMeasurableJobs,
   SPEED_REGRESSION_TOLERANCE,
@@ -33,6 +35,13 @@ const baseline: GateBaseline = {
     },
   },
 };
+
+// The frozen file the guard reads at runtime. Tests assert against the
+// committed JSON itself rather than a hand-copied transcription of its numbers,
+// so a recapture cannot leave them asserting figures the data no longer has.
+const committed = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
+) as GateBaseline;
 
 describe('checkLintCeiling', () => {
   it('passes when the ceiling matches the frozen baseline', () => {
@@ -255,9 +264,6 @@ describe('checkSpeedRegression', () => {
 });
 
 describe('the committed gate-baseline.json', () => {
-  const committed = JSON.parse(
-    readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'gate-baseline.json'), 'utf8'),
-  ) as GateBaseline;
   // `?? 0` never fires in practice — the test below asserts the figure is a
   // number — and a 0 baseline would fail the slowdown expectations loudly.
   const baselineLongestJobSeconds = committed.gateSpeed.averageLongestJobDurationSeconds ?? 0;
@@ -422,5 +428,175 @@ describe('checkImageSizeRegression', () => {
     };
     const result = checkImageSizeRegression(1_200_000_000, measuredBaseline);
     expect(result.pass).toBe(true);
+  });
+});
+
+// toon#154: checkSpeedRegression assumes ci.yml's gated jobs run in parallel.
+// The jobs API has no `needs:` field, so this check infers serialisation from
+// how far apart the measured jobs were CREATED -- a figure runner queue depth
+// cannot move, so it cannot resurrect the toon#150/toon#151 false FAIL.
+describe('checkParallelismAssumption', () => {
+  it('passes a genuinely parallel run: both jobs created together, span equals the longest job', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:03Z',
+        completed_at: '2026-08-13T00:01:57Z',
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:04Z',
+        completed_at: '2026-08-13T00:00:53Z',
+      },
+    ]);
+
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+  });
+
+  // The scenario the issue describes: someone adds `needs:` between the two
+  // gated jobs. Real wall-clock roughly doubles (build then devbox run back
+  // to back) while neither longestJobSeconds nor sumRunnerSeconds moves --
+  // exactly what checkSpeedRegression and checkPerformanceRegression cannot
+  // see on their own.
+  it('fails when the gated jobs run back-to-back instead of in parallel', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:03Z',
+        completed_at: '2026-08-13T00:01:57Z', // 114s
+      },
+      {
+        // GitHub does not create a `needs:`-gated job until its dependency
+        // finishes, so this job's OWN queue gap (created_at -> started_at)
+        // stays small even though it started 114s after build did.
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:01:57Z',
+        started_at: '2026-08-13T00:01:59Z',
+        completed_at: '2026-08-13T00:02:48Z', // 49s
+      },
+    ]);
+
+    // The blind spot toon#154 is about: both gated figures look unchanged...
+    expect(durations.longestJobSeconds).toBe(114);
+    expect(checkSpeedRegression(durations.longestJobSeconds, baseline).pass).toBe(true);
+    expect(checkPerformanceRegression(durations.sumRunnerSeconds, baseline).pass).toBe(true);
+    // ...but the parallelism check catches the doubled span.
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('no longer appear to run in parallel');
+  });
+
+  // toon#150/toon#151's exact regression: a saturated runner pool inflates
+  // the span for a reason that has nothing to do with the job DAG. This must
+  // still pass, or the parallelism check would resurrect the false FAIL #151
+  // fixed. Both jobs were created at the same instant -- queueing delayed
+  // their starts, not their creation -- so the skew gate sees a parallel run
+  // no matter how deep the queue got.
+  it('passes a queue-saturated parallel run instead of false-FAILing (toon#150/toon#151)', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-05T20:56:24Z',
+        started_at: '2026-08-05T20:57:02Z',
+        completed_at: '2026-08-05T20:58:35Z',
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-05T20:56:24Z',
+        started_at: '2026-08-05T21:02:50Z',
+        completed_at: '2026-08-05T21:03:44Z',
+      },
+    ]);
+
+    expect(durations.maxCreationSkewSeconds).toBe(0);
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+  });
+
+  // The band the span-with-queue-threshold revision of this check got wrong:
+  // a genuinely parallel run whose LONGEST job waits 12-30s for a runner. The
+  // span outgrows longestJob * 1.1 (132s vs 125.4s here) while summed queue
+  // time (22s) stays under the old 30s skip threshold, so the span heuristic
+  // hard-FAILed an unrelated commit and blamed a `needs:` that does not
+  // exist. Creation skew is 0 -- both jobs were created together -- so the
+  // check must pass this run.
+  it('passes a parallel run whose longest job queued 12-30s (the span-heuristic false-FAIL band)', () => {
+    const durations = computeJobDurationsSeconds([
+      {
+        name: 'build',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:20Z',
+        completed_at: '2026-08-13T00:02:14Z', // 114s, queued 20s
+      },
+      {
+        name: 'Devbox Environment Validation',
+        created_at: '2026-08-13T00:00:00Z',
+        started_at: '2026-08-13T00:00:02Z',
+        completed_at: '2026-08-13T00:00:51Z', // 49s, queued 2s
+      },
+    ]);
+
+    // The exact shape of the band: span exceeds longestJob * 1.1 while
+    // summed queue sits between the 10%-of-longest slack and the old 30s
+    // threshold. Fully overlapping executions nonetheless.
+    expect(durations.totalWallClockSeconds).toBe(132);
+    expect(durations.longestJobSeconds).toBe(114);
+    expect(durations.totalQueueSeconds).toBe(22);
+    expect(durations.maxCreationSkewSeconds).toBe(0);
+
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+  });
+
+  // The skew tolerance separates fan-out jitter (~1-2s) from a real `needs:`
+  // edge (creation delayed by the dependency's full runtime). Pin it so an
+  // edit cannot quietly widen it past the shortest gated job's duration,
+  // which would let a real serialisation hide inside the tolerance.
+  it('keeps the creation-skew tolerance above jitter and far below a gated job duration', () => {
+    expect(PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS).toBe(15);
+  });
+
+  it('skips rather than guesses when there is no created_at data to measure creation skew', () => {
+    const durations = computeJobDurationsSeconds([
+      { name: 'build', started_at: '2026-08-13T00:00:00Z', completed_at: '2026-08-13T00:01:54Z' },
+      {
+        name: 'Devbox Environment Validation',
+        started_at: '2026-08-13T00:01:54Z',
+        completed_at: '2026-08-13T00:02:43Z',
+      },
+    ]);
+
+    // The fixture is back-to-back, so a span-based check would have FAILED it
+    // on no evidence; without created_at there is nothing to judge.
+    expect(durations.maxCreationSkewSeconds).toBeUndefined();
+    const result = checkParallelismAssumption(durations);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toContain('skipped');
+  });
+
+  // The committed samples predate creation-skew capture, so replaying them
+  // exercises the skip branch: a run whose skew cannot be measured must never
+  // fail. Deliberately no span-vs-longest-job assertion here -- the five
+  // samples happen to have identical spans, but a parallel run whose longest
+  // job queued would not, and pinning that equality is the span heuristic
+  // this check exists to avoid.
+  it('skips, rather than fails, every sampleRun in the committed gate-baseline.json', () => {
+    const sampleRuns = committed.sampleRuns ?? [];
+    expect(sampleRuns.length).toBeGreaterThan(0);
+    for (const run of sampleRuns) {
+      const result = checkParallelismAssumption({
+        byName: {},
+        longestJobSeconds: run.longestJobSeconds,
+        sumRunnerSeconds: run.sumRunnerSeconds,
+        totalWallClockSeconds: run.totalRunSpanSeconds,
+        totalQueueSeconds: run.queueSeconds,
+      });
+      expect(result.pass).toBe(true);
+      expect(result.reason).toContain('skipped');
+    }
   });
 });
