@@ -187,6 +187,15 @@ async function pushBranch(
   label: string,
   { bestEffort = false }: { bestEffort?: boolean } = {},
 ): Promise<boolean> {
+  // The single place `bestEffort` is honoured: warn and give up, or fail loud.
+  // Returns `false` so every call site can `return abort(...)`.
+  const abort = (reason: string): false => {
+    const msg = `[${label}] ${reason}`;
+    if (!bestEffort) throw new Error(msg);
+    console.warn(`  WARNING: ${msg}`);
+    return false;
+  };
+
   let token: string;
   try {
     const minted = await mintAppToken();
@@ -195,23 +204,13 @@ async function pushBranch(
     process.env.GH_TOKEN = token;
     console.log(`  [${label}] credential: freshly minted (source=${minted.source})`);
   } catch (err) {
-    const msg = `[${label}] could not obtain a push credential: ${(err as Error).message}`;
-    if (bestEffort) {
-      console.warn(`  WARNING: ${msg}`);
-      return false;
-    }
-    throw new Error(msg);
+    return abort(`could not obtain a push credential: ${(err as Error).message}`);
   }
 
   // `umask 077` so the file is 600 from creation — never briefly world-readable.
   const stage = await sandbox.exec(`umask 077 && cat > ${TOKEN_PATH}`, { stdin: token });
   if (stage.exitCode !== 0) {
-    const msg = `[${label}] failed to stage the push credential (exit ${stage.exitCode}).`;
-    if (bestEffort) {
-      console.warn(`  WARNING: ${msg}`);
-      return false;
-    }
-    throw new Error(msg);
+    return abort(`failed to stage the push credential (exit ${stage.exitCode}).`);
   }
 
   try {
@@ -221,12 +220,9 @@ async function pushBranch(
       { onLine: (line) => console.log(`  [${label}] ${line}`) },
     );
     if (push.exitCode !== 0) {
-      const msg = `[${label}] git push of '${branch}' failed (exit ${push.exitCode}).\n${push.stderr}`;
-      if (bestEffort) {
-        console.warn(`  WARNING: ${msg}`);
-        return false;
-      }
-      throw new Error(msg);
+      return abort(
+        `git push of '${branch}' failed (exit ${push.exitCode}).\n${push.stderr}`,
+      );
     }
     return true;
   } finally {
@@ -407,6 +403,7 @@ try {
       submitFactoryOpsVerdict(String(pr.number), review.verdict, {
         number: issueNumber,
         title: issueTitle,
+        body: issueBody,
       });
       console.log(
         blocking
