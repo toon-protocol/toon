@@ -524,22 +524,24 @@ describe('resolveSolanaChainConfig', () => {
     expect(config.programId).toBe('');
   });
 
-  it('[P0] solana-mainnet preset ships unconfigured (empty programId) and carries the native USDC mint', () => {
+  it('[P0] solana-mainnet preset carries the deployed programId and the native USDC mint', () => {
     const config = resolveSolanaChainConfig('solana-mainnet');
     expect(config.chainType).toBe('solana');
     expect(config.cluster).toBe('mainnet-beta');
-    expect(config.programId).toBe('');
+    expect(config.programId).toBe(
+      '8e7BhzydH1EqL486tw6Lp99BXviH3i5JN8qNpMSNmHj3'
+    );
     expect(config.tokenMint).toBe(
       'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
     );
     expect(config.rpcUrl).toBe('https://api.mainnet-beta.solana.com');
   });
 
-  it('[P1] SOLANA_PROGRAM_ID env override fills the empty solana-mainnet programId', () => {
-    const promoted = 'PromotedProgramId1111111111111111111111111';
-    vi.stubEnv('SOLANA_PROGRAM_ID', promoted);
+  it('[P1] SOLANA_PROGRAM_ID env override wins over the deployed solana-mainnet programId', () => {
+    const override = 'OverrideProgramId111111111111111111111111111';
+    vi.stubEnv('SOLANA_PROGRAM_ID', override);
     const config = resolveSolanaChainConfig('solana-mainnet');
-    expect(config.programId).toBe(promoted);
+    expect(config.programId).toBe(override);
   });
 });
 

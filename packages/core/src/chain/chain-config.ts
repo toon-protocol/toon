@@ -4,7 +4,7 @@
  * Provides chain presets for three blockchain families:
  * - **EVM**: Anvil (local dev), Arbitrum Sepolia (staging), Arbitrum One (production)
  * - **Solana**: solana-devnet (local dev), solana-mainnet (production,
- *   ships unconfigured until a program id is promoted)
+ *   carries the deployed payment-channel program id)
  * - **Mina**: mina-devnet (local dev)
  *
  * Environment variable overrides:
@@ -358,18 +358,23 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       programId: '',
       cluster: 'devnet',
     },
-    // Solana mainnet-beta (public). TOON payment-channel program not deployed
-    // there yet, so this ships unconfigured -- empty programId, promoted only
-    // once connector#834 lands a mainnet deploy (mirrors how base-mainnet
-    // ships with an empty tokenNetworkAddress). NOT wired into
-    // network-profile.ts's public tiers, which already resolve their own
-    // mainnet Solana endpoint (SOLANA_TIER.mainnet) independently of this
-    // low-level, e2e-stack-facing preset table.
+    // Solana mainnet-beta (public). NOT wired into network-profile.ts's
+    // public tiers, which already resolve their own mainnet Solana endpoint
+    // (SOLANA_TIER.mainnet) independently of this low-level,
+    // e2e-stack-facing preset table.
     'solana-mainnet': {
       name: 'solana-mainnet',
       chainType: 'solana',
       rpcUrl: 'https://api.mainnet-beta.solana.com',
-      programId: '',
+      // VERIFIED 2026-08-14, per toon#198: owner
+      // BPFLoaderUpgradeab1e11111111111111111111111 (executable, upgradeable),
+      // ProgramData 29MT16eh1GCdL4JWrJHjyTWu5ZMn217h25ojCvFpx2wc, 136,770
+      // bytes, deployed slot 439316400. Bytecode pulled back with
+      // `solana program dump` hashes identical to a local build from
+      // connector@main with the pinned `cargo build-sbf --tools-version
+      // v1.52`, so the on-chain program is provably the audited source. Full
+      // deployment record: toon-protocol/connector#971.
+      programId: '8e7BhzydH1EqL486tw6Lp99BXviH3i5JN8qNpMSNmHj3',
       cluster: 'mainnet-beta',
       // Circle's native USDC mint on Solana mainnet-beta, 6 decimals.
       // VERIFIED 2026-08-13 by Drew Pierson, per toon#166's "Needs a human
