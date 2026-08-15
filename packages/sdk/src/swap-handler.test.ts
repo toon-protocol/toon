@@ -1342,12 +1342,13 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     expect(calls[0]!.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
   });
 
-  it('[P0] toon#200: EIP-55 checksummed (mixed-case) EVM chain-recipient is accepted, not rejected T00', async () => {
+  it('[P0] toon#200: EIP-55 checksummed (mixed-case) EVM chain-recipient is accepted and normalized', async () => {
     // Released clients send checksummed addresses (viem / EIP-55). The
     // handler's local `validateChainRecipient` duplicate used to test
     // against a lowercase-only regex, rejecting every stock-client swap
-    // packet as a "malformed rumor" (T00 Internal error).
-    const CHECKSUMMED_RECIPIENT = '0x' + 'aB'.repeat(20);
+    // packet as a "malformed rumor" (T00 Internal error at the time).
+    // Canonical EIP-55 example address (ERC-55 spec test vector).
+    const CHECKSUMMED_RECIPIENT = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed';
     const { issuer, calls, issueClaim } = makeMockIssuer();
     const handler = createSwapHandler({
       recipientSecretKey,
