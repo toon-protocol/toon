@@ -1,5 +1,76 @@
 # @toon-protocol/core
 
+## 3.4.0
+
+### Minor Changes
+
+- adb1240: feat(core): add an optional `notice` field to `IlpPeerInfo` (kind:10032)
+
+  `IlpPeerInfo` gains an optional
+  `notice?: { id, severity: 'info' | 'action-required', summary, url }` field
+  (toon#183), giving operators a delivery channel for status/breaking-change
+  notices through the one event every client already fetches at bootstrap.
+  `buildIlpPeerInfoEvent` emits it when present and omits it otherwise; the
+  parser drops a malformed or partial notice while still parsing the rest of
+  `IlpPeerInfo`, and degrades an unrecognized `severity` to `'info'` rather
+  than rejecting it.
+
+  This is additive and optional — no behaviour change for a consumer that does
+  not use the field.
+
+- 53196fc: fix(core): seal `BootstrapService.announceViaIlp`'s packet and carry a real execution condition
+
+  `BootstrapService.announceViaIlp` sent its announce PREPARE with no
+  `executionCondition` and a plaintext base64 TOON payload, which a Rust
+  connector refuses outright (`F01 prepare carries no execution condition`;
+  toon#143).
+  - `@toon-protocol/core` gains a new `./wire` subpath export carrying the
+    sealed-wire primitives (`sealExchange`, `readExchangeOutcome`,
+    `deriveFulfillment`, `deriveCondition`, the gift-wrap seal/open pair, and
+    the OER envelope codec), ported from `@toon-protocol/client`'s
+    `src/wire/` together with its committed cross-repo vectors. `core` gains
+    `@noble/curves` and `@noble/ciphers` as direct dependencies; it does not
+    depend on `@toon-protocol/client`.
+  - `IlpClient.sendIlpPacket`/`sendIlpPacketWithClaim` accept an optional
+    base64-encoded `executionCondition`, forwarded verbatim by every in-repo
+    transport (`direct-ilp-client`, `http-ilp-client`, `ilp-client`,
+    `direct-bls-client`).
+  - A new `ConnectorEdgeLookup` port (`getIdentity`/`getRoutePrice`) lets a
+    caller supply the terminating connector's identity and route price;
+    `announceViaIlp` seals its packet to that identity via one `sealExchange`
+    call on both the claim and no-claim branches, and asks for the amount
+    (ADR 0020) instead of computing it as bytes × rate. Without a
+    `connectorEdgeLookup`, the announce phase is skipped rather than sending
+    an unsealed packet.
+  - `BootstrapServiceConfig.basePricePerByte` is deprecated: it no longer
+    prices the announce path by multiplying against the payload's byte
+    length; if set, it is used verbatim as an explicit amount override
+    instead of asking for the route price.
+
+### Patch Changes
+
+- a898240: fix(core): stop shipping a stale local-validator programId as the `solana-devnet` preset's default
+
+  `SOLANA_CHAIN_PRESETS['solana-devnet']` (and thus `resolveSolanaChainConfig('solana-devnet')`)
+  defaulted `programId` to `EdJxYPDxGvaJuu57DSUptf4soLv8enpdyQJJhHDLiydG` — a pre-cutover
+  self-hosted-validator id that `network-profile.ts` already documents as retired. Worse, this
+  preset's `rpcUrl` is `http://localhost:19899` (a local `solana-test-validator`, per the dev/e2e
+  stack), where a deployed program's id is a fresh keypair generated per `cargo build-sbf` build —
+  no fixed default can be correct there, and it is a different program than the one deployed on the
+  public Solana devnet cluster (see `network-profile.ts`'s `SOLANA_TIER`).
+
+  `programId` now defaults to `''` for `solana-devnet`; callers targeting a local validator must
+  supply the id of whatever they deployed via the existing `SOLANA_PROGRAM_ID` env override.
+
+- 7bf8383: fix(core): promote the deployed Solana mainnet program id into the `solana-mainnet` preset
+
+  `SOLANA_CHAIN_PRESETS['solana-mainnet']` (and thus `resolveSolanaChainConfig('solana-mainnet')`)
+  shipped `programId: ''`, pending a mainnet deploy of the TOON payment-channel program
+  (connector#834). That program is now live on Solana mainnet-beta at
+  `8e7BhzydH1EqL486tw6Lp99BXviH3i5JN8qNpMSNmHj3` (deployed slot 439316400, verified against a
+  local `cargo build-sbf` build of `connector@main` — see toon#198 / connector#971), so the preset
+  now carries it. `tokenMint` (Circle's native USDC) is unchanged.
+
 ## 3.3.0
 
 ### Minor Changes
