@@ -1199,7 +1199,7 @@ describe('[Story 12.8] DEFAULT_SEEN_PACKET_IDS_CAP + LRU eviction (AC-10, AC-14,
 // ---------------------------------------------------------------------------
 
 describe('Story 12.9 — chain-recipient tag handling', () => {
-  it('[P0] T-5: missing `chain-recipient` tag on rumor → ctx.reject T00 (AC-1, AC-8, AC-14a)', async () => {
+  it('[P0] T-5: missing `chain-recipient` tag on rumor → ctx.reject F01 (AC-1, AC-8, AC-14a; toon#200)', async () => {
     const { issuer, issueClaim } = makeMockIssuer();
     const handler = createSwapHandler({
       recipientSecretKey,
@@ -1211,13 +1211,15 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     const res = await handler(makeGiftWrappedCtx({ rumor }));
     expect(res.accept).toBe(false);
     if (!res.accept) {
-      expect(res.code).toBe('T00');
-      expect(res.message).toBe('Internal error');
+      expect(res.code).toBe('F01');
+      expect(res.message).toBe(
+        'missing or malformed chain-recipient for evm:base:8453 — expected 0x + 40 hex chars'
+      );
     }
     expect(issueClaim).not.toHaveBeenCalled();
   });
 
-  it('[P0] T-6a: malformed EVM `chain-recipient` (not 20-byte hex) → T00 (AC-2, AC-8, AC-14b)', async () => {
+  it('[P0] T-6a: malformed EVM `chain-recipient` (not 20-byte hex) → F01 (AC-2, AC-8, AC-14b; toon#200)', async () => {
     const { issuer, issueClaim } = makeMockIssuer();
     const handler = createSwapHandler({
       recipientSecretKey,
@@ -1227,11 +1229,16 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     const rumor = makeRumor({ chainRecipient: '0xNOTHEX' });
     const res = await handler(makeGiftWrappedCtx({ rumor }));
     expect(res.accept).toBe(false);
-    if (!res.accept) expect(res.code).toBe('T00');
+    if (!res.accept) {
+      expect(res.code).toBe('F01');
+      expect(res.message).toBe(
+        'missing or malformed chain-recipient for evm:base:8453 — expected 0x + 40 hex chars'
+      );
+    }
     expect(issueClaim).not.toHaveBeenCalled();
   });
 
-  it('[P1] T-6b: malformed Solana `chain-recipient` → T00 (AC-2, AC-8, AC-14b)', async () => {
+  it('[P1] T-6b: malformed Solana `chain-recipient` → F01 (AC-2, AC-8, AC-14b; toon#200)', async () => {
     // Construct a swap pair targeting solana.
     const SOLANA_PAIR: SwapPair = {
       from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
@@ -1250,11 +1257,16 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     });
     const res = await handler(makeGiftWrappedCtx({ rumor }));
     expect(res.accept).toBe(false);
-    if (!res.accept) expect(res.code).toBe('T00');
+    if (!res.accept) {
+      expect(res.code).toBe('F01');
+      expect(res.message).toBe(
+        'missing or malformed chain-recipient for solana:mainnet — expected a base58-encoded 32-byte public key'
+      );
+    }
     expect(issueClaim).not.toHaveBeenCalled();
   });
 
-  it('[P2] T-6c: malformed Mina `chain-recipient` (short base58) → T00 (AC-2, AC-8, AC-14b)', async () => {
+  it('[P2] T-6c: malformed Mina `chain-recipient` (short base58) → F01 (AC-2, AC-8, AC-14b; toon#200)', async () => {
     // Story 12.9 AC-14b enumerates per-chain malformed cases. T-6a covers
     // EVM, T-6b covers Solana; this pins the mina:* branch of the local
     // `validateChainRecipient` duplicate in swap-handler.ts so a future
@@ -1277,7 +1289,12 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     });
     const res = await handler(makeGiftWrappedCtx({ rumor }));
     expect(res.accept).toBe(false);
-    if (!res.accept) expect(res.code).toBe('T00');
+    if (!res.accept) {
+      expect(res.code).toBe('F01');
+      expect(res.message).toBe(
+        'missing or malformed chain-recipient for mina:mainnet — expected a base58 string of at least 32 chars'
+      );
+    }
     expect(issueClaim).not.toHaveBeenCalled();
   });
 
@@ -1323,6 +1340,27 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     const res = await handler(makeGiftWrappedCtx({ rumor: customRumor }));
     expect(res.accept).toBe(true);
     expect(calls[0]!.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
+  });
+
+  it('[P0] toon#200: EIP-55 checksummed (mixed-case) EVM chain-recipient is accepted and normalized', async () => {
+    // Released clients send checksummed addresses (viem / EIP-55). The
+    // handler's local `validateChainRecipient` duplicate used to test
+    // against a lowercase-only regex, rejecting every stock-client swap
+    // packet as a "malformed rumor" (T00 Internal error at the time).
+    // Canonical EIP-55 example address (ERC-55 spec test vector).
+    const CHECKSUMMED_RECIPIENT = '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed';
+    const { issuer, calls, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({ chainRecipient: CHECKSUMMED_RECIPIENT });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(true);
+    expect(issueClaim).toHaveBeenCalledTimes(1);
+    // Downstream consumers get a normalized (lowercased) value.
+    expect(calls[0]!.chainRecipient).toBe(CHECKSUMMED_RECIPIENT.toLowerCase());
   });
 
   it('[P0] T-8: IssueClaimParams TYPE shape includes both senderPubkey and chainRecipient (AC-10)', () => {
