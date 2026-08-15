@@ -134,26 +134,50 @@ console.log(
   `\n=== agent:review runner — PR #${prNumber} (head: ${headRef}) ===\n`,
 );
 
-// Resolve the repo once so the host-side push verification can query the remote
-// branch ref via the authenticated `gh`.
-const nwo = execFileSync(
-  "gh",
-  ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
-  { encoding: "utf8" },
-).trim();
+/**
+ * Read a branch's tip from origin, or null if the branch does not exist.
+ *
+ * Deliberately `git ls-remote` and NOT `gh api .../git/ref/heads/<branch>`:
+ * the REST ref endpoint is served from a read replica and returns the PRE-push
+ * SHA for seconds after a push lands. That cost toon-meta#396 a real review —
+ * verdict CLEAN, commit pushed and live on the branch, but the single REST read
+ * ~8s later still reported the old head, so the runner declared the push failed
+ * and withheld the factory-ops approval. `ls-remote` talks to the same git
+ * backend the push just wrote to, so it does not lag it.
+ */
+function readRemoteHead(ref: string): string | null {
+  const out = execFileSync(
+    "git",
+    ["ls-remote", "origin", `refs/heads/${ref}`],
+    { encoding: "utf8" },
+  ).trim();
+  return out ? (out.split(/\s+/)[0] ?? null) : null;
+}
 
-// Read the current tip sha of the PR head branch on origin via the authenticated
-// host `gh`. Returns null if the branch does not exist on the remote.
-function remoteHeadSha(): string | null {
-  try {
-    return execFileSync(
-      "gh",
-      ["api", `repos/${nwo}/git/ref/heads/${headRef}`, "--jq", ".object.sha"],
-      { encoding: "utf8" },
-    ).trim();
-  } catch {
-    return null;
+/**
+ * Poll origin until `ref` points at `expectedSha`, up to ~60s. Returns the last
+ * SHA observed (=== expectedSha on success). Replication lag is normally under
+ * a second; the long ceiling costs nothing on the happy path (first read wins)
+ * and only spends wall clock on the run that would otherwise fail wrongly.
+ */
+async function awaitRemoteHead(
+  ref: string,
+  expectedSha: string,
+  { attempts = 12, delayMs = 5_000 } = {},
+): Promise<string | null> {
+  let observed: string | null = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    observed = readRemoteHead(ref);
+    if (observed === expectedSha) return observed;
+    if (attempt < attempts) {
+      console.log(
+        `  [verify] origin/${ref} is ${observed ?? "<missing>"}, waiting for ` +
+          `${expectedSha} (attempt ${attempt}/${attempts})`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
   }
+  return observed;
 }
 
 const sandbox = await sandcastle.createSandbox({
@@ -181,9 +205,6 @@ try {
   verdict = review.verdict;
 
   if (review.commits.length > 0) {
-    // Snapshot the remote tip BEFORE pushing so we can prove the push landed.
-    const remoteHeadBefore = remoteHeadSha();
-
     // Push the reviewer's refinement commits back onto the PR branch. No merge,
     // no close, no new PR — the existing PR just gets updated.
     console.log(
@@ -204,26 +225,25 @@ try {
 
     // FAIL LOUD. review-push-prompt.md logs COMPLETE regardless of whether the
     // in-sandbox `git push` actually landed. Verify from the HOST that origin's
-    // PR-branch tip ADVANCED past its pre-push value. If it did not, the push
-    // failed silently (same class as store#50) and the reviewer's refinements
-    // never reached the PR — fail the Actions job instead of green-lying.
-    const remoteHeadAfter = remoteHeadSha();
-    if (remoteHeadAfter === null || remoteHeadAfter === remoteHeadBefore) {
-      reviewPushError =
-        `\nERROR: the push-review phase reported COMPLETE, but origin's tip ` +
-        `for PR branch '${headRef}' did not advance ` +
-        `(before: ${remoteHeadBefore ?? "<missing>"}, after: ` +
-        `${remoteHeadAfter ?? "<missing>"}).\n` +
-        `  The reviewer made ${review.commits.length} commit(s) but the ` +
-        `in-sandbox \`git push\` failed silently, so the PR did NOT pick them ` +
-        `up. Inspect the push-review phase logs above. The Actions job is ` +
-        `failing deliberately so this is not mistaken for success.`;
-    } else {
+    // PR-branch tip reaches the reviewer's last commit. Polled, not read once —
+    // see readRemoteHead()/awaitRemoteHead() above for why a single read here
+    // fails on pushes that actually landed.
+    const expectedSha = review.commits[review.commits.length - 1]!.sha;
+    const remoteHead = await awaitRemoteHead(headRef, expectedSha);
+    if (remoteHead === expectedSha) {
       console.log(
-        `\nVerified: origin/${headRef} advanced ` +
-          `${remoteHeadBefore ?? "<new>"} → ${remoteHeadAfter}. ` +
+        `\nVerified: origin/${headRef} is at ${remoteHead}. ` +
           `The PR picked up the reviewer's commits.`,
       );
+    } else {
+      reviewPushError =
+        `\nERROR: the push-review phase reported COMPLETE, but the PR branch ` +
+        `'${headRef}' did NOT advance to the reviewer's commits within 60s.\n` +
+        `  Expected head SHA (last review commit): ${expectedSha}\n` +
+        `  Last observed remote head SHA:          ${remoteHead ?? "<branch not found>"}\n` +
+        `  The in-sandbox \`git push\` failed silently. Inspect the push-review ` +
+        `phase logs above. The Actions job is failing deliberately so this is ` +
+        `not mistaken for success.`;
     }
   } else {
     console.log("\nReviewer made no changes — nothing to push.");
