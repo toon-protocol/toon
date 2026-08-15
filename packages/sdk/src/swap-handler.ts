@@ -517,7 +517,12 @@ const SWAP_HANDLER_BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
 export function validateChainRecipient(value: string, chain: string): boolean {
   if (typeof value !== 'string' || value.length === 0) return false;
   if (chain.startsWith('evm:')) {
-    return SWAP_HANDLER_EVM_ADDRESS_REGEX.test(value);
+    // toon#153 (stream-swap.ts) / toon#200 (here): viem / EIP-55 emits
+    // checksummed (mixed-case) addresses, and released clients send them
+    // in the `chain-recipient` tag. Lowercase-normalize before the
+    // strict-lowercase-hex regex so a valid checksummed address is
+    // accepted instead of every stock-client swap packet being rejected.
+    return SWAP_HANDLER_EVM_ADDRESS_REGEX.test(value.toLowerCase());
   }
   if (chain.startsWith('solana:')) {
     if (!SWAP_HANDLER_BASE58_REGEX.test(value)) return false;
@@ -538,6 +543,11 @@ export function validateChainRecipient(value: string, chain: string): boolean {
  * Extract the sender-supplied chain-recipient address from the rumor's
  * `chain-recipient` tag (Story 12.9 AC-8). Returns `null` if the tag is
  * missing or malformed for `chain`.
+ *
+ * toon#200: an EVM value is returned lowercased — `validateChainRecipient`
+ * accepts EIP-55 checksummed (mixed-case) input, so downstream consumers
+ * (e.g. `IssueClaimParams.chainRecipient`) get a single normalized casing
+ * regardless of which casing the sender used.
  */
 export function findChainRecipient(
   rumor: UnsignedEvent,
@@ -546,7 +556,7 @@ export function findChainRecipient(
   const raw = findTagValue(rumor, 'chain-recipient');
   if (!raw) return null;
   if (!validateChainRecipient(raw, chain)) return null;
-  return raw;
+  return chain.startsWith('evm:') ? raw.toLowerCase() : raw;
 }
 
 // ---------------------------------------------------------------------------

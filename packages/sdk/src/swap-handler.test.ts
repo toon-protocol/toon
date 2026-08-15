@@ -1325,6 +1325,26 @@ describe('Story 12.9 — chain-recipient tag handling', () => {
     expect(calls[0]!.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
   });
 
+  it('[P0] toon#200: EIP-55 checksummed (mixed-case) EVM chain-recipient is accepted, not rejected T00', async () => {
+    // Released clients send checksummed addresses (viem / EIP-55). The
+    // handler's local `validateChainRecipient` duplicate used to test
+    // against a lowercase-only regex, rejecting every stock-client swap
+    // packet as a "malformed rumor" (T00 Internal error).
+    const CHECKSUMMED_RECIPIENT = '0x' + 'aB'.repeat(20);
+    const { issuer, calls, issueClaim } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+    });
+    const rumor = makeRumor({ chainRecipient: CHECKSUMMED_RECIPIENT });
+    const res = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(res.accept).toBe(true);
+    expect(issueClaim).toHaveBeenCalledTimes(1);
+    // Downstream consumers get a normalized (lowercased) value.
+    expect(calls[0]!.chainRecipient).toBe(CHECKSUMMED_RECIPIENT.toLowerCase());
+  });
+
   it('[P0] T-8: IssueClaimParams TYPE shape includes both senderPubkey and chainRecipient (AC-10)', () => {
     // Compile-time shape guard: if a future change removes either field, this
     // block will fail TypeScript compilation. The `satisfies` operator binds
