@@ -260,6 +260,12 @@ export const DEFAULT_SEEN_PACKET_IDS_CAP = 10_000;
 export const SWAP_HANDLER_REJECT_CODES = {
   /** Malformed / invalid PREPARE content — gift-wrap shape or amount invalid. */
   INVALID_GIFT_WRAP: 'F01',
+  /**
+   * Missing or malformed `chain-recipient` tag on the rumor (toon#200). A
+   * permanent sender-side error — F01, not the T00 previously emitted here,
+   * so the sender can self-diagnose instead of treating it as transient.
+   */
+  INVALID_CHAIN_RECIPIENT: 'F01',
   /** No route — the handler did not match a registered destination. */
   UNREACHABLE: 'F02',
   /** Duplicate packet — `seenPacketIds` replay hit. */
@@ -540,6 +546,18 @@ export function validateChainRecipient(value: string, chain: string): boolean {
 }
 
 /**
+ * Describe the expected `chain-recipient` shape for `chain`, for use in a
+ * self-diagnosable reject message (toon#200). MUST stay in sync with
+ * `validateChainRecipient`'s per-chain rules above.
+ */
+function describeChainRecipientShape(chain: string): string {
+  if (chain.startsWith('evm:')) return '0x + 40 hex chars';
+  if (chain.startsWith('solana:')) return 'a base58-encoded 32-byte public key';
+  if (chain.startsWith('mina:')) return 'a base58 string of at least 32 chars';
+  return 'a non-empty string';
+}
+
+/**
  * Extract the sender-supplied chain-recipient address from the rumor's
  * `chain-recipient` tag (Story 12.9 AC-8). Returns `null` if the tag is
  * missing or malformed for `chain`.
@@ -703,9 +721,11 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     }
 
     // Story 12.9 AC-1 / AC-8: extract and validate the `chain-recipient`
-    // tag from the inner rumor. Missing or malformed values are treated as
-    // a malformed rumor (T00, consistent with other opaque-internal-error
-    // paths) — the sender may retry with a corrected address.
+    // tag from the inner rumor. Missing or malformed values are a permanent
+    // sender-side error, not a transient/internal one (toon#200 owner
+    // decision, superseding AC-14b's original T00 pin) — reject F01 with a
+    // message naming the field and the expected shape so the sender can
+    // self-diagnose and retry with a corrected address.
     const chainRecipient = findChainRecipient(rumor, pair.to.chain);
     if (!chainRecipient) {
       logger.debug({
@@ -714,7 +734,10 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
         reason: 'missing_or_malformed_chain_recipient',
         chain: pair.to.chain,
       });
-      return ctx.reject('T00', 'Internal error');
+      return ctx.reject(
+        'F01',
+        `missing or malformed chain-recipient for ${pair.to.chain} — expected ${describeChainRecipientShape(pair.to.chain)}`
+      );
     }
 
     // AC-11: replay protection check. We RESERVE the packetId synchronously
