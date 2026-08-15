@@ -358,11 +358,10 @@ export const SOLANA_CHAIN_PRESETS: Record<SolanaChainName, SolanaChainPreset> =
       programId: '',
       cluster: 'devnet',
     },
-    // Solana mainnet-beta (public). The TOON payment-channel program is live
-    // there (connector#834), so this ships the deployed programId. NOT wired
-    // into network-profile.ts's public tiers, which already resolve their
-    // own mainnet Solana endpoint (SOLANA_TIER.mainnet) independently of
-    // this low-level, e2e-stack-facing preset table.
+    // Solana mainnet-beta (public). NOT wired into network-profile.ts's
+    // public tiers, which already resolve their own mainnet Solana endpoint
+    // (SOLANA_TIER.mainnet) independently of this low-level,
+    // e2e-stack-facing preset table.
     'solana-mainnet': {
       name: 'solana-mainnet',
       chainType: 'solana',
