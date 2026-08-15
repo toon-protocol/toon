@@ -723,9 +723,9 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     // Story 12.9 AC-1 / AC-8: extract and validate the `chain-recipient`
     // tag from the inner rumor. Missing or malformed values are a permanent
     // sender-side error, not a transient/internal one (toon#200 owner
-    // decision, superseding AC-14b's original T00 pin) — reject F01 with a
-    // message naming the field and the expected shape so the sender can
-    // self-diagnose and retry with a corrected address.
+    // decision, superseding AC-14a/AC-14b's original T00 pin) — reject F01
+    // with a message naming the field and the expected shape so the sender
+    // can self-diagnose and retry with a corrected address.
     const chainRecipient = findChainRecipient(rumor, pair.to.chain);
     if (!chainRecipient) {
       logger.debug({
