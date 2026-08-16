@@ -53,6 +53,9 @@ import type {
   ClaimIssuer,
   IssueClaimParams,
   IssueClaimResult,
+  SwapHandlerFailure,
+  SwapHandlerLogger,
+  SwapHandlerRejectResponse,
 } from './index.js';
 import { createHandlerContext } from './handler-context.js';
 import type { HandlerContext } from './handler-context.js';
@@ -1721,5 +1724,401 @@ describe('Issue #84 — per-fulfill stream receipts (maker side)', () => {
 
     await handler(makeGiftWrappedCtx({ rumor: makeReceiptRumor() }));
     expect(store.get(STREAM_NONCE)).toMatchObject({ seq: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toon#204 — refusal seam: stop swallowing the error, let the caller classify
+// ---------------------------------------------------------------------------
+
+describe('toon#204 refusal seam (onFailure)', () => {
+  function makeLogger(): SwapHandlerLogger & {
+    warnCalls: Record<string, unknown>[];
+    errorCalls: Record<string, unknown>[];
+  } {
+    const warnCalls: Record<string, unknown>[] = [];
+    const errorCalls: Record<string, unknown>[] = [];
+    return {
+      warnCalls,
+      errorCalls,
+      debug: () => undefined,
+      info: () => undefined,
+      warn: (...args: unknown[]) =>
+        warnCalls.push(args[0] as Record<string, unknown>),
+      error: (...args: unknown[]) =>
+        errorCalls.push(args[0] as Record<string, unknown>),
+    };
+  }
+
+  /** An issuer that throws whatever it is handed. */
+  function throwingIssuer(err: unknown): ClaimIssuer {
+    return {
+      issueClaim: vi.fn(async () => {
+        throw err;
+      }) as unknown as ClaimIssuer['issueClaim'],
+    };
+  }
+
+  it('[P0] a non-inventory issuer failure reaches the caller logger with its message intact', async () => {
+    // The live devnet shape: an actionable message destroyed on the way out.
+    const thrown = Object.assign(new Error('0x0124a370: 1000 unredeemed'), {
+      code: 'CHANNEL_UNREDEEMED',
+    });
+    const logger = makeLogger();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(thrown),
+      logger,
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(res.accept).toBe(false);
+    const line = logger.errorCalls.find(
+      (c) => c['event'] === 'swap_handler.issuer_failed'
+    );
+    expect(line).toBeDefined();
+    expect(line?.['error']).toBe('0x0124a370: 1000 unredeemed');
+    // The thrown value itself — not just its sentence — survives.
+    expect(line?.['err']).toBe(thrown);
+    expect(line?.['code']).toBe('CHANNEL_UNREDEEMED');
+  });
+
+  it('[P0] onFailure sees the thrown issuer error verbatim, with packet context', async () => {
+    const thrown = Object.assign(new Error('signer offline'), {
+      code: 'SIGNING_FAILED',
+      details: { chain: 'evm:base:8453' },
+    });
+    const seen: SwapHandlerFailure[] = [];
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(thrown),
+      onFailure: (f) => {
+        seen.push(f);
+        return undefined;
+      },
+    });
+
+    await handler(makeGiftWrappedCtx({ amount: 2_000_000n }));
+
+    expect(seen).toHaveLength(1);
+    const failure = seen[0]!;
+    expect(failure.stage).toBe('issuer');
+    expect(failure.error).toBe(thrown);
+    expect(failure.message).toBe('signer offline');
+    expect(failure.code).toBe('SIGNING_FAILED');
+    expect(
+      (failure.error as { details: { chain: string } }).details.chain
+    ).toBe('evm:base:8453');
+    expect(failure.defaultRejection).toEqual({
+      code: 'T00',
+      message: 'Internal error',
+    });
+    expect(failure.context.claimIssued).toBe(false);
+    expect(failure.context.sourceAmount).toBe(2_000_000n);
+    expect(failure.context.pair).toBe(USDC_BASE_PAIR);
+    expect(failure.context.senderPubkey).toBe(senderPubkey);
+    expect(failure.context.chainRecipient).toBe(FIXTURE_EVM_RECIPIENT);
+    expect(failure.context.rate).toBe(USDC_BASE_PAIR.rate);
+    expect(typeof failure.context.targetAmount).toBe('bigint');
+  });
+
+  it('[P0] onFailure replaces the blanket T00 with a classified reject (code, message, data, rejectReason)', async () => {
+    const thrown = Object.assign(new Error('0x0124a370: 1000 unredeemed'), {
+      code: 'CHANNEL_UNREDEEMED',
+    });
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(thrown),
+      // The shape swap#137's `refusalDiagnostics` builds on its side today.
+      onFailure: (f) =>
+        f.code === 'CHANNEL_UNREDEEMED'
+          ? {
+              code: 'T04',
+              message: `channel_unredeemed: ${f.message}`,
+              data: Buffer.from(
+                JSON.stringify({ reason: 'channel_unredeemed' }),
+                'utf8'
+              ).toString('base64'),
+              rejectReason: {
+                code: 'insufficient_funds',
+                message: f.message,
+              },
+            }
+          : undefined,
+    });
+
+    const res = (await handler(
+      makeGiftWrappedCtx({})
+    )) as SwapHandlerRejectResponse;
+
+    expect(res.accept).toBe(false);
+    expect(res.code).toBe('T04');
+    expect(res.message).toBe('channel_unredeemed: 0x0124a370: 1000 unredeemed');
+    expect(
+      JSON.parse(Buffer.from(res.data as string, 'base64').toString('utf8'))
+    ).toEqual({ reason: 'channel_unredeemed' });
+    expect(res.rejectReason).toEqual({
+      code: 'insufficient_funds',
+      message: '0x0124a370: 1000 unredeemed',
+    });
+  });
+
+  it('[P0] the encrypt failure surfaces its error to the logger and to onFailure', async () => {
+    // An empty claim makes `encryptFulfillClaim` throw for real — no mocking.
+    const issueClaim = vi.fn(async () => ({
+      claim: new Uint8Array(0),
+      claimId: 'claim-42',
+    }));
+    const logger = makeLogger();
+    const seen: SwapHandlerFailure[] = [];
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim } as unknown as ClaimIssuer,
+      logger,
+      onFailure: (f) => {
+        seen.push(f);
+        return undefined;
+      },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(res.accept).toBe(false);
+    const line = logger.errorCalls.find(
+      (c) => c['event'] === 'swap_handler.encrypt_failed'
+    );
+    expect(line).toBeDefined();
+    expect(String(line?.['error'])).toMatch(/claimData must not be empty/);
+    expect(line?.['err']).toBeInstanceOf(Error);
+
+    expect(seen).toHaveLength(1);
+    const failure = seen[0]!;
+    expect(failure.stage).toBe('encrypt');
+    expect(failure.error).toBeInstanceOf(Error);
+    expect(failure.message).toMatch(/claimData must not be empty/);
+    // The fact swap#137 had to INFER downstream is now stated outright.
+    expect(failure.context.claimIssued).toBe(true);
+    expect(failure.context.claimId).toBe('claim-42');
+  });
+
+  it('[P0] onFailure can classify the encrypt failure instead of inferring it', async () => {
+    const issueClaim = vi.fn(async () => ({
+      claim: new Uint8Array(0),
+      claimId: 'claim-43',
+    }));
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim } as unknown as ClaimIssuer,
+      onFailure: (f) =>
+        f.stage === 'encrypt'
+          ? {
+              code: 'T00',
+              message: `claim_encrypt_failed: ${f.message}`,
+            }
+          : undefined,
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(res.accept).toBe(false);
+    if (!res.accept) {
+      expect(res.code).toBe('T00');
+      expect(res.message).toMatch(/^claim_encrypt_failed: /);
+      expect(res.message).not.toBe('Internal error');
+    }
+  });
+
+  it('[P0] INSUFFICIENT_INVENTORY behaviour is unchanged, with and without a mapper', async () => {
+    const thrown = Object.assign(new Error('insufficient inventory'), {
+      code: 'INSUFFICIENT_INVENTORY',
+    });
+    const logger = makeLogger();
+    const seen: SwapHandlerFailure[] = [];
+    const base = {
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(thrown),
+    };
+
+    const bare = await createSwapHandler(base)(makeGiftWrappedCtx({}));
+    expect(bare.accept).toBe(false);
+    if (!bare.accept) {
+      expect(bare.code).toBe('T04');
+      expect(bare.message).toBe('Insufficient liquidity');
+    }
+
+    const mapped = await createSwapHandler({
+      ...base,
+      logger,
+      // A mapper that only enriches the opaque cases, exactly as swap's
+      // classifier does: leave the SDK's own liquidity contract alone.
+      onFailure: (f) => {
+        seen.push(f);
+        return f.defaultRejection.code === 'T00'
+          ? { code: 'F99', message: 'classified' }
+          : undefined;
+      },
+    })(makeGiftWrappedCtx({ amount: 1_000_001n }));
+
+    expect(mapped.accept).toBe(false);
+    if (!mapped.accept) {
+      expect(mapped.code).toBe('T04');
+      expect(mapped.message).toBe('Insufficient liquidity');
+    }
+    expect(seen[0]?.defaultRejection).toEqual({
+      code: 'T04',
+      message: 'Insufficient liquidity',
+    });
+    // Still logged at warn under the same event name.
+    expect(
+      logger.warnCalls.some(
+        (c) => c['event'] === 'swap_handler.insufficient_inventory'
+      )
+    ).toBe(true);
+    expect(logger.errorCalls).toHaveLength(0);
+  });
+
+  it('[P1] the rate-provider stage reaches onFailure with the thrown error', async () => {
+    const thrown = new Error('oracle unreachable');
+    const seen: SwapHandlerFailure[] = [];
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      rateProvider: () => {
+        throw thrown;
+      },
+      onFailure: (f) => {
+        seen.push(f);
+        return { code: 'T99', message: `rate_unavailable: ${f.message}` };
+      },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(seen[0]?.stage).toBe('rate_provider');
+    expect(seen[0]?.error).toBe(thrown);
+    expect(seen[0]?.defaultRejection.message).toBe('Rate provider error');
+    expect(res.accept).toBe(false);
+    if (!res.accept) {
+      expect(res.code).toBe('T99');
+      expect(res.message).toBe('rate_unavailable: oracle unreachable');
+    }
+  });
+
+  it('[P1] the rate-conversion stage reaches onFailure and keeps its generic default', async () => {
+    const seen: SwapHandlerFailure[] = [];
+    const { issuer } = makeMockIssuer();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: issuer,
+      rateProvider: () => '0.0',
+      onFailure: (f) => {
+        seen.push(f);
+        return undefined;
+      },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(seen[0]?.stage).toBe('rate_conversion');
+    expect(seen[0]?.message).toMatch(/Rate is zero/);
+    expect(seen[0]?.context.rate).toBe('0.0');
+    expect(res.accept).toBe(false);
+    if (!res.accept) {
+      expect(res.code).toBe('T00');
+      expect(res.message).toBe('Rate conversion error');
+    }
+  });
+
+  it('[P1] a throwing onFailure cannot break the packet — default reject stands', async () => {
+    const logger = makeLogger();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(new Error('signer offline')),
+      logger,
+      onFailure: () => {
+        throw new Error('mapper blew up');
+      },
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(res.accept).toBe(false);
+    if (!res.accept) {
+      expect(res.code).toBe('T00');
+      expect(res.message).toBe('Internal error');
+    }
+    expect(
+      logger.errorCalls.some(
+        (c) => c['event'] === 'swap_handler.on_failure_threw'
+      )
+    ).toBe(true);
+  });
+
+  it('[P1] a malformed onFailure return is ignored and reported', async () => {
+    const logger = makeLogger();
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: throwingIssuer(new Error('signer offline')),
+      logger,
+      onFailure: () => ({ code: '', message: 42 }) as never,
+    });
+
+    const res = await handler(makeGiftWrappedCtx({}));
+
+    expect(res.accept).toBe(false);
+    if (!res.accept) expect(res.code).toBe('T00');
+    expect(
+      logger.warnCalls.some(
+        (c) => c['event'] === 'swap_handler.on_failure_invalid_rejection'
+      )
+    ).toBe(true);
+  });
+
+  it('[P1] a classified refusal still releases the replay reservation', async () => {
+    let attempt = 0;
+    const issueClaim = vi.fn(async (): Promise<IssueClaimResult> => {
+      attempt += 1;
+      if (attempt === 1) throw new Error('signer offline');
+      return { claim: new Uint8Array([9, 9, 9]), claimId: 'retry-ok' };
+    });
+    const handler = createSwapHandler({
+      recipientSecretKey,
+      swapPairs: [USDC_BASE_PAIR],
+      claimIssuer: { issueClaim } as unknown as ClaimIssuer,
+      onFailure: () => ({ code: 'F99', message: 'classified' }),
+    });
+
+    const rumor = makeRumor({});
+    const first = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(first.accept).toBe(false);
+    if (!first.accept) expect(first.code).toBe('F99');
+
+    // Same packet id — must NOT come back as F04 duplicate.
+    const second = await handler(makeGiftWrappedCtx({ rumor }));
+    expect(second.accept).toBe(true);
+  });
+
+  it('[P2] construction-time validation rejects a non-function onFailure', () => {
+    const { issuer } = makeMockIssuer();
+    expect(() =>
+      createSwapHandler({
+        recipientSecretKey,
+        swapPairs: [USDC_BASE_PAIR],
+        claimIssuer: issuer,
+        onFailure: 'nope' as never,
+      })
+    ).toThrow(SwapHandlerError);
   });
 });
