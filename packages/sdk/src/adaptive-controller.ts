@@ -49,7 +49,7 @@
 import type { SwapPair } from '@toon-protocol/core';
 import { ToonError } from '@toon-protocol/core';
 
-import { applyRate } from './swap-handler.js';
+import { applyRate } from './apply-rate.js';
 
 // ---------------------------------------------------------------------------
 // Errors

@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import type { SwapPair } from '@toon-protocol/core';
 
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import type { SettlementTxError } from '../errors.js';
 import { base58Encode } from '../identity.js';
 import { balanceProofHashSolana } from './hashes.js';

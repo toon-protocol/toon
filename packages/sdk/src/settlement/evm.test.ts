@@ -11,7 +11,7 @@ import { keccak_256 } from '@noble/hashes/sha3.js';
 import { bytesToHex } from '@noble/hashes/utils.js';
 import type { SwapPair } from '@toon-protocol/core';
 
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import { SettlementTxError } from '../errors.js';
 import {
   buildEvmSettlementTx,

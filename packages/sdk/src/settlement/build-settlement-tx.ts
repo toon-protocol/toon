@@ -12,7 +12,7 @@
 
 import { SettlementTxError } from '../errors.js';
 import { base58Decode } from '../identity.js';
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import {
   buildEvmSettlementTx,
   recoverEvmSignerAddress,

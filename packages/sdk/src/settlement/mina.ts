@@ -44,7 +44,7 @@
  */
 
 import { SettlementTxError } from '../errors.js';
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import { balanceProofFieldsMina } from './hashes.js';
 import type { SwapSignerConfig, SettlementBundle } from './types.js';
 

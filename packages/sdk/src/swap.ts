@@ -16,10 +16,12 @@ export type {
   StreamSwapResult,
   StreamSwapClient,
   StreamSwapController,
-  AccumulatedClaim,
   PacketProgress,
   RateMonitorCallback,
 } from './stream-swap.js';
+// toon#210: `AccumulatedClaim` is a settlement type shared by the rolling
+// path; it moved out of `stream-swap.ts` but is exported under the same name.
+export type { AccumulatedClaim } from './settlement/accumulated-claim.js';
 export { wrapSwapPacketToToon, decryptFulfillClaim } from './gift-wrap.js';
 // rfc-0039 stream receipts (issue #84): sender-side verification + the
 // serialized audit artifact, plus the maker-side issuance helpers.

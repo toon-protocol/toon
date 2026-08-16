@@ -43,7 +43,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { ed25519 } from '@noble/curves/ed25519.js';
 import type { SwapPair } from '@toon-protocol/core';
 
-import type { AccumulatedClaim } from '../../src/stream-swap.js';
+import type { AccumulatedClaim } from '../../src/settlement/accumulated-claim.js';
 import { base58Encode, balanceProofHashSolana } from '../../src/index.js';
 import { balanceProofFieldsMina } from '../../src/settlement/hashes.js';
 import {

@@ -24,6 +24,13 @@ import { createHash } from 'node:crypto';
 import type { UnsignedEvent } from 'nostr-tools/pure';
 import type { SwapPair } from '@toon-protocol/core';
 
+// toon#210 (ADR 0003 stage 3): `applyRate` / `ApplyRateParams` and
+// `IssueClaimParams` / `IssueClaimResult` were relocated OUT of this file
+// because the ROLLING swap path depends on them and this file is withdrawn
+// with the legacy path (toon#211). `index.ts` re-exports them from their new
+// homes, so the published surface is unchanged; this file is now a consumer.
+import { applyRate } from './apply-rate.js';
+import type { IssueClaimParams, IssueClaimResult } from './claim-issuance.js';
 import { GiftWrapError, SwapHandlerError } from './errors.js';
 import { unwrapSwapPacketFromToon, encryptFulfillClaim } from './gift-wrap.js';
 import type { HandlePacketRejectResponse } from './handler-context.js';
@@ -40,62 +47,6 @@ import {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Parameters passed to a {@link ClaimIssuer.issueClaim} call. */
-export interface IssueClaimParams {
-  /** Source-asset amount received by the Swap (ILP packet amount, source micro-units). */
-  sourceAmount: bigint;
-  /** Target-asset amount owed to the sender (post-rate-conversion, target micro-units). */
-  targetAmount: bigint;
-  /** The `SwapPair` this packet is being priced against. */
-  pair: SwapPair;
-  /**
-   * The sender's real Nostr pubkey (extracted from the unwrapped seal).
-   *
-   * Identity-layer key only: used by the Swap for inventory ledger keying and
-   * the sender→channel sticky binding (`channelState.reserve()` /
-   * `channelState.release()`). The Swap MUST NOT pass this to chain-layer
-   * signers as the balance-proof `recipient` — use {@link chainRecipient}
-   * for that (Story 12.9 D12-011).
-   */
-  senderPubkey: string;
-  /**
-   * The sender's chain-specific payout address for `pair.to.chain`
-   * (Story 12.9 AC-10). Extracted and format-validated from the rumor's
-   * `chain-recipient` tag by the swap handler. REQUIRED. This is the
-   * address the Swap's `PaymentChannelSigner` MUST use as the balance-proof
-   * `recipient` (e.g., 20-byte EVM address, 32-byte Solana Ed25519 pubkey).
-   */
-  chainRecipient: string;
-  /** The inner rumor (for optional Swap-side context; may be ignored by the issuer). */
-  rumor: UnsignedEvent;
-}
-
-/**
- * Result returned from {@link ClaimIssuer.issueClaim}.
- *
- * Story 12.6 extension: additive settlement-context fields let the sender
- * reconstruct the balance-proof message hash for signature verification and
- * on-chain settlement (see `buildSettlementTx()`).
- */
-export interface IssueClaimResult {
-  /** Signed claim bytes ready for NIP-44 encryption (chain-specific format). */
-  claim: Uint8Array;
-  /** Optional Swap-side claim ID for logging/tracing. */
-  claimId?: string;
-  // --- Story 12.6 settlement-context fields (additive, all optional for
-  // one-story-cycle backward compat; the Swap SHOULD emit all of them) ---
-  /** Channel identifier on the target chain. */
-  channelId?: string;
-  /** Balance-proof nonce (monotonically increasing per channel). */
-  nonce?: bigint;
-  /** Cumulative transferred amount on the channel (target micro-units). */
-  cumulativeAmount?: bigint;
-  /** Recipient address (the sender's target-asset address). */
-  recipient?: string;
-  /** Swap's on-chain signer address. */
-  swapSignerAddress?: string;
-}
 
 /**
  * Pluggable signed-claim issuer. Story 12.3 defines only the contract — the
@@ -118,18 +69,6 @@ export interface ClaimIssuer {
    * error taxonomy can pick the code and message instead.
    */
   issueClaim(params: IssueClaimParams): Promise<IssueClaimResult>;
-}
-
-/** Parameters for {@link applyRate}. */
-export interface ApplyRateParams {
-  /** Source amount in source micro-units. */
-  sourceAmount: bigint;
-  /** `SwapPair.from.assetScale` (number of decimals on source side). */
-  fromScale: number;
-  /** `SwapPair.to.assetScale` (number of decimals on target side). */
-  toScale: number;
-  /** Decimal-string rate (target whole-units per source whole-unit). */
-  rate: string;
 }
 
 /**
@@ -549,59 +488,6 @@ export class BoundedSeenPacketIds {
 }
 
 // ---------------------------------------------------------------------------
-// applyRate helper (AC-8)
-// ---------------------------------------------------------------------------
-
-const RATE_REGEX = /^(0|[1-9]\d*)(\.\d+)?$/;
-
-/**
- * Apply a decimal-string exchange rate to a source amount across asset scales.
- * Uses BigInt arithmetic throughout — never coerces to `Number` — to preserve
- * 18-decimal EVM precision (Epic 11 retro MAX_SAFE_INTEGER guard).
- *
- * Rounds toward zero (integer division), which economically favors the Swap
- * (standard market-maker convention).
- *
- * @throws {SwapHandlerError} If rate format is invalid, rate is zero, or
- *   sourceAmount is not positive.
- */
-export function applyRate(params: ApplyRateParams): bigint {
-  const { sourceAmount, fromScale, toScale, rate } = params;
-
-  if (!RATE_REGEX.test(rate)) {
-    throw new SwapHandlerError(`Invalid rate format: ${rate}`);
-  }
-  // Reject any zero-valued rate regardless of decimal presentation.
-  // RATE_REGEX matches `'0'`, `'0.0'`, `'0.00'`, etc. — all semantically
-  // "not quoting". Previous check only caught the bare `'0'` form, letting
-  // `'0.0'` slip through and produce a zero-valued targetAmount that the
-  // sender's rate-deviation guard could not catch (expectedTargetAmount=0n
-  // skips the deviation math). (Story 12.5 code-review pass #3.)
-  if (/^0(\.0+)?$/.test(rate)) {
-    throw new SwapHandlerError('Rate is zero (pair not quoting)');
-  }
-  if (sourceAmount <= 0n) {
-    throw new SwapHandlerError(
-      `sourceAmount must be positive, got ${sourceAmount}`
-    );
-  }
-
-  const dotIdx = rate.indexOf('.');
-  const integerPart = dotIdx === -1 ? rate : rate.slice(0, dotIdx);
-  const fractionalPart = dotIdx === -1 ? '' : rate.slice(dotIdx + 1);
-
-  const rateNumerator = BigInt(integerPart + fractionalPart);
-  const rateDenominator = 10n ** BigInt(fractionalPart.length);
-
-  const scaleUp = 10n ** BigInt(toScale);
-  const scaleDown = 10n ** BigInt(fromScale);
-
-  return (
-    (sourceAmount * rateNumerator * scaleUp) / (rateDenominator * scaleDown)
-  );
-}
-
-// ---------------------------------------------------------------------------
 // findSwapPair helper (AC-7)
 // ---------------------------------------------------------------------------
 
@@ -667,10 +553,13 @@ function splitAssetChain(
 // Story 12.9 AC-2 / AC-8 — chain-recipient format validation
 // ---------------------------------------------------------------------------
 //
-// Duplicated (intentionally small) from `stream-swap.ts` to avoid a circular
-// module cycle (`stream-swap` imports `applyRate` from this file). Guardrail
-// 8.5 sanctions local duplication rather than introducing a shared helper
-// package. Rules MUST match the sender-side validator byte-for-byte.
+// Duplicated (intentionally small) from `stream-swap.ts`. Historically this
+// avoided a circular module cycle (`stream-swap` imported `applyRate` from
+// this file); toon#210 moved `applyRate` to `apply-rate.ts`, so the cycle is
+// gone — but the duplication stays, because Guardrail 8.5 sanctions local
+// duplication over a shared helper package and de-duplicating it now would be
+// a behavioural change in a file that toon#211 deletes outright. Rules MUST
+// match the sender-side validator byte-for-byte.
 
 const SWAP_HANDLER_EVM_ADDRESS_REGEX = /^0x[0-9a-f]{40}$/;
 const SWAP_HANDLER_BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]+$/;
