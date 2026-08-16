@@ -6,7 +6,7 @@
  * @see _bmad-output/implementation-artifacts/12-6-build-settlement-tx.md
  */
 
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import type { MinaSignerClientLike } from './mina.js';
 
 /**

@@ -12,7 +12,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 
 import { SettlementTxError } from '../errors.js';
 import { base58Decode, base58Encode } from '../identity.js';
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import { balanceProofHashSolana, concatBytes } from './hashes.js';
 import type { SwapSignerConfig, SettlementBundle } from './types.js';
 

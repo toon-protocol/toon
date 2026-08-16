@@ -13,7 +13,7 @@ import type { SwapPair } from '@toon-protocol/core';
 
 import { ed25519 } from '@noble/curves/ed25519.js';
 
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import type { SettlementTxError } from '../errors.js';
 import { base58Encode } from '../identity.js';
 import {

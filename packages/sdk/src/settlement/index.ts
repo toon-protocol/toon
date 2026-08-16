@@ -34,6 +34,8 @@ export {
 export { verifyMinaSignature, loadMinaSignerClient } from './mina.js';
 export type { MinaSignerClientLike } from './mina.js';
 
+export type { AccumulatedClaim } from './accumulated-claim.js';
+
 export type {
   SettlementBundle,
   BuildSettlementTxParams,

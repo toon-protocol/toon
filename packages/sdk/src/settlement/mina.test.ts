@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { SwapPair } from '@toon-protocol/core';
 
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import { SettlementTxError } from '../errors.js';
 import { balanceProofFieldsMina } from './hashes.js';
 import {

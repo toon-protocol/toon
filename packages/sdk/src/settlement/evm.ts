@@ -12,7 +12,7 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 import { recoverEvmSigner } from '@toon-protocol/settlement-digest';
 
 import { SettlementTxError } from '../errors.js';
-import type { AccumulatedClaim } from '../stream-swap.js';
+import type { AccumulatedClaim } from './accumulated-claim.js';
 import {
   balanceProofHashEvm,
   bigintToBytes32BE,

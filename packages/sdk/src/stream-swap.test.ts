@@ -15,17 +15,17 @@ import type { UnsignedEvent } from 'nostr-tools/pure';
 import type { SwapPair } from '@toon-protocol/core';
 
 import { unwrapSwapPacketFromToon, encryptFulfillClaim } from './gift-wrap';
-import { applyRate } from './swap-handler';
+import { applyRate } from './apply-rate';
 
 import {
   streamSwap,
   streamSwapControlled,
   type StreamSwapParams,
   type StreamSwapResult,
-  type AccumulatedClaim,
   type PacketProgress,
   type RateMonitorCallback,
 } from './stream-swap';
+import type { AccumulatedClaim } from './settlement/accumulated-claim';
 import { StreamSwapError } from './errors';
 import {
   signStreamReceipt,

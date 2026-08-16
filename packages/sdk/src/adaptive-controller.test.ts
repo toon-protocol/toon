@@ -23,7 +23,7 @@ import {
   type PacketObservation,
   type SwapControllerState,
 } from './adaptive-controller';
-import { applyRate } from './swap-handler';
+import { applyRate } from './apply-rate';
 
 const MAKER = 'a'.repeat(64);
 const OTHER_MAKER = 'b'.repeat(64);
