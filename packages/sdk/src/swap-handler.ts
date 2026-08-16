@@ -26,6 +26,7 @@ import type { SwapPair } from '@toon-protocol/core';
 
 import { GiftWrapError, SwapHandlerError } from './errors.js';
 import { unwrapSwapPacketFromToon, encryptFulfillClaim } from './gift-wrap.js';
+import type { HandlePacketRejectResponse } from './handler-context.js';
 import type { Handler } from './handler-registry.js';
 import { base58Decode } from './identity.js';
 import {
@@ -112,7 +113,9 @@ export interface ClaimIssuer {
    * @throws Error (or subclass) on insufficient reserves, unsupported pair,
    * or signing failure. Errors with `code === 'INSUFFICIENT_INVENTORY'` or
    * messages matching `/insufficient/i` are surfaced as ILP T04; all other
-   * errors as T00.
+   * errors default to T00 — but the thrown value is handed verbatim to
+   * {@link CreateSwapHandlerConfig.onFailure} first, so an issuer's own
+   * error taxonomy can pick the code and message instead.
    */
   issueClaim(params: IssueClaimParams): Promise<IssueClaimResult>;
 }
@@ -151,6 +154,137 @@ export interface SwapHandlerLogger {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
+}
+
+// ---------------------------------------------------------------------------
+// toon#204 — the refusal seam
+// ---------------------------------------------------------------------------
+
+/**
+ * Which stage of the handler pipeline produced a refusal.
+ *
+ * Only the stages that can fail with a *thrown* error are represented — the
+ * handler's other rejects (bad kind, invalid amount, unwrap failure,
+ * unsupported pair, malformed `chain-recipient`, duplicate packet) are
+ * decided by inspection, already carry a specific code and a
+ * self-diagnosable message, and never reach {@link SwapHandlerFailureMapper}.
+ */
+export type SwapHandlerFailureStage =
+  /** `rateProvider` threw, or returned a shape the handler cannot use. */
+  | 'rate_provider'
+  /** `applyRate` rejected the resolved rate or the source amount. */
+  | 'rate_conversion'
+  /** `claimIssuer.issueClaim()` threw. No claim was issued. */
+  | 'issuer'
+  /** `encryptFulfillClaim()` threw. A claim WAS issued and is now stranded. */
+  | 'encrypt';
+
+/** Packet-scoped context handed to a {@link SwapHandlerFailureMapper}. */
+export interface SwapHandlerFailureContext {
+  /** ILP destination address of the PREPARE being refused. */
+  destination: string;
+  /** Source-asset amount on the PREPARE (source micro-units). */
+  sourceAmount: bigint;
+  /** The matched `SwapPair`. */
+  pair: SwapPair;
+  /** The sender's real Nostr pubkey (from the seal, not the outer wrap). */
+  senderPubkey: string;
+  /** The sender's validated chain-recipient address for `pair.to.chain`. */
+  chainRecipient: string;
+  /** Resolved rate, once rate resolution succeeded. */
+  rate?: string;
+  /** Converted target amount, once rate conversion succeeded. */
+  targetAmount?: bigint;
+  /**
+   * `true` only on the `encrypt` stage: `issueClaim()` already resolved, so
+   * the maker has committed inventory for a claim the sender will never see.
+   */
+  claimIssued: boolean;
+  /** `IssueClaimResult.claimId`, when the issuer supplied one. */
+  claimId?: string;
+}
+
+/**
+ * A failure the handler is about to turn into an ILP REJECT, handed to the
+ * caller-supplied {@link SwapHandlerFailureMapper} *before* the reject is
+ * built — with the thrown value intact.
+ */
+export interface SwapHandlerFailure {
+  /** Which stage failed. */
+  stage: SwapHandlerFailureStage;
+  /**
+   * The thrown value, VERBATIM — not a string. `code`, `details`, `cause`
+   * and the stack are all still attached, which is the whole point of this
+   * seam: the SDK cannot classify a maker's domain errors, but the maker can.
+   */
+  error: unknown;
+  /** `error.message` (or `String(error)`), extracted for convenience. */
+  message: string;
+  /** `error.code`, when the thrown value carries a string one. */
+  code?: string;
+  /** Packet-scoped context. */
+  context: SwapHandlerFailureContext;
+  /**
+   * Exactly what the handler will reject with if the mapper returns nothing.
+   *
+   * This is also how a mapper tells an *already-classified* failure from an
+   * opaque one: the handler recognises insufficient inventory on its own and
+   * defaults to `T04 / Insufficient liquidity`, so a mapper that only wants
+   * to enrich the opaque cases can return early when
+   * `defaultRejection.code !== 'T00'`.
+   */
+  defaultRejection: SwapHandlerRejection;
+}
+
+/** An ILP REJECT a {@link SwapHandlerFailureMapper} wants emitted. */
+export interface SwapHandlerRejection {
+  /** ILP wire code, e.g. `'T04'`, `'F99'`. Required. */
+  code: string;
+  /** Human-readable message returned to the sender. Required. */
+  message: string;
+  /**
+   * Optional opaque payload attached as `data` on the reject response —
+   * base64 by convention, matching how the connector's reject `data` is
+   * carried on the wire.
+   */
+  data?: string;
+  /**
+   * Optional SEMANTIC reject reason for the connector's `REJECT_CODE_MAP`
+   * (e.g. `{ code: 'insufficient_funds' }`).
+   *
+   * NOTE: this survives only when the maker wires its packet handler to the
+   * connector directly. `createNode()`'s `setPacketHandler` adapter in
+   * `@toon-protocol/core` derives `rejectReason` from the wire code and
+   * overwrites whatever the handler set.
+   */
+  rejectReason?: { code: string; message: string };
+  /** Optional metadata merged onto the reject response. */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Caller-supplied classifier: turn a {@link SwapHandlerFailure} into the
+ * REJECT the sender should see.
+ *
+ * MUST be synchronous — it runs on the reject path of a live packet.
+ * Returning `undefined` (or throwing, or returning a malformed rejection)
+ * keeps `failure.defaultRejection`, so a mapper can classify the conditions
+ * it knows and ignore the rest. A mapper that classifies nothing at all must
+ * still `return undefined` explicitly: `void` is deliberately NOT in the
+ * union (this repo's lint forbids `no-invalid-void-type`), and observing
+ * without classifying is what `logger` is for.
+ */
+export type SwapHandlerFailureMapper = (
+  failure: SwapHandlerFailure
+) => SwapHandlerRejection | undefined;
+
+/**
+ * The handler's reject response. Widens `HandlePacketRejectResponse` with the
+ * two extra fields a {@link SwapHandlerRejection} may carry.
+ */
+export interface SwapHandlerRejectResponse extends HandlePacketRejectResponse {
+  data?: string;
+  rejectReason?: { code: string; message: string };
 }
 
 /**
@@ -222,6 +356,27 @@ export interface CreateSwapHandlerConfig {
   receiptSessions?: ReceiptSessionStoreLike;
   /** Optional pino-compatible logger. Defaults to a no-op logger. */
   logger?: SwapHandlerLogger;
+  /**
+   * Optional refusal classifier (toon#204).
+   *
+   * Before the handler rejects a packet because something *threw* — the rate
+   * provider, rate conversion, the claim issuer, or claim encryption — it
+   * calls this hook with the thrown value intact plus the reject it would
+   * otherwise emit. Return a {@link SwapHandlerRejection} to replace that
+   * reject; return nothing to keep it.
+   *
+   * This exists because the SDK cannot classify a maker's domain errors: it
+   * recognises only insufficient inventory and collapsed everything else to
+   * `T00 Internal error`, discarding the actionable message at the throw
+   * site (e.g. `0x0124a370…: 1000 unredeemed`, which cost a multi-hour live
+   * diagnosis on devnet — swap#136/#137). The maker already knows how to
+   * classify its own failures; this is where it says so.
+   *
+   * Defaults are unchanged when this is omitted, and the hook cannot break
+   * the handler: a throw or a malformed return falls back to
+   * `failure.defaultRejection`.
+   */
+  onFailure?: SwapHandlerFailureMapper;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +411,10 @@ export const DEFAULT_SEEN_PACKET_IDS_CAP = 10_000;
  * reject-code conventions (F01 = malformed, F02 = unreachable, F04 =
  * duplicate, F06 = unsupported pair, T00 = transient internal, T04 =
  * insufficient liquidity).
+ *
+ * These are DEFAULTS for the throwing stages: a
+ * {@link CreateSwapHandlerConfig.onFailure} mapper may replace the code and
+ * message of any refusal it can classify (toon#204).
  */
 export const SWAP_HANDLER_REJECT_CODES = {
   /** Malformed / invalid PREPARE content — gift-wrap shape or amount invalid. */
@@ -632,7 +791,17 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     throw new SwapHandlerError('receiptSecretKey must be a 32-byte Uint8Array');
   }
 
+  if (
+    config.onFailure !== undefined &&
+    typeof config.onFailure !== 'function'
+  ) {
+    throw new SwapHandlerError(
+      'onFailure must be a function (failure) => SwapHandlerRejection | undefined'
+    );
+  }
+
   const logger = config.logger ?? NOOP_LOGGER;
+  const onFailure = config.onFailure;
 
   // Issue #84: receipt signing key + per-streamNonce session state. Default
   // signer is the maker identity key (verifiable against `swapPubkey`).
@@ -765,6 +934,106 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       seenPacketIds.delete(packetId);
     };
 
+    /**
+     * toon#204 — the single exit for every "something threw" refusal.
+     *
+     * Releases the replay reservation (all four throwing stages are
+     * retryable), offers the failure to `onFailure` with the thrown value
+     * INTACT, logs the outcome — including the code actually going on the
+     * wire — and builds the reject.
+     */
+    const refuse = (params: {
+      stage: SwapHandlerFailureStage;
+      error: unknown;
+      /** Log event name, kept byte-identical to the pre-#204 lines. */
+      logEvent: string;
+      level: 'warn' | 'error';
+      defaultRejection: SwapHandlerRejection;
+      context: Omit<
+        SwapHandlerFailureContext,
+        | 'destination'
+        | 'sourceAmount'
+        | 'pair'
+        | 'senderPubkey'
+        | 'chainRecipient'
+      >;
+    }): SwapHandlerRejectResponse => {
+      releaseReservation();
+
+      const { stage, error, defaultRejection } = params;
+      const message = error instanceof Error ? error.message : String(error);
+      const rawCode = (error as { code?: unknown } | undefined)?.code;
+      const failure: SwapHandlerFailure = {
+        stage,
+        error,
+        message,
+        ...(typeof rawCode === 'string' && { code: rawCode }),
+        context: {
+          destination: ctx.destination,
+          sourceAmount: ctx.amount,
+          pair,
+          senderPubkey,
+          chainRecipient,
+          ...params.context,
+        },
+        defaultRejection,
+      };
+
+      let rejection = defaultRejection;
+      if (onFailure) {
+        try {
+          const mapped = onFailure(failure);
+          if (
+            mapped !== undefined &&
+            mapped !== null &&
+            typeof mapped.code === 'string' &&
+            mapped.code.length > 0 &&
+            typeof mapped.message === 'string'
+          ) {
+            rejection = mapped;
+          } else if (mapped !== undefined && mapped !== null) {
+            // A mapper that returns garbage must not take the packet down
+            // with it — say so loudly and keep the default.
+            logger.warn({
+              event: 'swap_handler.on_failure_invalid_rejection',
+              stage,
+            });
+          }
+        } catch (mapErr) {
+          logger.error({
+            event: 'swap_handler.on_failure_threw',
+            stage,
+            error: mapErr instanceof Error ? mapErr.message : String(mapErr),
+            err: mapErr,
+          });
+        }
+      }
+
+      logger[params.level]({
+        event: params.logEvent,
+        // `error` (the message) is the pre-#204 field and stays put; `err`
+        // carries the thrown value itself so a pino-style serializer can
+        // record its code/cause/stack instead of just the sentence.
+        error: message,
+        err: error,
+        ...(typeof rawCode === 'string' && { code: rawCode }),
+        stage,
+        rejectCode: rejection.code,
+        rejectMessage: rejection.message,
+      });
+
+      return {
+        ...ctx.reject(rejection.code, rejection.message),
+        ...(rejection.data !== undefined && { data: rejection.data }),
+        ...(rejection.rejectReason !== undefined && {
+          rejectReason: rejection.rejectReason,
+        }),
+        ...(rejection.metadata !== undefined && {
+          metadata: rejection.metadata,
+        }),
+      };
+    };
+
     // AC-9 rate resolution (optional live hook per D12-006).
     //
     // Issue #82 (rolling-swap quote tape): the resolved rate `R_i` and its
@@ -796,12 +1065,17 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
         );
       }
     } catch (err) {
-      logger.error({
-        event: 'swap_handler.rate_provider_failed',
-        error: err instanceof Error ? err.message : String(err),
+      return refuse({
+        stage: 'rate_provider',
+        error: err,
+        logEvent: 'swap_handler.rate_provider_failed',
+        level: 'error',
+        defaultRejection: {
+          code: SWAP_HANDLER_REJECT_CODES.INTERNAL,
+          message: SWAP_HANDLER_REJECT_MESSAGES.RATE_PROVIDER,
+        },
+        context: { claimIssued: false },
       });
-      releaseReservation();
-      return ctx.reject('T00', 'Rate provider error');
     }
 
     // AC-8: apply rate (BigInt throughout).
@@ -820,15 +1094,21 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
         rate,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warn({
-        event: 'swap_handler.rate_conversion_failed',
-        error: msg,
-      });
       // Do NOT surface the internal rate string / validation detail to the
-      // sender -- return a generic privacy-preserving message.
-      releaseReservation();
-      return ctx.reject('T00', 'Rate conversion error');
+      // sender -- the DEFAULT message stays generic and privacy-preserving.
+      // A maker that wants to say more can do so via `onFailure`; it is the
+      // one that knows what its own rate source is allowed to leak.
+      return refuse({
+        stage: 'rate_conversion',
+        error: err,
+        logEvent: 'swap_handler.rate_conversion_failed',
+        level: 'warn',
+        defaultRejection: {
+          code: SWAP_HANDLER_REJECT_CODES.INTERNAL,
+          message: SWAP_HANDLER_REJECT_MESSAGES.RATE_CONVERSION,
+        },
+        context: { rate, claimIssued: false },
+      });
     }
 
     // AC-9: delegate to claim issuer
@@ -858,20 +1138,31 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
     } catch (err) {
       const code = (err as { code?: unknown })?.code;
       const message = err instanceof Error ? err.message : String(err);
-      if (code === 'INSUFFICIENT_INVENTORY' || /insufficient/i.test(message)) {
-        logger.warn({
-          event: 'swap_handler.insufficient_inventory',
-          error: message,
-        });
-        releaseReservation();
-        return ctx.reject('T04', 'Insufficient liquidity');
-      }
-      logger.error({
-        event: 'swap_handler.issuer_failed',
-        error: message,
+      // The ONE condition the SDK can classify by itself. Its default is
+      // unchanged (T04 / 'Insufficient liquidity', logged at warn under the
+      // same event) — but it goes through `refuse` too, so `onFailure` sees
+      // every issuer failure uniformly and can tell this one apart by
+      // `defaultRejection.code`.
+      const insufficient =
+        code === 'INSUFFICIENT_INVENTORY' || /insufficient/i.test(message);
+      return refuse({
+        stage: 'issuer',
+        error: err,
+        logEvent: insufficient
+          ? 'swap_handler.insufficient_inventory'
+          : 'swap_handler.issuer_failed',
+        level: insufficient ? 'warn' : 'error',
+        defaultRejection: insufficient
+          ? {
+              code: SWAP_HANDLER_REJECT_CODES.INSUFFICIENT_LIQUIDITY,
+              message: SWAP_HANDLER_REJECT_MESSAGES.INSUFFICIENT_LIQUIDITY,
+            }
+          : {
+              code: SWAP_HANDLER_REJECT_CODES.INTERNAL,
+              message: SWAP_HANDLER_REJECT_MESSAGES.INTERNAL,
+            },
+        context: { rate, targetAmount, claimIssued: false },
       });
-      releaseReservation();
-      return ctx.reject('T00', 'Internal error');
     }
 
     // AC-10: NIP-44 encrypt the claim (Story 12.2 handles ephemeral-key zeroing).
@@ -882,12 +1173,29 @@ export function createSwapHandler(config: CreateSwapHandlerConfig): Handler {
       ciphertext = enc.ciphertext;
       ephemeralPubkey = enc.ephemeralPubkey;
     } catch (err) {
-      logger.error({
-        event: 'swap_handler.encrypt_failed',
-        error: err instanceof Error ? err.message : String(err),
+      // toon#204: this branch used to end the error's life — the message was
+      // flattened into one log line the default no-op logger threw away, and
+      // the sender got a bare `T00 Internal error` indistinguishable from
+      // the issuer branch above. swap#137 could only *infer* it downstream
+      // ("a blanket T00 after a claim was issued can only be this"). Now the
+      // thrown value reaches `onFailure`, and `claimIssued: true` says
+      // plainly that value is committed but stranded.
+      return refuse({
+        stage: 'encrypt',
+        error: err,
+        logEvent: 'swap_handler.encrypt_failed',
+        level: 'error',
+        defaultRejection: {
+          code: SWAP_HANDLER_REJECT_CODES.INTERNAL,
+          message: SWAP_HANDLER_REJECT_MESSAGES.INTERNAL,
+        },
+        context: {
+          rate,
+          targetAmount,
+          claimIssued: true,
+          ...(claimId !== undefined && { claimId }),
+        },
       });
-      releaseReservation();
-      return ctx.reject('T00', 'Internal error');
     }
 
     // AC-11: packetId was reserved pre-issuance to close the concurrent
