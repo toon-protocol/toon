@@ -164,6 +164,13 @@ export type {
   ApplyRateParams,
   SwapHandlerLogger,
   RateQuote,
+  // toon#204 — caller-supplied refusal classification seam.
+  SwapHandlerFailure,
+  SwapHandlerFailureContext,
+  SwapHandlerFailureMapper,
+  SwapHandlerFailureStage,
+  SwapHandlerRejection,
+  SwapHandlerRejectResponse,
 } from './swap-handler.js';
 
 // Adaptive δ/W controller (issue #83, rolling-swap spec §6)
