@@ -18,6 +18,10 @@ name: Release
 # (they never turn green, so the Release PR stays BLOCKED forever). Attributing the
 # commits to the App — a trusted installed integration — lets its CI run without the
 # manual-approval gate. Fall back to github-actions[bot] only if the App is absent.
+#
+# The git identity above is only who the commit says it is; the CREDENTIAL that
+# pushes the branch is a separate thing, and it is set by `token:` on the checkout
+# step below. Both must be the App. See that step's comment.
 
 on:
   push:
@@ -54,6 +58,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # The App token, NOT the default GITHUB_TOKEN. changesets/action
+          # pushes `changeset-release/main` with the git credentials checkout
+          # persists, and checkout defaults that to GITHUB_TOKEN. A push made
+          # by GITHUB_TOKEN does not trigger workflows, so the Version Packages
+          # PR's `synchronize` event fired no CI at all and the required
+          # `CI OK` context could never appear — leaving the PR permanently
+          # BLOCKED (#207, #187, #179 each needed a manual close/reopen, whose
+          # `reopened` event is what actually ran CI). The PR itself could
+          # still be CREATED because creation goes through the env token
+          # below, which was already the App's — which is why `opened` was
+          # green and every later push was not.
+          # With the App as the push credential, the Release PR's pull_request
+          # events fire CI like any human push would.
+          token: ${{ steps.app-token.outputs.token || github.token }}
 
       - name: Configure git identity for changeset commits
         run: |
