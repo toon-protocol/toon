@@ -8,11 +8,13 @@ import {
   checkMeasurementCoverage,
   checkParallelismAssumption,
   checkPerformanceRegression,
+  checkRequiredJobsMeasured,
   checkSpeedRegression,
   computeJobDurationsSeconds,
   computeMaxDeviationFraction,
   PARALLELISM_CREATION_SKEW_TOLERANCE_SECONDS,
   PERFORMANCE_REGRESSION_TOLERANCE,
+  resolveExcludedJobNames,
   selectMeasurableJobs,
   SPEED_REGRESSION_TOLERANCE,
   type GateBaseline,
@@ -598,5 +600,145 @@ describe('checkParallelismAssumption', () => {
       expect(result.pass).toBe(true);
       expect(result.reason).toContain('skipped');
     }
+  });
+});
+
+// toon#216. The Solana settlement redemption proof is a ci.yml job that runs
+// only on change sets touching the settlement surface, and it is excluded from
+// the frozen figures by name. These two functions are what keep that exclusion
+// from becoming a hole in the ceiling.
+describe('resolveExcludedJobNames', () => {
+  const withExclusions: GateBaseline = {
+    ...baseline,
+    gateSpeed: {
+      ...baseline.gateSpeed,
+      excludedJobNames: ['Solana settlement redemption proof'],
+    },
+  };
+
+  it('unions the frozen baseline exclusions with the guard job passed in by the workflow', () => {
+    expect(resolveExcludedJobNames(withExclusions, 'Gate speed guard')).toEqual([
+      'Solana settlement redemption proof',
+      'Gate speed guard',
+    ]);
+  });
+
+  it('does not duplicate the guard job when the baseline already names it', () => {
+    const both: GateBaseline = {
+      ...baseline,
+      gateSpeed: {
+        ...baseline.gateSpeed,
+        excludedJobNames: ['Gate speed guard', 'Solana settlement redemption proof'],
+      },
+    };
+    expect(resolveExcludedJobNames(both, 'Gate speed guard')).toEqual([
+      'Gate speed guard',
+      'Solana settlement redemption proof',
+    ]);
+  });
+
+  it('still excludes the guard job when the baseline lists no exclusions', () => {
+    expect(resolveExcludedJobNames(baseline, 'Gate speed guard')).toEqual(['Gate speed guard']);
+  });
+
+  it('excludes nothing when neither source names anything', () => {
+    expect(resolveExcludedJobNames(baseline, undefined)).toEqual([]);
+    expect(resolveExcludedJobNames(baseline, '')).toEqual([]);
+  });
+});
+
+describe('checkRequiredJobsMeasured', () => {
+  const required: GateBaseline = {
+    ...baseline,
+    gateSpeed: {
+      ...baseline.gateSpeed,
+      requiredMeasuredJobNames: ['build', 'Devbox Environment Validation'],
+    },
+  };
+
+  it('passes when every baselined job was measured', () => {
+    const result = checkRequiredJobsMeasured(
+      ['build', 'Devbox Environment Validation', 'no-op merge guard'],
+      required,
+    );
+    expect(result.pass).toBe(true);
+  });
+
+  // The failure this exists for: an exclusion (or a rename, or a job that
+  // stopped running) quietly takes the expensive job out of the measurement,
+  // and the remaining cheap jobs sail under a ceiling captured on all of them.
+  it('fails when an excluded/renamed/absent job takes gated work out of the measurement', () => {
+    const result = checkRequiredJobsMeasured(['Devbox Environment Validation'], required);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('build');
+    expect(result.reason).toContain('recapture');
+  });
+
+  it('fails loudly when the baseline carries no required list at all', () => {
+    expect(checkRequiredJobsMeasured(['build'], baseline).pass).toBe(false);
+    const empty: GateBaseline = {
+      ...baseline,
+      gateSpeed: { ...baseline.gateSpeed, requiredMeasuredJobNames: [] },
+    };
+    expect(checkRequiredJobsMeasured(['build'], empty).pass).toBe(false);
+  });
+});
+
+describe("the committed baseline's measured-job bookkeeping", () => {
+  it('requires the two jobs its frozen figures were captured on', () => {
+    expect(committed.gateSpeed.requiredMeasuredJobNames).toEqual([
+      'build',
+      'Devbox Environment Validation',
+    ]);
+  });
+
+  it('excludes the guard job and the conditional Solana proof, and nothing else', () => {
+    expect(committed.gateSpeed.excludedJobNames).toEqual([
+      'Gate speed/performance no-regression guard',
+      'Solana settlement redemption proof',
+    ]);
+  });
+
+  // The one combination that would defeat the ceiling silently: excluding a job
+  // the frozen numbers were measured on. Belt to checkRequiredJobsMeasured's
+  // braces -- that check fires in CI, this one fires on the committed file.
+  it('never excludes a job it also requires to be measured', () => {
+    const excluded = committed.gateSpeed.excludedJobNames ?? [];
+    const requiredNames = committed.gateSpeed.requiredMeasuredJobNames ?? [];
+    expect(requiredNames.filter((name) => excluded.includes(name))).toEqual([]);
+  });
+
+  it('replays a real run: build + devbox + no-op-merge measured, guard and proof excluded', () => {
+    // Job rows as the API returned them for run 32028945650 (push, 3590bb3),
+    // plus a proof job at its measured 94s. The proof and the guard must drop
+    // out; what remains must still be inside both frozen ceilings.
+    const apiJobs = [
+      { name: 'build', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:17:20Z', created_at: '2026-08-17T12:15:28Z' },
+      { name: 'Devbox Environment Validation', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:16:18Z', created_at: '2026-08-17T12:15:28Z' },
+      { name: 'no-op merge guard', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:15:36Z', created_at: '2026-08-17T12:15:28Z' },
+      { name: 'Solana settlement redemption proof', started_at: '2026-08-17T12:17:22Z', completed_at: '2026-08-17T12:18:56Z', created_at: '2026-08-17T12:17:20Z' },
+      { name: 'Gate speed/performance no-regression guard', started_at: '2026-08-17T12:17:24Z', completed_at: '2026-08-17T12:17:56Z', created_at: '2026-08-17T12:17:20Z' },
+    ];
+
+    const measured = selectMeasurableJobs(apiJobs, {
+      excludeNames: resolveExcludedJobNames(
+        committed,
+        'Gate speed/performance no-regression guard',
+      ),
+    });
+    expect(measured.map((job) => job.name)).toEqual([
+      'build',
+      'Devbox Environment Validation',
+      'no-op merge guard',
+    ]);
+
+    const durations = computeJobDurationsSeconds(measured);
+    expect(checkRequiredJobsMeasured(Object.keys(durations.byName), committed).pass).toBe(true);
+    expect(checkSpeedRegression(durations.longestJobSeconds, committed).pass).toBe(true);
+    expect(checkPerformanceRegression(durations.sumRunnerSeconds, committed).pass).toBe(true);
+    // Without the exclusion, the proof's `needs: build` creation lag would also
+    // have tripped the parallelism check -- the second reason it cannot simply
+    // be folded into the measured set.
+    expect(checkParallelismAssumption(durations).pass).toBe(true);
   });
 });
