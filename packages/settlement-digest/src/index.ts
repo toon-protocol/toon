@@ -16,7 +16,12 @@
  */
 
 // Byte helpers.
-export { hexToBytes, bigintToBytes32BE, concatBytes } from './hashes.js';
+export {
+  hexToBytes,
+  bigintToBytes32BE,
+  bigintToBytes8LE,
+  concatBytes,
+} from './hashes.js';
 
 // EVM v2 EIP-712 digest + exported typehash/domain constants.
 export {
@@ -30,8 +35,12 @@ export {
   COOP_CLOSE_TYPEHASH,
 } from './hashes.js';
 
-// Non-EVM message digests.
+// Non-EVM message digests. `balanceProofMessageSolana` is the on-chain-verifiable
+// Solana balance proof; `balanceProofHashSolana` is the legacy hash no deployed
+// program verifies (toon#214) and is retained for recognition only.
 export {
+  balanceProofMessageSolana,
+  SOLANA_BALANCE_PROOF_MESSAGE_SIZE,
   balanceProofHashSolana,
   minaHashToField,
   balanceProofFieldsMina,

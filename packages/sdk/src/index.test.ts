@@ -176,6 +176,8 @@ describe('@toon-protocol/sdk public API exports', () => {
       'balanceProofHashEvm',
       'coopCloseHashEvm',
       'eip712DomainSeparatorEvm',
+      'balanceProofMessageSolana',
+      'patchSolanaRecentBlockhash',
       'balanceProofHashSolana',
       'bigintToBytes32BE',
       'concatBytes',

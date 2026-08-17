@@ -260,6 +260,12 @@ export {
   balanceProofHashEvm,
   coopCloseHashEvm,
   eip712DomainSeparatorEvm,
+  // toon#214: `balanceProofMessageSolana` is the Solana balance proof the
+  // deployed program verifies; `patchSolanaRecentBlockhash` is what a submitter
+  // needs to make a Solana bundle broadcastable. `balanceProofHashSolana` is the
+  // legacy digest no program checks, kept for recognition only.
+  balanceProofMessageSolana,
+  patchSolanaRecentBlockhash,
   balanceProofHashSolana,
   balanceProofFieldsMina,
   minaHashToField,

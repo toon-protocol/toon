@@ -11,12 +11,19 @@
  *
  * Coverage:
  *   - Solana: build an `AccumulatedClaim` balance-proof envelope, sign the
- *     shared `balanceProofHashSolana` message with Ed25519 (deterministic test
- *     key), assert the envelope shape (chain discriminator `solana`, 64-byte
+ *     shared `balanceProofMessageSolana` message with Ed25519 (deterministic
+ *     test key), assert the envelope shape (chain discriminator `solana`, 64-byte
  *     Ed25519 signature in `claimBytes`, channelId/cumulativeAmount/nonce/
  *     recipient present) and round-trip it through `verifyEd25519Signature`.
- *     Then assert `buildSolanaSettlementTx` emits a `SettlementBundle` with
- *     `chainKind: 'solana'` and the connector-consumed metadata.
+ *     Then assert `buildSolanaSettlementTx` emits a `SettlementBundle` whose
+ *     `unsignedTxBytes` carry the encoding connector's own
+ *     `packages/solana-program` accepts — the discriminator, the field order and
+ *     the out-of-band Ed25519 precompile instruction, decoded field by field.
+ *
+ *     A sign -> verify round-trip alone is a CLOSED LOOP and is what let toon#214
+ *     hide: the SDK signed and verified a `sha256(...)` digest no deployed
+ *     program has ever checked. The byte-level assertions below are the half that
+ *     points OUT of this repo, at constants copied from the program source.
  *   - Mina: build the Swap-format claim envelope by signing the shared
  *     `balanceProofFieldsMina` field-element message with `mina-signer`
  *     (`signFields`), assert the envelope shape (chain discriminator `mina`,
@@ -44,11 +51,15 @@ import { ed25519 } from '@noble/curves/ed25519.js';
 import type { SwapPair } from '@toon-protocol/core';
 
 import type { AccumulatedClaim } from '../../src/settlement/accumulated-claim.js';
-import { base58Encode, balanceProofHashSolana } from '../../src/index.js';
+import { base58Encode, base58Decode } from '../../src/index.js';
+import { balanceProofMessageSolana } from '../../src/settlement/hashes.js';
 import { balanceProofFieldsMina } from '../../src/settlement/hashes.js';
 import {
   verifyEd25519Signature,
   buildSolanaSettlementTx,
+  SOLANA_CLAIM_FROM_CHANNEL_DISCRIMINATOR,
+  SOLANA_ED25519_PROGRAM_ID,
+  SOLANA_INSTRUCTIONS_SYSVAR_ID,
 } from '../../src/settlement/solana.js';
 import {
   verifyMinaSignature,
@@ -92,9 +103,9 @@ function solanaSigner(): { privateKey: Uint8Array; signerAddress: string } {
 
 /**
  * Construct a signed Solana balance-proof envelope (`AccumulatedClaim`) the way
- * the connector's settlement path consumes it: a 64-byte Ed25519 signature over
- * `balanceProofHashSolana(channelId, cumulativeAmount, nonce, recipient)`,
- * carried as `claimBytes`.
+ * the deployed program consumes it: a 64-byte Ed25519 signature over the raw
+ * 48-byte `channel_pda || nonce(8 LE) || transferred_amount(8 LE)` message
+ * (`balanceProofMessageSolana`), carried as `claimBytes`.
  */
 function signedSolanaClaim(): {
   claim: AccumulatedClaim;
@@ -106,13 +117,12 @@ function signedSolanaClaim(): {
   const cumulativeAmount = '500';
   const nonce = '1';
 
-  const msgHash = balanceProofHashSolana(
-    channelId,
-    BigInt(cumulativeAmount),
+  const message = balanceProofMessageSolana(
+    base58Decode(channelId),
     BigInt(nonce),
-    recipient
+    BigInt(cumulativeAmount)
   );
-  const sig = new Uint8Array(ed25519.sign(msgHash, privateKey));
+  const sig = new Uint8Array(ed25519.sign(message, privateKey));
 
   const claim: AccumulatedClaim = {
     packetIndex: 0,
@@ -201,6 +211,87 @@ describe(
       expect(bundle.nonce).toBe('1');
       expect(bundle.recipient).toBe(claim.recipient);
       expect(bundle.unsignedTxBytes.length).toBeGreaterThan(0);
+    });
+
+    it('the emitted tx matches packages/solana-program byte for byte (toon#214)', () => {
+      const { claim, signerAddress } = signedSolanaClaim();
+      const programId = base58Encode(fill32(0x66));
+      const { unsignedTxBytes } = buildSolanaSettlementTx(
+        claim,
+        { address: signerAddress, programId },
+        claim.recipient!,
+        0,
+        1
+      );
+
+      // --- header + account keys (processor.rs:664-675) ---
+      // 1 signer (the fee payer), 0 readonly signers, 4 readonly non-signers.
+      expect(Array.from(unsignedTxBytes.slice(0, 3))).toEqual([1, 0, 4]);
+      expect(unsignedTxBytes[3]).toBe(6); // short_vec: 6 account keys
+      const keyAt = (i: number): string =>
+        base58Encode(unsignedTxBytes.slice(4 + i * 32, 4 + (i + 1) * 32));
+      expect(keyAt(0)).toBe(claim.recipient); // fee payer, writable signer
+      expect(keyAt(1)).toBe(claim.channelId); // channel PDA, writable
+      expect(keyAt(2)).toBe(signerAddress); // claimer, readonly
+      expect(keyAt(3)).toBe(SOLANA_INSTRUCTIONS_SYSVAR_ID);
+      expect(keyAt(4)).toBe(SOLANA_ED25519_PROGRAM_ID);
+      expect(keyAt(5)).toBe(programId);
+
+      // --- blockhash placeholder + instruction count ---
+      const blockhashOffset = 4 + 6 * 32;
+      expect(
+        Array.from(unsignedTxBytes.slice(blockhashOffset, blockhashOffset + 32))
+      ).toEqual(Array.from(new Uint8Array(32)));
+      const ixCountOffset = blockhashOffset + 32;
+      expect(unsignedTxBytes[ixCountOffset]).toBe(2);
+
+      // --- instruction 0: the Ed25519 precompile, no accounts, 160B data ---
+      let cursor = ixCountOffset + 1;
+      expect(unsignedTxBytes[cursor]).toBe(4); // program id index -> Ed25519
+      expect(unsignedTxBytes[cursor + 1]).toBe(0); // no accounts
+      // 160 = 16 header/offsets + 32 pubkey + 64 signature + 48 message,
+      // short_vec-encoded across two bytes.
+      expect(Array.from(unsignedTxBytes.slice(cursor + 2, cursor + 4))).toEqual(
+        [0xa0, 0x01]
+      );
+      const edData = unsignedTxBytes.slice(cursor + 4, cursor + 4 + 160);
+      expect(edData[0]).toBe(1); // num_signatures
+      expect(
+        Array.from(edData.slice(48, 112)) // signature
+      ).toEqual(Array.from(claim.claimBytes));
+      expect(base58Encode(edData.slice(16, 48))).toBe(signerAddress); // pubkey
+      expect(Array.from(edData.slice(112, 160))).toEqual(
+        Array.from(
+          balanceProofMessageSolana(base58Decode(claim.channelId!), 1n, 500n)
+        )
+      );
+
+      // --- instruction 1: ClaimFromChannel ---
+      cursor = cursor + 4 + 160;
+      expect(unsignedTxBytes[cursor]).toBe(5); // program id index
+      expect(unsignedTxBytes[cursor + 1]).toBe(4); // four accounts…
+      // …in the positional order processor.rs reads them: fee_payer, claimer,
+      // channel_pda, instructions sysvar.
+      expect(Array.from(unsignedTxBytes.slice(cursor + 2, cursor + 6))).toEqual(
+        [0, 2, 1, 3]
+      );
+      expect(unsignedTxBytes[cursor + 6]).toBe(24); // 8 + 8 + 8
+      const claimData = unsignedTxBytes.slice(cursor + 7, cursor + 31);
+      // instruction.rs:12 CLAIM_FROM_CHANNEL — a flat tag, not an Anchor hash.
+      expect(Array.from(claimData.slice(0, 8))).toEqual([
+        6, 0, 0, 0, 0, 0, 0, 0,
+      ]);
+      expect(Array.from(claimData.slice(0, 8))).toEqual(
+        Array.from(SOLANA_CLAIM_FROM_CHANNEL_DISCRIMINATOR)
+      );
+      // nonce (1) then transferred_amount (500), both u64 LE.
+      expect(Array.from(claimData.slice(8, 16))).toEqual([
+        1, 0, 0, 0, 0, 0, 0, 0,
+      ]);
+      expect(Array.from(claimData.slice(16, 24))).toEqual([
+        0xf4, 0x01, 0, 0, 0, 0, 0, 0,
+      ]);
+      expect(unsignedTxBytes.length).toBe(cursor + 31);
     });
   }
 );

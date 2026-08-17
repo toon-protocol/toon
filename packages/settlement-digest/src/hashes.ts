@@ -278,14 +278,83 @@ export function coopCloseHashEvm(
 }
 
 /**
- * Compute the Solana balance-proof message hash:
+ * Encode a non-negative bigint as 8-byte little-endian — the width and
+ * endianness every `u64` field of the native Solana payment-channel program
+ * uses, both in instruction data and in its account layout. Throws if negative
+ * or above `2^64 - 1`.
+ */
+export function bigintToBytes8LE(x: bigint): Uint8Array {
+  if (x < 0n) {
+    throw new Error('bigint must be non-negative for balance-proof encoding');
+  }
+  if (x > 0xffffffffffffffffn) {
+    throw new Error('bigint exceeds 64 bits');
+  }
+  const out = new Uint8Array(8);
+  let v = x;
+  for (let i = 0; i < 8; i++) {
+    out[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return out;
+}
+
+/** Byte length of a Solana balance-proof message: 32 + 8 + 8. */
+export const SOLANA_BALANCE_PROOF_MESSAGE_SIZE = 48;
+
+/**
+ * Build the 48-byte Solana balance-proof message that is actually verifiable
+ * on chain:
+ *   channelPda(32) || nonce(8 LE) || transferredAmount(8 LE)
+ *
+ * This is the message the deployed native payment-channel program's Ed25519
+ * precompile check reconstructs and compares byte-for-byte before it will
+ * accept a `ClaimFromChannel` — see connector
+ * `packages/solana-program/src/processor.rs:900-910` (`expected_message`) and
+ * its two existing client-side twins, connector
+ * `crates/connector-settlement-solana/src/wire.rs:100-110`
+ * (`balance_proof_message`) and toon-client
+ * `packages/client/src/channel/solana-payment-channel.ts`
+ * (`buildBalanceProofMessage`).
+ *
+ * Note what it does NOT bind: the mint, the recipient of the eventual payout,
+ * and any hash of the above. The signature is over these 48 RAW bytes — the
+ * precompile verifies the message itself, not a digest of it — and the channel
+ * PDA is what ties the proof to a pair of participants and a mint.
+ *
+ * @stable — signer, off-chain verifier and the on-chain program all depend on
+ * this exact byte layout.
+ */
+export function balanceProofMessageSolana(
+  channelPda: Uint8Array,
+  nonce: bigint,
+  transferredAmount: bigint
+): Uint8Array {
+  if (channelPda.length !== 32) {
+    throw new Error(
+      `Solana channel PDA must be 32 bytes (got ${channelPda.length})`
+    );
+  }
+  return concatBytes(
+    channelPda,
+    bigintToBytes8LE(nonce),
+    bigintToBytes8LE(transferredAmount)
+  );
+}
+
+/**
+ * Compute the LEGACY Solana balance-proof message hash:
  *   sha256(utf8(channelId) || cumulativeAmount(32BE) || nonce(32BE) || utf8(recipient))
  *
- * `channelId` and `recipient` are base58-encoded strings (ASCII-subset of
- * UTF-8). This hash is what `SolanaPaymentChannelSigner.signBalanceProof`
- * signs and what `verifyEd25519Signature` verifies against.
- *
- * @stable — signer and verifier depend on the exact byte layout.
+ * @deprecated NOT VERIFIABLE ON CHAIN. No deployed TOON program verifies this
+ * digest: the native Solana payment-channel program checks an Ed25519 signature
+ * over the raw 48 bytes of {@link balanceProofMessageSolana} instead, so a claim
+ * signed over this hash can only ever be checked off-chain and can never be
+ * redeemed (toon#214). Kept as a published export (it shipped in
+ * `@toon-protocol/core@3.0.0` / `@toon-protocol/sdk@3.0.0`) with its golden
+ * vectors intact so a legacy claim can still be recognised, and used by the
+ * settlement path NOWHERE. New signers and verifiers must use
+ * {@link balanceProofMessageSolana}.
  */
 export function balanceProofHashSolana(
   channelId: string,
