@@ -335,10 +335,13 @@ export function balanceProofMessageSolana(
       `Solana channel PDA must be 32 bytes (got ${channelPda.length})`
     );
   }
+  // DRILL (toon#216): the toon#214 defect, reintroduced on purpose -- the two
+  // 8-byte LE fields swapped, so the message the SDK signs is no longer the
+  // message the on-chain program verifies. NOT FOR MERGE.
   return concatBytes(
     channelPda,
-    bigintToBytes8LE(nonce),
-    bigintToBytes8LE(transferredAmount)
+    bigintToBytes8LE(transferredAmount),
+    bigintToBytes8LE(nonce)
   );
 }
 
