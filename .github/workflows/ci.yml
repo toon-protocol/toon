@@ -8,6 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # `gh api` reads this run's change set for the settlement-surface decision
+    # in the last step; every other step here is checkout + pnpm. Declared
+    # explicitly rather than inherited, as gate-regression-guard already does.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      # Consumed by the solana-settlement-proof job's `if:` AND asserted by
+      # ci-ok, which pairs this decision with that job's result so a skipped
+      # proof can only ever mean "a decision that RAN said the surface was
+      # untouched" (toon#216).
+      settlement_surface_touched: ${{ steps.settlement-surface.outputs.touched }}
     steps:
       - uses: actions/checkout@v7
 
@@ -106,6 +118,51 @@ jobs:
           pnpm --filter @toon-protocol/sdk test:integration tests/integration/connector-contract.test.ts tests/integration/connector-contract.multichain.test.ts
           pnpm --filter @toon-protocol/sdk exec tsc -p tests/integration/tsconfig.json
 
+      # Decides whether the solana-settlement-proof job below must run for this
+      # change set (toon#216). It lives as a step in an existing job rather than
+      # a job of its own on purpose: a new always-on job costs ~10 runner-seconds
+      # against a summed-runner-second ceiling whose worst recent run sits ~8%
+      # under it, and this costs about a second inside an install this job has
+      # already paid for.
+      #
+      # The decision is a tested module (.sandcastle/settlement-surface.ts), not
+      # a workflow `paths:` filter, because a filter cannot gate a JOB, cannot
+      # fail safe, and cannot be unit-tested. Any failure here -- a `gh api`
+      # error, a missing change set -- fails this step and therefore `CI OK`;
+      # an UNENUMERABLE change set decides `true` and runs the proof. There is
+      # no path on which "we could not tell" silently skips it.
+      - name: Decide whether this change touches the Solana settlement surface
+        id: settlement-surface
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          CHANGED="${RUNNER_TEMP:-/tmp}/ci-changed-files.txt"
+          case "$EVENT_NAME" in
+            pull_request)
+              gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename' > "$CHANGED"
+              ;;
+            push)
+              # An all-zero `before` is a branch's first push: there is no
+              # previous commit to diff against, so fall through to the
+              # fail-safe sentinel rather than guessing.
+              if [ -z "${PUSH_BEFORE:-}" ] || [ "$PUSH_BEFORE" = "0000000000000000000000000000000000000000" ]; then
+                echo '__UNKNOWN__' > "$CHANGED"
+              else
+                gh api "repos/$REPO/compare/$PUSH_BEFORE...$PUSH_AFTER" --paginate --jq '.files[]?.filename' > "$CHANGED"
+              fi
+              ;;
+            *)
+              echo '__UNKNOWN__' > "$CHANGED"
+              ;;
+          esac
+          npx tsx .sandcastle/settlement-surface-cli.ts "$CHANGED"
+
   devbox-validate:
     name: Devbox Environment Validation
     runs-on: ubuntu-latest
@@ -195,18 +252,130 @@ jobs:
   no-op-merge:
     uses: toon-protocol/toon-meta/.github/workflows/empty-pr-guard.yml@main
 
+  # Solana settlement redemption proof (toon#215), moved here from its own
+  # stand-alone workflow and wired into the aggregate by toon#216. That
+  # workflow is deleted in the same commit -- running both would put two
+  # identical proof jobs on every settlement PR.
+  #
+  # WHY IT MOVED: `CI OK` is this repo's only required status context, so a
+  # proof outside the aggregate blocks nothing. It could go red, or stop
+  # running, and a merge would still go through. The defect it guards
+  # (toon#214: a claim signed over a message nothing on chain verifies)
+  # silently produced bundles that could never redeem, which makes this the
+  # guard least able to afford being optional.
+  #
+  # WHY IT IS CONDITIONAL: ~90s of runner time on every PR, for a proof that
+  # can only speak about the settlement surface. It runs when the change set
+  # touches that surface, decided by the `build` job's last step; on every
+  # other PR it is `skipped` and ci-ok requires that skip to be paired with a
+  # decision of `false`. It is NOT folded into the frozen
+  # .sandcastle/gate-baseline.json figures -- see that file's
+  # gatePerformance.conditionalJobs.solanaSettlementProof for the measured
+  # cost (89-94s) and why excluding it beats raising the ceiling 55%.
+  #
+  # `timeout-minutes` is this job's own cost gate, since the guard job finishes
+  # before this one does and cannot measure it. A hung validator fails the job,
+  # and therefore `CI OK`, in minutes.
+  solana-settlement-proof:
+    name: Solana settlement redemption proof
+    needs: [build]
+    # `needs: [build]` already requires build to have succeeded; the surface
+    # decision is the additional condition. A false here reports `skipped`,
+    # which ci-ok accepts ONLY against a `false` decision.
+    if: needs.build.outputs.settlement_surface_touched == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 8.15.9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      # Restored BEFORE the installer so a warm cache skips the download
+      # entirely. Keyed on the exact version — a version bump must miss.
+      - name: Cache Solana CLI
+        id: solana-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/solana
+          key: solana-cli-${{ runner.os }}-v2.1.21
+
+      # v2.1.21, NOT the v3.x line, and load-bearing rather than conservatism:
+      # v3's `solana-test-validator` hard-requires io_uring, which is unavailable
+      # under some sandboxed runners (connector's and swap's gates pin the same
+      # version for the same reason). It also matches the `=2.1.0`
+      # solana-program pin the vendored `payment_channel.so` was built against.
+      - name: Install Solana CLI
+        if: steps.solana-cli-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.21/install)"
+
+      - name: Put Solana CLI on PATH
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      # Fail here with a clear message rather than 90s later inside a test.
+      - name: Assert Solana toolchain
+        run: |
+          solana --version
+          solana-test-validator --version
+
+      - run: pnpm install --no-frozen-lockfile
+
+      # The integration config imports the SDK from source, but core /
+      # settlement-digest resolve through their dist entry points.
+      - run: pnpm -r build
+
+      # SDK_REQUIRE_SOLANA=1 turns "validator not available" from a skip into a
+      # hard failure. Without it this job could report success having run
+      # nothing, which is the exact defect swap#106/#160 found twice.
+      - name: Redeem a claim on a local validator
+        env:
+          SDK_REQUIRE_SOLANA: '1'
+          NO_COLOR: '1'
+          FORCE_COLOR: '0'
+        run: |
+          pnpm --filter @toon-protocol/sdk test:integration \
+            tests/integration/solana-claim-redeem.integration.test.ts 2>&1 \
+            | tee /tmp/solana-proof.log
+
+      # A green tick is not evidence that anything ran. The suite must have
+      # collected its full complement AND printed the on-chain state transition
+      # its successful redemption logs.
+      - name: Assert the proof actually redeemed something on chain
+        run: |
+          set -euo pipefail
+          sed -r 's/\x1b\[[0-9;]*[a-zA-Z]//g' /tmp/solana-proof.log > /tmp/solana-proof.plain
+          if ! grep -qE 'Tests +5 passed \(5\)' /tmp/solana-proof.plain; then
+            echo "FAIL: expected 5 passing tests in the Solana redemption proof."
+            echo "A test that stopped running is the failure mode this job exists to prevent."
+            exit 1
+          fi
+          if ! grep -q '\[solana-redeem\] tx ' /tmp/solana-proof.plain; then
+            echo "FAIL: no on-chain redemption was logged — nothing moved a channel account."
+            exit 1
+          fi
+          grep '\[solana-redeem\]' /tmp/solana-proof.plain
+
   ci-ok:
     name: CI OK
     runs-on: ubuntu-latest
-    needs: [build, devbox-validate, gate-regression-guard, no-op-merge]
+    needs: [build, devbox-validate, gate-regression-guard, no-op-merge, solana-settlement-proof]
     if: always()
     steps:
       # Fleet-wide aggregate required check per toon-meta#279: this single job
       # is the repo's required status, so a skipped or cancelled gating job
-      # must never read as a pass. All three needed jobs are expected to run
-      # on every run of this workflow -- gate-regression-guard only skips when
-      # a dependency failed, which must fail the aggregate anyway. Anything
-      # other than 'success' (failure, cancelled, skipped) fails this job.
+      # must never read as a pass. All four unconditional jobs are expected to
+      # run on every run of this workflow -- gate-regression-guard only skips
+      # when a dependency failed, which must fail the aggregate anyway.
+      # Anything other than 'success' (failure, cancelled, skipped) fails this
+      # job. The conditional Solana proof is evaluated separately below.
       - name: Require every gating job to have succeeded
         env:
           BUILD_RESULT: ${{ needs.build.result }}
@@ -222,4 +391,46 @@ jobs:
             echo "CI not OK: at least one gating job did not succeed (skipped/cancelled counts as failure)."
             exit 1
           fi
-          echo "CI OK: all gating jobs succeeded."
+          echo "CI OK: all unconditional gating jobs succeeded."
+
+      # The conditional half (toon#216). A bare `needs:` on a conditional job
+      # blocks NOTHING: a job skipped by its own `if:` reports `skipped`, and a
+      # required check that reads a skip as a pass is not a gate. So the skip is
+      # only accepted against the decision that produced it -- `build`'s
+      # settlement-surface output, which comes from a step that RAN.
+      #
+      # Three outcomes, no fourth:
+      #   decision true  -> the proof must have SUCCEEDED. failure, cancelled
+      #                     and skipped all fail the aggregate.
+      #   decision false -> skipped (normal) or success (someone re-ran it by
+      #                     hand) are both fine.
+      #   anything else  -> `build` succeeded without emitting a decision, i.e.
+      #                     the wiring is broken. Fail: an unreadable decision
+      #                     must never be the reason the proof was skipped.
+      - name: Require the Solana settlement proof for changes that touch it
+        env:
+          SETTLEMENT_TOUCHED: ${{ needs.build.outputs.settlement_surface_touched }}
+          PROOF_RESULT: ${{ needs.solana-settlement-proof.result }}
+        run: |
+          echo "settlement surface touched: '$SETTLEMENT_TOUCHED'"
+          echo "solana-settlement-proof: $PROOF_RESULT"
+          case "$SETTLEMENT_TOUCHED" in
+            true)
+              if [ "$PROOF_RESULT" != "success" ]; then
+                echo "CI not OK: this change touches the Solana settlement surface, so the redemption proof must pass, and it reported '$PROOF_RESULT' (skipped/cancelled counts as failure)."
+                exit 1
+              fi
+              echo "CI OK: the Solana settlement redemption proof passed on a change that touches it."
+              ;;
+            false)
+              if [ "$PROOF_RESULT" != "skipped" ] && [ "$PROOF_RESULT" != "success" ]; then
+                echo "CI not OK: the Solana settlement proof reported '$PROOF_RESULT'."
+                exit 1
+              fi
+              echo "CI OK: this change touches no Solana settlement surface; the proof was correctly '$PROOF_RESULT'."
+              ;;
+            *)
+              echo "CI not OK: the settlement-surface decision reported '$SETTLEMENT_TOUCHED', which is neither 'true' nor 'false' — the build job succeeded without deciding whether the Solana proof was required, so its skip cannot be trusted."
+              exit 1
+              ;;
+          esac

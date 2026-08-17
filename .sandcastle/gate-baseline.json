@@ -27,7 +27,11 @@
     "sampleSize": 5,
     "regressionTolerance": 0.2,
     "regressionToleranceRationale": "toon#153, corrected by toon#173. The 50% band inherited from the retired span metric (toon#151) was sized for a queue-inflated quantity that could swing tens of seconds run-to-run; averageLongestJobDurationSeconds is a job duration and is far steadier. toon#173 re-recaptured sampleRuns to include pull_request-gated runs (see timingsRecaptureMethodUpdate) after discovering the #153 rationale's push-only sample had missed the run that actually gated #157. Over the current 5 sampleRuns, longestJobSeconds (104, 120, 115, 115, 116) deviate at most 8.8% from the new 114.0s mean (observedMaxDeviationFraction; the 104s low outlier). 20% is roughly 2.3x that observed spread -- tighter than the 3x toon#153 claimed, but still enough that no sampleRun would false-FAIL -- while still catching a genuine 40% compute regression (114.0s -> 159.6s exceeds the 136.8s allowance). Real headroom above the top observed sample (120s) is ~14.0%, under the ~15% comfort margin toon#173 asked to flag rather than silently tolerate.",
-    "observedMaxDeviationFraction": 0.0877192982
+    "observedMaxDeviationFraction": 0.0877192982,
+    "requiredMeasuredJobNames": ["build", "Devbox Environment Validation"],
+    "requiredMeasuredJobNamesRationale": "toon#216. These are the jobs the frozen figures above were captured on, asserted present in every measurement by checkRequiredJobsMeasured. The list is a FLOOR, not the full measured set: any other job of the run that has finished by the time the guard reads the API is measured too and counts against both ceilings (today that is `no-op merge guard`, ~3-6s, added by toon#209 after these figures were captured -- unbaselined but well inside the 15% band, worth recapturing next time the baseline is refreshed). Its purpose is the inverse of checkMeasurementCoverage: coverage catches 'nothing was measured', this catches 'the expensive jobs quietly stopped being measured' -- an exclusion that grew a gated job, a rename that orphaned the baseline, or a job that stopped running.",
+    "excludedJobNames": ["Gate speed/performance no-regression guard", "Solana settlement redemption proof"],
+    "excludedJobNamesRationale": "toon#216. Job display names dropped from the measurement, declared here rather than in a ci.yml env var so widening what the ceiling ignores is a reviewed diff to the frozen baseline. (1) `Gate speed/performance no-regression guard` -- the guard observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API (also passed in via GATE_GUARD_SELF_JOB_NAME). (2) `Solana settlement redemption proof` -- see gatePerformance.conditionalJobs.solanaSettlementProof for the measured cost and the full argument. Neither exclusion can hide gated work: dropping a name in requiredMeasuredJobNames fails checkRequiredJobsMeasured, and .sandcastle/settlement-surface.test.ts pins the proof's spelling here to the `name:` ci.yml declares so a rename cannot leave a dangling exclusion."
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
@@ -40,6 +44,19 @@
       "observedMaxDeviationFraction": 0.0318627451,
       "billedMinutes": 0,
       "billedMinutesNote": "Public repo — GitHub-hosted Actions minutes are free; the Actions API always reports billable.UBUNTU.total_ms=0 for this repo regardless of actual runner time."
+    },
+    "conditionalJobs": {
+      "_docs": "toon#216. Jobs in ci.yml that run only for some change sets, so they are NOT part of the always-on figures above and are excluded from them by name (gateSpeed.excludedJobNames). Excluded is not un-gated: each one records its measured cost here and carries a `timeout-minutes` wall-clock cap in ci.yml, which is a hard failure of the job and therefore of the `CI OK` aggregate.",
+      "solanaSettlementProof": {
+        "ciYmlJobId": "solana-settlement-proof",
+        "jobDisplayName": "Solana settlement redemption proof",
+        "runsWhen": "the change set touches the Solana settlement surface — .sandcastle/settlement-surface.ts, decided per-run in the `build` job",
+        "measuredJobSeconds": [94, 89],
+        "measuredFrom": "the two real runs of the pre-toon#216 stand-alone workflow: run 32027376316 (pull_request, 08a6ef4, COLD Solana-CLI cache — the 30s installer ran) = 94s, run 32027610213 (push, bf74fac, warm cache) = 89s",
+        "timeoutMinutes": 10,
+        "timeoutMinutesRationale": "~6x the measured 89-94s. Loose enough that a slow runner or a sluggish validator boot cannot flake the gate, tight enough that a hung `solana-test-validator` fails in minutes instead of burning the 360-minute default. Raising it is a visible diff here and in ci.yml.",
+        "whyNotFoldedIntoTheCeiling": "Folding a 90s job into the always-on figures would have meant raising averagePerRunSeconds from 163.2s to ~253s (+55%) — a ceiling that no longer describes the common path, re-baselined against numbers taken from two runs rather than the documented 5-run sample. The longest-job figure would have survived (89-94s is under the 136.8s allowance) but the summed-runner-second figure would not, and `needs: build` also skews job creation past checkParallelismAssumption's 15s tolerance. Excluding it keeps both frozen figures measuring exactly the jobs they were captured on, and puts this job's cost under its own appropriate threshold instead."
+      }
     },
     "cacheHitRate": {
       "pnpmDependencyCache": "4/5 (80%) — action: actions/setup-node@v7 with cache: pnpm. The one miss was the run whose pnpm-lock.yaml changed, which correctly invalidates the cache key.",

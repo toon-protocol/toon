@@ -26,6 +26,17 @@ export interface GateBaseline {
     // committed sampleRuns and fail if this drifts out of sync with them --
     // the failure mode that shipped a stale 3x/4x claim in toon#153.
     observedMaxDeviationFraction?: number;
+    // Job display names the guard must NOT fold into the baselined figures,
+    // declared HERE rather than in a workflow env var so that changing what
+    // the ceiling covers is a diff to the frozen baseline and not a quiet
+    // edit to ci.yml. See checkRequiredJobsMeasured for why this cannot be
+    // used to exclude the gate's real work.
+    excludedJobNames?: readonly string[];
+    // Job display names that MUST appear in the measurement. Pairs with
+    // excludedJobNames: an exclusion that hides gated work makes one of these
+    // go missing, and the guard fails instead of measuring a cheaper run than
+    // the one that actually executed.
+    requiredMeasuredJobNames?: readonly string[];
   };
   gatePerformance: {
     runnerMinutes: {
@@ -276,6 +287,62 @@ export function computeJobDurationsSeconds(jobs: CiJobTiming[]): JobDurations {
     totalWallClockSeconds,
     totalQueueSeconds,
     maxCreationSkewSeconds,
+  };
+}
+
+// The set of job names the guard drops from the measurement: the baseline's
+// frozen `excludedJobNames`, plus the guard's own job (passed in from the
+// workflow, since only the workflow knows what it called itself).
+//
+// Exclusions exist because not every job in a ci.yml run is part of the WORK
+// the frozen figures were captured on -- the guard's own observing job never
+// was, and neither is a conditional deep-integration proof that runs on a
+// minority of PRs and carries its own wall-clock cap. What they must never
+// become is a way to move real gate work out of the ceiling, which is what
+// checkRequiredJobsMeasured checks.
+export function resolveExcludedJobNames(baseline: GateBaseline, selfJobName?: string): string[] {
+  const excluded = new Set<string>(baseline.gateSpeed.excludedJobNames ?? []);
+  if (selfJobName !== undefined && selfJobName !== '') {
+    excluded.add(selfJobName);
+  }
+  return [...excluded];
+}
+
+// The other half of exclusion safety. checkMeasurementCoverage below catches
+// "nothing was measured"; this catches the subtler "the expensive things were
+// measured yesterday and are not being measured today" -- an exclusion list
+// that grew a gated job, a job renamed out from under the baseline, or a job
+// that stopped running at all. Any of those would let the run report a
+// cheaper, easier measurement than the one that actually executed.
+export function checkRequiredJobsMeasured(
+  measuredJobNames: readonly string[],
+  baseline: GateBaseline,
+): GuardResult {
+  const required = baseline.gateSpeed.requiredMeasuredJobNames;
+
+  // Same stance as checkSpeedRegression's missing-figure branch: a baseline
+  // without the list is a mis-capture, not a licence to skip the check.
+  if (required === undefined || required.length === 0) {
+    return {
+      pass: false,
+      reason:
+        'gate-baseline.json has no gateSpeed.requiredMeasuredJobNames — without it an exclusion could drop a gated job out of the measured set unnoticed',
+    };
+  }
+
+  const measured = new Set(measuredJobNames);
+  const missing = required.filter((name) => !measured.has(name));
+
+  if (missing.length > 0) {
+    return {
+      pass: false,
+      reason: `the baselined job(s) [${missing.join(', ')}] were not measured (measured: [${measuredJobNames.join(', ')}]) — the frozen figures cover those jobs, so a run that excludes, renames or skips one of them is not comparable against them. Either restore the job or recapture the baseline (see its \`method\` field).`,
+    };
+  }
+
+  return {
+    pass: true,
+    reason: `every baselined job was measured: [${required.join(', ')}]`,
   };
 }
 

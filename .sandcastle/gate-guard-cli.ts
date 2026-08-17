@@ -17,7 +17,11 @@
 //                                    runner queue depth (toon#151).
 //                                    Env: GATE_GUARD_SELF_JOB_NAME (job to exclude,
 //                                    i.e. the guard's own), GATE_GUARD_RUN_ATTEMPT
-//                                    (only measure jobs from this attempt).
+//                                    (only measure jobs from this attempt). Any
+//                                    other excluded job is named in the frozen
+//                                    baseline's gateSpeed.excludedJobNames, and
+//                                    gateSpeed.requiredMeasuredJobNames keeps an
+//                                    exclusion from quietly hiding gated work.
 //   image-size <bytes>            - fails if the built agent image exceeds the
 //                                    frozen baseline size. No-ops until #116/#120's
 //                                    placeholder dockerImageSize.bytes is filled in.
@@ -35,8 +39,10 @@ import {
   checkMeasurementCoverage,
   checkParallelismAssumption,
   checkPerformanceRegression,
+  checkRequiredJobsMeasured,
   checkSpeedRegression,
   computeJobDurationsSeconds,
+  resolveExcludedJobNames,
   selectMeasurableJobs,
   type CiJobTiming,
   type GateBaseline,
@@ -101,13 +107,17 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
   const attemptEnv = process.env.GATE_GUARD_RUN_ATTEMPT;
   const attempt = attemptEnv ? Number(attemptEnv) : undefined;
 
+  const baseline = loadBaseline();
+  // Every other exclusion comes from the frozen baseline, not from the
+  // workflow, so widening what the ceiling ignores is a reviewed diff.
+  const excludeNames = resolveExcludedJobNames(baseline, selfJobName);
+
   const jobs = selectMeasurableJobs(parsed.jobs, {
-    excludeNames: selfJobName ? [selfJobName] : [],
+    excludeNames,
     attempt: attempt !== undefined && Number.isFinite(attempt) ? attempt : undefined,
   }) as CiJobTiming[];
 
   const durations = computeJobDurationsSeconds(jobs);
-  const baseline = loadBaseline();
 
   // Context only -- neither figure is gated, because both include the time
   // jobs sat queued for a free runner (toon#151).
@@ -121,8 +131,15 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
   console.log(
     `[gate-guard] INFO: measured ${jobs.length} job(s) of attempt ${attempt ?? '?'} — ${perJob}; run span ${durations.totalWallClockSeconds.toFixed(1)}s${queue} (span and queue are reported for context only, NOT gated)`,
   );
+  console.log(
+    `[gate-guard] INFO: excluded from the measurement by name: [${excludeNames.join(', ')}]`,
+  );
 
   const coveragePass = report('coverage', checkMeasurementCoverage(jobs.length));
+  const requiredJobsPass = report(
+    'required-jobs',
+    checkRequiredJobsMeasured(Object.keys(durations.byName), baseline),
+  );
   const speedPass = report('speed', checkSpeedRegression(durations.longestJobSeconds, baseline));
   const performancePass = report(
     'performance',
@@ -130,7 +147,7 @@ function runSpeedPerformance(jobsJsonPath: string | undefined): boolean {
   );
   const parallelismPass = report('parallelism', checkParallelismAssumption(durations));
 
-  return coveragePass && speedPass && performancePass && parallelismPass;
+  return coveragePass && requiredJobsPass && speedPass && performancePass && parallelismPass;
 }
 
 function runImageSize(bytesArg: string | undefined): boolean {
