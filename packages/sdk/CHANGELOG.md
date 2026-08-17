@@ -1,5 +1,95 @@
 # @toon-protocol/sdk
 
+## 3.3.0
+
+### Minor Changes
+
+- bf74fac: Make the Solana settlement bundle EXECUTABLE, and refuse the claims that are not
+  (toon#214).
+
+  `buildSettlementTx`'s Solana branch emitted a transaction no validator could ever
+  run. Every field of it was wrong against the deployed native payment-channel
+  program (connector `packages/solana-program`), and nothing caught it because the
+  SDK verified its own signature scheme in a closed loop and asserted only
+  `unsignedTxBytes.length > 0`:
+
+  |                    | emitted before                                                                                              | what the program requires                                                     |
+  | ------------------ | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+  | discriminator      | `sha256("global:update_balance")[0..8]` (Anchor)                                                            | `[6,0,0,0,0,0,0,0]` (`instruction.rs:12`)                                     |
+  | payload            | `cumulative(8 LE) \|\| nonce(8 LE)`                                                                         | `nonce(8 LE) \|\| transferred_amount(8 LE)`                                   |
+  | signature          | inlined into the program's instruction data                                                                 | out of band, in an Ed25519 precompile instruction at index 0                  |
+  | signed message     | `sha256(utf8(channelId) \|\| cumulative(32BE) \|\| nonce(32BE) \|\| utf8(recipient))`                       | the RAW 48 bytes `channel_pda \|\| nonce(8 LE) \|\| transferred_amount(8 LE)` |
+  | accounts           | `[recipient(signer), swapSigner, channelId, program]`, program also passed as an account of the instruction | `[fee_payer(signer), claimer, channel_pda(w), instructions sysvar]`           |
+  | instructions       | 1                                                                                                           | 2 (precompile first)                                                          |
+  | data length prefix | threw above 127 bytes                                                                                       | `short_vec`, and the precompile instruction alone is 160 bytes                |
+
+  Changes:
+  - **`@toon-protocol/settlement-digest` / `@toon-protocol/core` / `@toon-protocol/sdk`**:
+    new `balanceProofMessageSolana(channelPda, nonce, transferredAmount)` — the
+    48-byte message the program's Ed25519 precompile check reconstructs, and the
+    only Solana balance proof that can be redeemed. `bigintToBytes8LE` and
+    `SOLANA_BALANCE_PROOF_MESSAGE_SIZE` are exported alongside it.
+  - **`balanceProofHashSolana` is now deprecated** and used by the settlement path
+    nowhere. It remains exported (it shipped in core/sdk 3.0.0) with its golden
+    vectors intact, documented as not verifiable on chain.
+  - **`verifyEd25519Signature`** verifies the program's message. A claim signed
+    over the legacy digest is now `SIGNER_MISMATCH` — so `buildSettlementTx`
+    refuses to hand back a Solana bundle the chain would reject instead of
+    reporting success.
+  - **`buildSolanaSettlementTx`** compiles a real two-instruction legacy Message
+    (Ed25519 precompile, then `ClaimFromChannel`) with the program's account order
+    and privileges, proper `short_vec` lengths, and a duplicate-account guard.
+  - **New `patchSolanaRecentBlockhash(messageBytes, blockhash)`** (exported from the
+    sdk root): the bundle carries an all-zero blockhash placeholder, and patching it
+    is the submitter's one remaining step before signing with the recipient key.
+
+  Proven, not asserted: `packages/sdk/tests/integration/solana-claim-redeem.integration.test.ts`
+  boots a `solana-test-validator` with the real program (vendored, hash-asserted)
+  and a real channel PDA, redeems a claim through `buildSettlementTx`, and asserts
+  the on-chain `nonce_a` / `transferred_amount_a` moved — plus the mirror image: a
+  legacy-digest claim is refused by the builder and, if forced, by the chain.
+
+  **Signers must move in lockstep.** Any Solana balance-proof signer — today
+  `@toon-protocol/swap`'s `SolanaPaymentChannelSigner` — must sign
+  `balanceProofMessageSolana` for its claims to verify here and redeem on chain.
+
+- 313cf8c: Relocate the swap symbols the **rolling** path shares out of the **legacy** swap
+  files (toon#210, ADR 0003 stage 3).
+
+  **Nothing is withdrawn, added, renamed or re-typed.** This is a source-only move
+  so that ADR 0003's stage 7 — deleting `swap-handler.ts` and `stream-swap.ts`
+  with `createSwapHandler` — is a mechanical deletion instead of one that silently
+  breaks the rolling engine.
+
+  Moved (same exported names, same barrels, same types):
+  - `applyRate` / `ApplyRateParams` → `apply-rate.ts` (was `swap-handler.ts`).
+    Rolling importers: the SDK's own `adaptive-controller.ts` and
+    `@toon-protocol/swap`'s `rolling-engine.ts`.
+  - `IssueClaimParams` / `IssueClaimResult` → `claim-issuance.ts` (was
+    `swap-handler.ts`). `@toon-protocol/swap`'s rolling `IssueRollingClaimParams`
+    / `RollingIssueClaimResult` extend them.
+  - `AccumulatedClaim` → `settlement/accumulated-claim.ts` (was `stream-swap.ts`).
+    It is a settlement type — `buildSettlementTx` / `verifyAccumulatedClaim` and
+    `@toon-protocol/client`'s rolling reveal/settle paths all consume it.
+
+  The published surface is unchanged: the runtime export sets of both
+  `@toon-protocol/sdk` and `@toon-protocol/sdk/swap` are byte-identical to the
+  previous release (79 and 14 names), the emitted `.d.ts` declarations are
+  structurally identical, and the frozen public-API guard at
+  `packages/sdk/src/index.test.ts` is untouched. `@toon-protocol/swap` and
+  `@toon-protocol/client` build, typecheck and pass their suites against this
+  version with zero source changes.
+
+  Shipped as a **minor** rather than a patch because it is the versioned,
+  revertible checkpoint stage 7's major depends on — not because any consumer can
+  observe a difference.
+
+### Patch Changes
+
+- Updated dependencies [bf74fac]
+  - @toon-protocol/settlement-digest@1.1.0
+  - @toon-protocol/core@3.5.0
+
 ## 3.2.0
 
 ### Minor Changes

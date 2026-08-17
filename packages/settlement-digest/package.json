@@ -1,6 +1,6 @@
 {
   "name": "@toon-protocol/settlement-digest",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Dependency-light leaf for the RollingSwapChannel v2 EIP-712 balance-proof digest (EVM claim/coop-close) plus Solana/Mina message digests and pure EVM signer recovery. @noble-only — no ethers/abi/core deps.",
   "type": "module",
   "main": "./dist/index.js",
