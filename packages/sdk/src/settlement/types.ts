@@ -37,7 +37,11 @@ export interface SettlementBundle {
    * Raw UNSIGNED transaction bytes ready for the caller to sign (or for a
    * Chain Bridge DVM to gas-sponsor + sign). EVM: RLP-encoded tx with
    * placeholder gas fields (tx nonce / gasPrice / gasLimit = 0) per EIP-155.
-   * Solana: serialized Message (not Transaction — Transaction requires signatures).
+   * Solana: a compiled legacy Message (not a Transaction — that requires
+   * signatures) carrying the Ed25519 precompile verification at instruction 0
+   * and `ClaimFromChannel` at instruction 1, with an ALL-ZERO recent-blockhash
+   * placeholder the submitter must replace via `patchSolanaRecentBlockhash`
+   * before signing it with the `recipient` key (toon#214).
    * Mina: the verified balance-proof signature bytes (envelope). The final
    * on-chain `claimFromChannel` zkApp tx requires o1js proof generation and is
    * produced by a Mina-capable settler — see the on-chain settlement note in

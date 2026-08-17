@@ -23,6 +23,8 @@ export {
   balanceProofHashEvm,
   coopCloseHashEvm,
   eip712DomainSeparatorEvm,
+  balanceProofMessageSolana,
+  SOLANA_BALANCE_PROOF_MESSAGE_SIZE,
   balanceProofHashSolana,
   minaHashToField,
   balanceProofFieldsMina,

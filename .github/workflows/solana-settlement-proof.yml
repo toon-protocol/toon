@@ -1,0 +1,117 @@
+# Solana settlement redemption proof (toon#214).
+#
+# WHY THIS IS A SEPARATE WORKFLOW, NOT A JOB IN ci.yml
+#
+# `gate-regression-guard` in ci.yml measures THAT run's jobs against the frozen
+# `.sandcastle/gate-baseline.json` (114s longest job, 163.2s summed runner-seconds
+# over `build` + `devbox-validate`). Adding a job that installs the Solana CLI and
+# boots a validator to ci.yml would blow the summed-runner-second ceiling on its
+# first run, and the only way to make it green would be to re-baseline a frozen
+# guard against numbers nobody had measured yet. Keeping the proof in its own
+# workflow leaves that gate measuring exactly what it was captured on, and keeps
+# this check's cost visible on its own: ~1 runner-minute warm, and only on the
+# pull requests that touch the settlement surfaces below.
+#
+# The trade-off, stated plainly: this is NOT part of the `CI OK` aggregate, so it
+# is not a required status until a human adds it to branch protection. It is still
+# a red X on the PR when it fails. Adding it to branch protection is the follow-up.
+name: Solana settlement proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/sdk/src/settlement/**'
+      - 'packages/sdk/tests/integration/solana-claim-redeem.integration.test.ts'
+      - 'packages/sdk/tests/integration/fixtures/solana/**'
+      - 'packages/settlement-digest/src/**'
+      - 'packages/core/src/settlement/**'
+      - '.github/workflows/solana-settlement-proof.yml'
+  pull_request:
+    paths:
+      - 'packages/sdk/src/settlement/**'
+      - 'packages/sdk/tests/integration/solana-claim-redeem.integration.test.ts'
+      - 'packages/sdk/tests/integration/fixtures/solana/**'
+      - 'packages/settlement-digest/src/**'
+      - 'packages/core/src/settlement/**'
+      - '.github/workflows/solana-settlement-proof.yml'
+
+jobs:
+  redeem-on-local-validator:
+    name: Redeem a real claim against the real program
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 8.15.9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      # Restored BEFORE the installer so a warm cache skips the download
+      # entirely. Keyed on the exact version — a version bump must miss.
+      - name: Cache Solana CLI
+        id: solana-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/solana
+          key: solana-cli-${{ runner.os }}-v2.1.21
+
+      # v2.1.21, NOT the v3.x line, and load-bearing rather than conservatism:
+      # v3's `solana-test-validator` hard-requires io_uring, which is unavailable
+      # under some sandboxed runners (connector's and swap's gates pin the same
+      # version for the same reason). It also matches the `=2.1.0`
+      # solana-program pin the vendored `payment_channel.so` was built against.
+      - name: Install Solana CLI
+        if: steps.solana-cli-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v2.1.21/install)"
+
+      - name: Put Solana CLI on PATH
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      # Fail here with a clear message rather than 90s later inside a test.
+      - name: Assert Solana toolchain
+        run: |
+          solana --version
+          solana-test-validator --version
+
+      - run: pnpm install --no-frozen-lockfile
+
+      # The integration config imports the SDK from source, but core /
+      # settlement-digest resolve through their dist entry points.
+      - run: pnpm -r build
+
+      # SDK_REQUIRE_SOLANA=1 turns "validator not available" from a skip into a
+      # hard failure. Without it this job could report success having run
+      # nothing, which is the exact defect swap#106/#160 found twice.
+      - name: Redeem a claim on a local validator
+        env:
+          SDK_REQUIRE_SOLANA: '1'
+          NO_COLOR: '1'
+          FORCE_COLOR: '0'
+        run: |
+          pnpm --filter @toon-protocol/sdk test:integration \
+            tests/integration/solana-claim-redeem.integration.test.ts 2>&1 \
+            | tee /tmp/solana-proof.log
+
+      # A green tick is not evidence that anything ran. The suite must have
+      # collected its full complement AND printed the on-chain state transition
+      # its successful redemption logs.
+      - name: Assert the proof actually redeemed something on chain
+        run: |
+          set -euo pipefail
+          sed -r 's/\x1b\[[0-9;]*[a-zA-Z]//g' /tmp/solana-proof.log > /tmp/solana-proof.plain
+          if ! grep -qE 'Tests +5 passed \(5\)' /tmp/solana-proof.plain; then
+            echo "FAIL: expected 5 passing tests in the Solana redemption proof."
+            echo "A test that stopped running is the failure mode this job exists to prevent."
+            exit 1
+          fi
+          if ! grep -q '\[solana-redeem\] tx ' /tmp/solana-proof.plain; then
+            echo "FAIL: no on-chain redemption was logged — nothing moved a channel account."
+            exit 1
+          fi
+          grep '\[solana-redeem\]' /tmp/solana-proof.plain

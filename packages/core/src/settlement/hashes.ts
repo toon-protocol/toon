@@ -37,6 +37,8 @@ export {
   balanceProofHashEvm,
   coopCloseHashEvm,
   // Non-EVM message digests.
+  balanceProofMessageSolana,
+  SOLANA_BALANCE_PROOF_MESSAGE_SIZE,
   balanceProofHashSolana,
   minaHashToField,
   balanceProofFieldsMina,

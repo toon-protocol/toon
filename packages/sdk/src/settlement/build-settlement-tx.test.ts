@@ -15,14 +15,14 @@ import { ed25519 } from '@noble/curves/ed25519.js';
 
 import type { AccumulatedClaim } from './accumulated-claim.js';
 import type { SettlementTxError } from '../errors.js';
-import { base58Encode } from '../identity.js';
+import { base58Decode, base58Encode } from '../identity.js';
 import {
   buildSettlementTx,
   verifyAccumulatedClaim,
 } from './build-settlement-tx.js';
 import {
   balanceProofHashEvm,
-  balanceProofHashSolana,
+  balanceProofMessageSolana,
   balanceProofFieldsMina,
   hexToBytes,
 } from './hashes.js';
@@ -468,13 +468,14 @@ describe('buildSettlementTx grouping + winner selection (AC-5, AC-8, T-048)', ()
     const solRecipientBytes = new Uint8Array(32);
     solRecipientBytes.fill(0x22);
     const solRecipient = base58Encode(solRecipientBytes);
-    const solMsgHash = balanceProofHashSolana(
-      solChannelId,
-      777n,
+    // toon#214: the signature must cover the message the on-chain program
+    // verifies — channel_pda || nonce(8 LE) || transferred_amount(8 LE).
+    const solMsg = balanceProofMessageSolana(
+      base58Decode(solChannelId),
       1n,
-      solRecipient
+      777n
     );
-    const solSig = new Uint8Array(ed25519.sign(solMsgHash, solPk));
+    const solSig = new Uint8Array(ed25519.sign(solMsg, solPk));
     const solPair: SwapPair = {
       from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
       to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
@@ -569,8 +570,8 @@ describe('verifyAccumulatedClaim (AC-10)', () => {
     const recipientBytes = new Uint8Array(32);
     recipientBytes.fill(0x55);
     const recipient = base58Encode(recipientBytes);
-    const msgHash = balanceProofHashSolana(channelId, 250n, 3n, recipient);
-    const sig = new Uint8Array(ed25519.sign(msgHash, solPk));
+    const msg = balanceProofMessageSolana(base58Decode(channelId), 3n, 250n);
+    const sig = new Uint8Array(ed25519.sign(msg, solPk));
     const pair: SwapPair = {
       from: { assetCode: 'USDC', assetScale: 6, chain: 'evm:base:8453' },
       to: { assetCode: 'SOL', assetScale: 9, chain: 'solana:mainnet' },
