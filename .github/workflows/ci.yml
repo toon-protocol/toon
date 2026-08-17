@@ -244,12 +244,15 @@ jobs:
   # offender.
   #
   # `if: github.event_name == 'pull_request'`, not a step inside `build`: this
-  # command MUTATES the tree (bumps package.json versions, writes CHANGELOGs),
-  # and `build`'s own "Format check" step re-checks package.json against
-  # prettier in that same job (ci.yml:71-83) -- running the mutation there
-  # would make that step check output THIS step just wrote instead of what the
-  # PR author wrote. A separate job's checkout is a throwaway that publishes
-  # nothing, so the mutation is free, and it cannot bleed into a sibling step.
+  # command MUTATES the tree -- it bumps the version in every affected
+  # packages/*/package.json, writes packages/*/CHANGELOG.md, and DELETES the
+  # `.changeset/*.md` files it consumed. Steps in a job share one workspace,
+  # and `build`'s later steps (typecheck, the package test suites, the
+  # connector-contract canary) are there to judge the tree the PR author
+  # wrote; run the mutation among them and they would be judging bumped
+  # versions and consumed changesets instead. A separate job's checkout is a
+  # throwaway that publishes nothing, so the mutation is free there and cannot
+  # bleed into a sibling step.
   # Skipped on `push` (post-merge) on purpose -- validating a release plan
   # after the merge that plan describes gates nothing, same reasoning as why
   # this existed as a post-merge-only check in the first place.
@@ -430,7 +433,9 @@ jobs:
       # run on every run of this workflow -- gate-regression-guard only skips
       # when a dependency failed, which must fail the aggregate anyway.
       # Anything other than 'success' (failure, cancelled, skipped) fails this
-      # job. The conditional Solana proof is evaluated separately below.
+      # job. The two conditional jobs -- the Solana proof and the changeset
+      # release-plan check -- are each evaluated against their own condition in
+      # the steps below.
       - name: Require every gating job to have succeeded
         env:
           BUILD_RESULT: ${{ needs.build.result }}
