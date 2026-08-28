@@ -1,9 +1,11 @@
 /**
  * `buildSettlementTx()` — public entrypoint for Story 12.6.
  *
- * Takes the output `claims` array from `streamSwap()` + per-chain signer
- * config + per-chain recipient addresses, and produces one
- * {@link SettlementBundle} per unique `(chain, channelId)` group.
+ * Path-agnostic: takes an {@link AccumulatedClaim}`[]` — harvested by
+ * whichever swap protocol produced them (the rolling engine in
+ * `@toon-protocol/swap`) — + per-chain signer config + per-chain recipient
+ * addresses, and produces one {@link SettlementBundle} per unique
+ * `(chain, channelId)` group.
  *
  * @module
  * @since 12.6
@@ -58,9 +60,9 @@ function chainKindOf(chain: string): 'evm' | 'solana' | 'mina' | 'unknown' {
  *
  * @example
  * ```ts
- * const result = await streamSwap({ ... });
+ * const claims: AccumulatedClaim[] = /* harvested from a completed swap *\/ [];
  * const { bundles } = buildSettlementTx({
- *   claims: result.claims,
+ *   claims,
  *   signers: {
  *     'evm:base:8453': {
  *       address: '0xswap...',
@@ -486,7 +488,7 @@ export function buildSettlementTx(
  * Standalone utility: verify a single `AccumulatedClaim`'s signature against
  * a `SwapSignerConfig` without running the full grouping/winner pipeline.
  *
- * Useful inside a `streamSwap()` `onPacket` callback for mid-stream claim
+ * Useful inside a sender's per-packet callback for mid-stream claim
  * validation.
  *
  * For `mina:*` claims, pass a pre-loaded `mina-signer` `Client` as

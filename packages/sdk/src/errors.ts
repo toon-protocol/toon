@@ -72,10 +72,12 @@ export class GiftWrapError extends ToonError {
 }
 
 /**
- * Error thrown when swap handler orchestration fails.
- * Used for rate-conversion errors (invalid format, zero, overflow guards),
- * unsupported pair lookups, and issuer-boundary failures that are NOT
- * gift-wrap-specific. Gift-wrap failures continue to surface as `GiftWrapError`.
+ * Error thrown by `applyRate()` (rate-conversion errors: invalid format,
+ * zero, overflow guards). Originally also covered the legacy swap handler's
+ * issuer-boundary failures; that handler was withdrawn by toon#211 (ADR 0003
+ * stage 7), but the class name is kept — `applyRate` is path-agnostic and
+ * shared by the rolling swap engine, so the error's identity is now tied to
+ * the primitive, not the handler that used to house it.
  */
 export class SwapHandlerError extends ToonError {
   constructor(message: string, cause?: Error) {
@@ -85,52 +87,10 @@ export class SwapHandlerError extends ToonError {
 }
 
 /**
- * Error thrown by the sender-side `streamSwap()` API (Story 12.5).
- *
- * All failures are categorized by a narrow `code` so callers can branch on
- * cause. `INVALID_*` codes are construction-time validation failures (thrown
- * synchronously before any packet fires). `FULFILL_DECODE_FAILED` surfaces
- * when the Swap returns `accepted: true` but the FULFILL data cannot be
- * decoded — this is a non-fatal per-packet error and is captured in
- * `StreamSwapResult.errors[]`.
- */
-export class StreamSwapError extends Error {
-  readonly code:
-    | 'INVALID_AMOUNT'
-    | 'INVALID_CHUNKING'
-    | 'INVALID_PAIR'
-    | 'INVALID_STATE'
-    | 'INVALID_CHAIN_RECIPIENT'
-    | 'FULFILL_DECODE_FAILED';
-  // Not declared on Error in lib.es5; ES2022 adds it, but some tsconfigs
-  // still target older libs. Declare explicitly for cross-version safety.
-  declare readonly cause?: unknown;
-
-  constructor(
-    code: StreamSwapError['code'],
-    message: string,
-    options?: { cause?: unknown }
-  ) {
-    super(message);
-    this.name = 'StreamSwapError';
-    this.code = code;
-    if (options && 'cause' in options) {
-      Object.defineProperty(this, 'cause', {
-        value: options.cause,
-        enumerable: false,
-        writable: true,
-        configurable: true,
-      });
-    }
-  }
-}
-
-/**
  * Error thrown by the sender-side `buildSettlementTx()` helper (Story 12.6).
  *
  * Settlement is a post-swap one-shot computation, so this error class is
- * THROWN synchronously (unlike `streamSwap` which routes per-packet failures
- * through `StreamSwapResult`). Callers are expected to wrap the call in
+ * THROWN synchronously. Callers are expected to wrap the call in
  * `try/catch`.
  *
  * Narrow `code` union lets callers branch on cause — see
