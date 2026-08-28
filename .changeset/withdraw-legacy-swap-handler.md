@@ -25,7 +25,8 @@ the organization imports these symbols any more: the rolling maker stopped wirin
   `StreamSwapResult`, `StreamSwapClient`, `StreamSwapController`, `PacketProgress`,
   `RateMonitorCallback`).
 - The internal `__streamSwapTesting` testing surface.
-- `packages/sdk/scripts/swap.mjs` and `scripts/swap-mina.mjs` (legacy one-shot demo scripts).
+- The `packages/sdk/scripts/` legacy one-shot demo scripts (`swap.mjs`, `swap-mina.mjs`).
+  These were repo-local exercise scripts and were never part of the published package.
 
 **Unchanged** — still exported from `@toon-protocol/sdk` (and `@toon-protocol/sdk/swap` where
 applicable), because settlement and the rolling swap engine depend on them regardless of protocol:
