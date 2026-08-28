@@ -233,6 +233,64 @@ jobs:
           GATE_GUARD_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: npx tsx .sandcastle/gate-guard-cli.ts speed-performance /tmp/gate-guard-jobs.json
 
+  # Validates a changeset's release plan BEFORE merge (toon#219). Until now
+  # nothing in this repo read a changeset pre-merge: `changeset` only appeared
+  # inside release.yml's `version:`/`publish:` inputs, which run AFTER merge
+  # to `main`, where a failure gates nothing. toon-client#611 is the proof of
+  # what that misses -- a changeset naming both an ignored and a non-ignored
+  # package is a hard `changeset version` error, and toon-client's `release.yml`
+  # went red on every push to `main` for a day, with FIVE mixed changesets
+  # piled up behind the first because `changeset version` stops at the first
+  # offender.
+  #
+  # `if: github.event_name == 'pull_request'`, not a step inside `build`: this
+  # command MUTATES the tree -- it bumps the version in every affected
+  # packages/*/package.json, writes packages/*/CHANGELOG.md, and DELETES the
+  # `.changeset/*.md` files it consumed. Steps in a job share one workspace,
+  # and `build`'s later steps (typecheck, the package test suites, the
+  # connector-contract canary) are there to judge the tree the PR author
+  # wrote; run the mutation among them and they would be judging bumped
+  # versions and consumed changesets instead. A separate job's checkout is a
+  # throwaway that publishes nothing, so the mutation is free there and cannot
+  # bleed into a sibling step.
+  # Skipped on `push` (post-merge) on purpose -- validating a release plan
+  # after the merge that plan describes gates nothing, same reasoning as why
+  # this existed as a post-merge-only check in the first place.
+  #
+  # Assertion is `pnpm changeset version` -- the byte-identical command
+  # release.yml's `changesets/action` runs as its `version:` input, so green
+  # here means the release gets past versioning with no second implementation
+  # to drift (verified locally: a changeset naming a nonexistent package exits
+  # 1 with `Found changeset ... which is not in the workspace`; the current,
+  # unmodified changeset set exits 0 as a no-op). `git diff --stat` afterward
+  # makes "which packages would this release move" visible on every PR.
+  changeset:
+    name: Changeset validates a release plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 8.15.9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - name: Assert the changesets form a valid release plan
+        run: |
+          set -euo pipefail
+          pnpm changeset version
+          echo "--- the release plan this PR would produce ---"
+          git --no-pager diff --stat
+
   # Fleet no-op merge guard (toon-meta#405), wired INTO this repo's aggregate
   # required check so that it blocks a HUMAN merge and not just the fleet
   # auto-merge pass (toon-meta#408). connector#1008 merged green, closed its
@@ -366,7 +424,7 @@ jobs:
   ci-ok:
     name: CI OK
     runs-on: ubuntu-latest
-    needs: [build, devbox-validate, gate-regression-guard, no-op-merge, solana-settlement-proof]
+    needs: [build, devbox-validate, gate-regression-guard, no-op-merge, solana-settlement-proof, changeset]
     if: always()
     steps:
       # Fleet-wide aggregate required check per toon-meta#279: this single job
@@ -375,7 +433,9 @@ jobs:
       # run on every run of this workflow -- gate-regression-guard only skips
       # when a dependency failed, which must fail the aggregate anyway.
       # Anything other than 'success' (failure, cancelled, skipped) fails this
-      # job. The conditional Solana proof is evaluated separately below.
+      # job. The two conditional jobs -- the Solana proof and the changeset
+      # release-plan check -- are each evaluated against their own condition in
+      # the steps below.
       - name: Require every gating job to have succeeded
         env:
           BUILD_RESULT: ${{ needs.build.result }}
@@ -431,6 +491,42 @@ jobs:
               ;;
             *)
               echo "CI not OK: the settlement-surface decision reported '$SETTLEMENT_TOUCHED', which is neither 'true' nor 'false' — the build job succeeded without deciding whether the Solana proof was required, so its skip cannot be trusted."
+              exit 1
+              ;;
+          esac
+
+      # toon#219. `changeset` skips itself on `push` (its own `if:`), so a bare
+      # `needs:` would let that skip read as a pass on every event -- the same
+      # skipped-required-check trap toon#209 and toon#216 hit. Here the
+      # "decision" needing no separate step or module is `github.event_name`
+      # itself: this workflow only ever fires on `pull_request` or `push` to
+      # `main` (ci.yml:3-6), both already read directly off `github` context,
+      # so there is nothing bespoke to compute or fail-safe the way the Solana
+      # surface decision above has to.
+      - name: Require the changeset job to have validated the release plan on a pull request
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CHANGESET_RESULT: ${{ needs.changeset.result }}
+        run: |
+          echo "event: $EVENT_NAME"
+          echo "changeset: $CHANGESET_RESULT"
+          case "$EVENT_NAME" in
+            pull_request)
+              if [ "$CHANGESET_RESULT" != "success" ]; then
+                echo "CI not OK: this is a pull request, so the changeset job must validate the release plan, and it reported '$CHANGESET_RESULT' (skipped/cancelled counts as failure)."
+                exit 1
+              fi
+              echo "CI OK: the changeset job validated the release plan."
+              ;;
+            push)
+              if [ "$CHANGESET_RESULT" != "skipped" ] && [ "$CHANGESET_RESULT" != "success" ]; then
+                echo "CI not OK: the changeset job reported '$CHANGESET_RESULT' on a push, where it should have been skipped."
+                exit 1
+              fi
+              echo "CI OK: this is a push, not a pull request; the changeset job was correctly '$CHANGESET_RESULT'."
+              ;;
+            *)
+              echo "CI not OK: unrecognized event '$EVENT_NAME' — the changeset job's required/skip state cannot be trusted."
               exit 1
               ;;
           esac
