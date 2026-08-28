@@ -18,12 +18,12 @@
  * coupled fill.
  *
  * They were relocated here by toon#210 (ADR 0003 stage 3) so that withdrawing
- * the legacy handler in stage 7 is a mechanical deletion of `swap-handler.ts`.
- * The move is source-only: both types are still exported from
- * `@toon-protocol/sdk` under exactly the same names.
+ * the legacy handler in toon#211 (ADR 0003 stage 7) was a mechanical deletion
+ * of `swap-handler.ts`. The move is source-only: both types are still exported
+ * from `@toon-protocol/sdk` under exactly the same names.
  *
  * The `ClaimIssuer` interface itself is deliberately **not** here — its whole
- * contract is the legacy `issueClaim()` call, and it goes with the handler.
+ * contract was the legacy `issueClaim()` call, so it went with the handler.
  *
  * @module
  */

@@ -692,7 +692,7 @@ export function createNode(config: NodeConfig): ServiceNode {
       // returned `{ accept: true, metadata }`. To preserve handler ergonomics
       // (handlers still pass an object), serialize `metadata` → base64 JSON
       // into `data` here when the handler did not already populate `data`.
-      // The streamSwap FULFILL decoder expects this exact base64-JSON shape.
+      // Swap FULFILL decoders expect this exact base64-JSON shape.
       if (result.accept && result.metadata && !result.data) {
         try {
           const metadataJson = JSON.stringify(result.metadata);

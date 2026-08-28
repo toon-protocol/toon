@@ -34,8 +34,9 @@
  *   implementation is Node-only and lazily imports `node:fs`).
  *
  * INVARIANT (spec §5): the controller is an *efficiency* mechanism only. It
- * never sees, computes, or relaxes the `minExchangeRate` floor — the floor
- * check in `stream-swap.ts` runs before the controller observes anything and
+ * never sees, computes, or relaxes the `minExchangeRate` floor — the caller's
+ * floor check (the rolling engine's, since toon#211 withdrew the legacy
+ * `stream-swap.ts` sender) runs before the controller observes anything and
  * consults nothing but the floor itself. A calm (or adversarially painted)
  * tape can widen δ up to the caps, but can never worsen the sender's declared
  * worst case. NOTE: the adversarial-quote-tape question (toon-meta#146 — a
@@ -297,8 +298,9 @@ export interface PacketObservation {
 // ---------------------------------------------------------------------------
 
 /**
- * The seam `streamSwap` consumes (kept structural so alternative controller
- * implementations — or a test double — can be plugged in).
+ * The seam the rolling engine's sender consumes (kept structural so
+ * alternative controller implementations — or a test double — can be
+ * plugged in).
  */
 export interface StreamSwapAdaptiveController {
   /**

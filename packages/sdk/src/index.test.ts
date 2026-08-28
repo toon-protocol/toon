@@ -136,17 +136,10 @@ describe('@toon-protocol/sdk public API exports', () => {
       'unwrapSwapPacketFromToon',
       'encryptFulfillClaim',
       'decryptFulfillClaim',
-      // Swap handler (Story 12.3; Story 12.8 added reject-code constants)
+      // Rate conversion (toon#210): shared by the rolling path — survives
+      // the toon#211 withdrawal of the legacy handler that used to house it.
       'SwapHandlerError',
-      'createSwapHandler',
-      'findSwapPair',
       'applyRate',
-      'SWAP_HANDLER_REJECT_CODES',
-      'SWAP_HANDLER_REJECT_MESSAGES',
-      // Stream swap sender API (Story 12.5)
-      'StreamSwapError',
-      'streamSwap',
-      'streamSwapControlled',
       // rfc-0039 stream receipts (issue #84, rolling-swap spec §7.2)
       'signStreamReceipt',
       'verifyStreamReceipt',
@@ -190,7 +183,7 @@ describe('@toon-protocol/sdk public API exports', () => {
     ]);
 
     // Act -- exclude `__`-prefixed names: documented internal-testing surface,
-    // not part of the stable public API (see index.ts `__streamSwapTesting`).
+    // not part of the stable public API.
     const actualExports = new Set(
       Object.keys(sdk).filter((name) => !name.startsWith('__'))
     );

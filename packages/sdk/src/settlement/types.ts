@@ -105,7 +105,7 @@ export interface SwapSignerConfig {
  * @since 12.6
  */
 export interface BuildSettlementTxParams {
-  /** Claims to settle. Typically `streamSwapResult.claims`. MUST be non-empty. */
+  /** Claims to settle, harvested from a completed swap. MUST be non-empty. */
   claims: readonly AccumulatedClaim[];
   /** Per-chain Swap signer configuration. Keyed by `claim.pair.to.chain`. */
   signers: Record<string, SwapSignerConfig>;
