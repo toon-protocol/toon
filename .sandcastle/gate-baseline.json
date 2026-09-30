@@ -30,8 +30,12 @@
     "observedMaxDeviationFraction": 0.0877192982,
     "requiredMeasuredJobNames": ["build", "Devbox Environment Validation"],
     "requiredMeasuredJobNamesRationale": "toon#216. These are the jobs the frozen figures above were captured on, asserted present in every measurement by checkRequiredJobsMeasured. The list is a FLOOR, not the full measured set: any other job of the run that has finished by the time the guard reads the API is measured too and counts against both ceilings (today that is `no-op merge guard`, ~3-6s, added by toon#209 after these figures were captured -- unbaselined but well inside the 15% band, worth recapturing next time the baseline is refreshed). Its purpose is the inverse of checkMeasurementCoverage: coverage catches 'nothing was measured', this catches 'the expensive jobs quietly stopped being measured' -- an exclusion that grew a gated job, a rename that orphaned the baseline, or a job that stopped running.",
-    "excludedJobNames": ["Gate speed/performance no-regression guard", "Solana settlement redemption proof"],
-    "excludedJobNamesRationale": "toon#216. Job display names dropped from the measurement, declared here rather than in a ci.yml env var so widening what the ceiling ignores is a reviewed diff to the frozen baseline. (1) `Gate speed/performance no-regression guard` -- the guard observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API (also passed in via GATE_GUARD_SELF_JOB_NAME). (2) `Solana settlement redemption proof` -- see gatePerformance.conditionalJobs.solanaSettlementProof for the measured cost and the full argument. Neither exclusion can hide gated work: dropping a name in requiredMeasuredJobNames fails checkRequiredJobsMeasured, and .sandcastle/settlement-surface.test.ts pins the proof's spelling here to the `name:` ci.yml declares so a rename cannot leave a dangling exclusion."
+    "excludedJobNames": [
+      "Gate speed/performance no-regression guard",
+      "Solana settlement redemption proof",
+      "Changeset validates a release plan"
+    ],
+    "excludedJobNamesRationale": "toon#216. Job display names dropped from the measurement, declared here rather than in a ci.yml env var so widening what the ceiling ignores is a reviewed diff to the frozen baseline. (1) `Gate speed/performance no-regression guard` -- the guard observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API (also passed in via GATE_GUARD_SELF_JOB_NAME). (2) `Solana settlement redemption proof` -- see gatePerformance.conditionalJobs.solanaSettlementProof for the measured cost and the full argument. (3) `Changeset validates a release plan` (toon#219) -- a pull_request-only job, see gatePerformance.conditionalJobs.changesetReleasePlan. None of the exclusions can hide gated work: dropping a name in requiredMeasuredJobNames fails checkRequiredJobsMeasured, and .sandcastle/settlement-surface.test.ts pins the proof's spelling here to the `name:` ci.yml declares so a rename cannot leave a dangling exclusion."
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
@@ -47,6 +51,16 @@
     },
     "conditionalJobs": {
       "_docs": "toon#216. Jobs in ci.yml that run only for some change sets, so they are NOT part of the always-on figures above and are excluded from them by name (gateSpeed.excludedJobNames). Excluded is not un-gated: each one records its measured cost here and carries a `timeout-minutes` wall-clock cap in ci.yml, which is a hard failure of the job and therefore of the `CI OK` aggregate.",
+      "changesetReleasePlan": {
+        "ciYmlJobId": "changeset",
+        "jobDisplayName": "Changeset validates a release plan",
+        "runsWhen": "every pull_request run, never on push to main (`if: github.event_name == 'pull_request'`)",
+        "measuredJobSeconds": [32],
+        "measuredFrom": "run 36743410592 (pull_request, toon#220): 32s, warm pnpm cache -- checkout, pnpm/node setup, install, `pnpm changeset version`",
+        "timeoutMinutes": 5,
+        "timeoutMinutesRationale": "~9x the measured 32s; a hung install fails the job, and therefore `CI OK`, in minutes instead of the 360-minute default.",
+        "whyNotFoldedIntoTheCeiling": "Measured against the ceilings it did trip the performance guard: build 115s + devbox 48s + no-op 4s + this job 32s = 199s summed runner-seconds, over the 187.7s allowance (163.2s + 15%), while every gated job stayed the same size. The overage is exactly this job's own cost, not drift in the existing jobs (without it the run sums to 167s, inside the band). The job cannot be made cheaper than about 25s of setup, and folding it into `build` is not an option: `changeset version` mutates the tree and build's later steps must judge the author's tree (see the comment in ci.yml). It runs on pull requests only, so the push-and-PR samples the frozen figures were taken from do not describe it, and raising the always-on ceiling by ~20% to absorb a PR-only job would loosen the budget for the common path. Excluding it by name, like the Solana proof, keeps both frozen figures measuring the jobs they were captured on; the exclusion is a reviewed diff to this file, and the job's cost is capped by its own timeout-minutes."
+      },
       "solanaSettlementProof": {
         "ciYmlJobId": "solana-settlement-proof",
         "jobDisplayName": "Solana settlement redemption proof",

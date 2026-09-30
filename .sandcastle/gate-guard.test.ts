@@ -692,10 +692,11 @@ describe("the committed baseline's measured-job bookkeeping", () => {
     ]);
   });
 
-  it('excludes the guard job and the conditional Solana proof, and nothing else', () => {
+  it('excludes the guard job and the conditional Solana proof and changeset jobs, and nothing else', () => {
     expect(committed.gateSpeed.excludedJobNames).toEqual([
       'Gate speed/performance no-regression guard',
       'Solana settlement redemption proof',
+      'Changeset validates a release plan',
     ]);
   });
 
