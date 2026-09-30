@@ -1,96 +1,43 @@
-# TASK
+/mattpocock-skills:implement {{ISSUE_URL}}
 
-Fix issue {{TASK_ID}}: {{ISSUE_TITLE}}
+You are running AFK in a sandbox, on branch `{{BRANCH}}`, which is already checked out.
+Nobody will answer a question, so do not ask one. Treat the issue, its comments and its
+parent spec (if it has one) as settled. Read them with `gh issue view {{ISSUE_NUMBER}} --comments`.
 
-Pull in the issue using `gh issue view <ID>`. If it has a parent PRD, pull that in too.
+Commit to `{{BRANCH}}`, and reference `#{{ISSUE_NUMBER}}` in each commit message. Do not
+push, open a PR or close the issue. The runner does all three once you finish.
 
-Only work on the issue specified.
+## This repository
 
-Work on branch {{BRANCH}}. Make commits and run tests.
+- `CLAUDE.md` covers how to build and test. This repo is the shared library layer, `@toon-protocol/core`
+  and `@toon-protocol/sdk`, in a pnpm workspace. It has no image and no CLI. All payment-claim
+  validation lives in toon-protocol/connector, so never re-implement it here. Shared decisions live in
+  `toon-protocol/toon-meta`, which is not checked out, so read the ticket and its parent for them.
+- Dependencies are already installed. Build before you typecheck: cross-package imports resolve through
+  each package's built `dist/`, so a typecheck on a clean tree reports about 90 phantom `TS2307` errors.
+- After you finish, the runner runs CI's `build` job itself and won't open a PR while it is red:
+  `pnpm lint`, `pnpm -r build`, `pnpm typecheck`, `pnpm format:check`,
+  `npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling`, `pnpm -r --parallel test --if-present`,
+  `npx vitest run .sandcastle/` and the SDK's connector-contract canary. When you touch the Solana
+  settlement surface (`.sandcastle/settlement-surface.ts` lists it) it also runs the Solana redemption proof.
+  Run them yourself before you commit. Never weaken, skip or delete a test, and never loosen a lint
+  (the `--max-warnings 940` ceiling included), to get green.
+- A change to a published package needs a changeset (`pnpm changeset`), as `.changeset/` shows. Never
+  run `npm publish`: it ships unresolved `workspace:*` ranges.
+- `solana-test-validator` is installed, so the Solana proof genuinely runs. `SDK_REQUIRE_SOLANA=1` turns
+  a missing validator from a skip into a failure. A test that reports zero duration skipped, so treat that
+  as a failure.
 
-# CONTEXT
+## When you cannot finish
 
-Here are the last 10 commits:
+Stop only when a genuinely new decision is needed and neither the ticket nor its parent settles it, the action is
+irreversible, it touches mainnet or real funds, or it needs a credential that no workflow
+exposes. In that case, commit nothing and explain what blocks you in a comment on the issue
+(`gh issue comment {{ISSUE_NUMBER}}`). The runner moves an issue with no commits to
+`needs-triage`.
 
-<recent-commits>
+If your context is getting full (around 150k tokens) before you are done, commit what works,
+write the remaining steps to `.sandcastle/logs/handoff-{{ISSUE_NUMBER}}.md`, commit it with
+`git add -f`, and end your turn. A fresh session continues from your commits.
 
-!`git log -n 10 --format="%H%n%ad%n%B---" --date=short`
-
-</recent-commits>
-
-# EXPLORATION
-
-Explore the repo and fill your context window with relevant information that will allow you to complete the task.
-
-Pay extra attention to test files that touch the relevant parts of the code.
-
-# EXECUTION
-
-If applicable, use RGR to complete the task.
-
-1. RED: write one test
-2. GREEN: write the implementation to pass that test
-3. REPEAT until done
-4. REFACTOR the code
-
-# FEEDBACK LOOPS
-
-toon is a pnpm workspace. Before committing, run toon's real gate and make sure every command passes:
-
-- lint: `eslint . --max-warnings 940`
-- typecheck: `pnpm run typecheck`
-- test: `vitest run`
-- build: `pnpm -r run build`
-
-Rules for the gate:
-
-- **lint** and **test** and **build** must pass cleanly. The lint budget
-  (`--max-warnings 940`) is a hard ceiling: do NOT introduce new warnings.
-- **typecheck** is a hard gate at ZERO errors, blocking in CI (toon#144). You
-  must build BEFORE typechecking: run `pnpm -r run build` first, then
-  `pnpm run typecheck` — cross-package imports resolve through each package's
-  built `dist/`, so typechecking a clean checkout without `dist/` produces
-  ~90 phantom TS2307 errors. `pnpm run typecheck` must pass cleanly with no
-  errors.
-
-Do not commit until lint, test, build, and typecheck all pass cleanly.
-
-# COMMIT
-
-Make a git commit. The commit message must:
-
-1. Start with `RALPH:` prefix
-2. Include task completed + PRD reference
-3. Key decisions made
-4. Files changed
-5. Blockers or notes for next iteration
-
-Keep it concise.
-
-# THE ISSUE
-
-If the task is not complete, leave a comment on the issue with what was done.
-
-Do not close the issue - this will be done later.
-
-Once complete, output <promise>COMPLETE</promise>.
-
-# FINAL RULES
-
-ONLY WORK ON A SINGLE TASK.
-
-## Context budget
-
-Operate as if your context is capped at **~200k tokens**, whatever your model's actual window
-is (org policy: toon-meta's `CLAUDE.md` → *Context budget policy* — the cap is absolute, not a
-percentage of the window, because a percentage means different things on different models).
-Treat ~200k as a hard ceiling, not a target, and do the real work well below it.
-
-Start preparing a handoff at roughly **120k** tokens of context, and hand off no later than
-roughly **160k** — never run to the ceiling. Handing off means: write a structured handoff note
-(goal and remaining work as a concrete task list; what has been done and where — files,
-branches, commits; key decisions and why; exact paths/line numbers instead of "see above") to
-`.sandcastle/logs/handoff-<task-id>.md`, **commit it on this branch** (use `git add -f` —
-`.sandcastle/.gitignore` ignores `logs/`, and the sandbox is destroyed when the run ends, so an
-uncommitted note is lost), and end your turn so a fresh agent continues. Small, resumable units
-beat one degraded run.
+When the ticket is done and committed, output <promise>COMPLETE</promise>.

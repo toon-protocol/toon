@@ -26,3 +26,17 @@ Canonical rules/decisions: `toon-meta` → `_bmad-output/project-context.md`.
 
 ## Publishing
 CI publishes via **changesets + `pnpm`** using the org `NPM_TOKEN` secret. **Never run `npm publish`** — it ships unresolved `workspace:*` and breaks external installs (this is exactly how the old `sdk@0.5.0`/`town@0.4.0` got published broken).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`toon-protocol/toon`, via the `gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage labels, names unchanged. They also drive the AFK factory: `ready-for-agent` is its queue. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. This repo has no `CONTEXT.md` or ADRs of its own. See `docs/agents/domain.md`.
