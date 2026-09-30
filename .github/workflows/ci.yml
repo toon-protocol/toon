@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    # `synchronize` catches a PR that BECOMES a no-op after its branch is
+    # updated; `ready_for_review` re-runs the no-op merge guard on a draft
+    # leaving draft.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -380,9 +384,8 @@ jobs:
     needs: [build, devbox-validate, gate-regression-guard, no-op-merge, solana-settlement-proof]
     if: always()
     steps:
-      # Aggregate required check: this single job
-      # is the repo's required status, so a skipped or cancelled gating job
-      # must never read as a pass. All four unconditional jobs are expected to
+      # Aggregate required check: this single job is the repo's required
+      # status, so a skipped or cancelled gating job must never read as a pass. All four unconditional jobs are expected to
       # run on every run of this workflow -- gate-regression-guard only skips
       # when a dependency failed, which must fail the aggregate anyway.
       # Anything other than 'success' (failure, cancelled, skipped) fails this

@@ -28,8 +28,13 @@ function git(cwd: string, ...args: string[]): string {
   ).trim();
 }
 
-/** Build a repo shaped like a `refs/pull/N/merge` checkout and run the guard in it. */
-function runGuard(prContent: string | null) {
+/**
+ * Build a repo shaped like a `refs/pull/N/merge` checkout and run the guard in it.
+ * - `duplicate`: main has already landed the PR's exact content (the #1008 shape).
+ * - `real`: the PR carries a change main doesn't have.
+ * - `cancels-out`: the PR changes f.txt and then reverts it.
+ */
+function runGuard(shape: 'duplicate' | 'real' | 'cancels-out') {
   const dir = mkdtempSync(join(tmpdir(), 'noop-guard-'));
   dirs.push(dir);
   git(dir, 'init', '-q', '-b', 'main');
@@ -37,29 +42,22 @@ function runGuard(prContent: string | null) {
   git(dir, 'add', '.');
   git(dir, 'commit', '-q', '-m', 'base');
 
-  // The PR branch changes f.txt (or, for the no-op shape, changes it and reverts it).
   git(dir, 'checkout', '-q', '-b', 'pr');
   writeFileSync(join(dir, 'f.txt'), 'pr\n');
   git(dir, 'commit', '-q', '-am', 'pr change');
+  if (shape === 'cancels-out') {
+    writeFileSync(join(dir, 'f.txt'), 'base\n');
+    git(dir, 'commit', '-q', '-am', 'revert pr change');
+  }
   const head = git(dir, 'rev-parse', 'HEAD');
 
-  // main advances. For the #1008 shape, main lands the same content first.
   git(dir, 'checkout', '-q', 'main');
-  writeFileSync(join(dir, 'f.txt'), prContent ?? 'pr\n');
+  if (shape === 'duplicate') writeFileSync(join(dir, 'f.txt'), 'pr\n');
   writeFileSync(join(dir, 'g.txt'), 'other\n');
   git(dir, 'add', '.');
   git(dir, 'commit', '-q', '-m', 'main moves on');
   git(dir, 'checkout', '-q', '--detach', 'main');
-  git(
-    dir,
-    'merge',
-    '-q',
-    '--no-ff',
-    '-m',
-    'merge',
-    head,
-    ...(prContent === null ? [] : ['-X', 'ours'])
-  );
+  git(dir, 'merge', '-q', '--no-ff', '-m', 'merge', head);
 
   const res = spawnSync('bash', [GUARD], {
     cwd: dir,
@@ -70,7 +68,8 @@ function runGuard(prContent: string | null) {
       PR_HEAD_SHA: head,
       PR_BASE_REF: 'main',
       PR_NUMBER: '1',
-      PR_CHANGED_FILES: '1',
+      // The three-dot count from the event payload.
+      PR_CHANGED_FILES: shape === 'cancels-out' ? '0' : '1',
       GITHUB_STEP_SUMMARY: join(dir, 'summary.md'),
     },
   });
@@ -78,18 +77,22 @@ function runGuard(prContent: string | null) {
 }
 
 describe('no-op merge guard', () => {
-  it('fails a PR whose merge result changes zero files', () => {
-    // main already carries the PR's exact content: main's f.txt is 'pr\n' too.
-    const r = runGuard('pr\n');
+  it('fails a PR whose content is already on the base', () => {
+    const r = runGuard('duplicate');
     expect(r.status).toBe(1);
-    expect(r.out).toContain('EMPTY commit');
+    expect(r.out).toContain('its content is already on main');
+  });
+
+  it('fails a PR whose own commits cancel out', () => {
+    const r = runGuard('cancels-out');
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("this branch's commits cancel out");
   });
 
   it('passes a PR with a real diff', () => {
-    // main's f.txt is 'pr\n' only in the no-op case; here it stays 'base\n'.
-    const r = runGuard('base\n');
+    const r = runGuard('real');
     expect(r.status).toBe(0);
-    expect(r.out).toContain('changes');
+    expect(r.out).toContain('merging this PR changes 1 file(s) against main');
   });
 
   it('passes plainly on a push event', () => {
@@ -104,6 +107,12 @@ describe('no-op merge guard', () => {
 describe('ci.yml wiring', () => {
   it('has no reference to a toon-meta workflow', () => {
     expect(CI_YML).not.toMatch(/uses:\s*toon-protocol\/toon-meta/);
+  });
+
+  it("runs on the guard's pull_request triggers", () => {
+    expect(CI_YML).toContain(
+      'types: [opened, synchronize, reopened, ready_for_review]'
+    );
   });
 
   it('keeps the guard job name and feeds it to ci-ok', () => {

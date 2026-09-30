@@ -76,6 +76,9 @@ BRANCH_FILES="${PR_CHANGED_FILES:-0}"
     echo ""
     echo "Close this PR, or push the change it was supposed to carry."
   fi
+  echo ""
+  echo "This guard exists because connector#1008 did exactly this and nobody noticed:"
+  echo "it merged green, closed its ticket, and \`git show\` returned zero files."
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
 if [ "$BRANCH_FILES" -gt 0 ]; then
