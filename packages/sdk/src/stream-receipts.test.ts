@@ -7,9 +7,11 @@
  * duplicate/hole detection, out-of-order adds), the serialized audit
  * artifact, and the maker-side session store + issuance helper.
  *
- * The end-to-end wiring (handler emits receipts on FULFILL metadata;
- * streamSwap verifies/accumulates them) is tested in `swap-handler.test.ts`
- * and `stream-swap.test.ts`.
+ * End-to-end wiring (a handler emitting receipts on FULFILL metadata; a
+ * sender verifying/accumulating them) was previously tested against the
+ * legacy `swap-handler.test.ts` / `stream-swap.test.ts` suites, withdrawn by
+ * toon#211 (ADR 0003 stage 7). That coverage now lives with the rolling
+ * engine in `@toon-protocol/swap`.
  */
 
 import { describe, it, expect } from 'vitest';

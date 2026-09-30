@@ -291,8 +291,8 @@ export function unwrapSwapPacket(
  * Convenience: gift wrap a swap packet, encode to TOON binary, and build
  * an ILP PREPARE packet.
  *
- * This is the path that `streamSwap()` (Story 12.5) will use in its
- * per-packet loop.
+ * The rolling swap engine (`@toon-protocol/swap`) builds its per-packet RFQ
+ * on this path.
  */
 export function wrapSwapPacketToToon(
   params: WrapSwapPacketToToonParams

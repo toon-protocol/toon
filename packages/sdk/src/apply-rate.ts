@@ -7,14 +7,14 @@
  * and the **rolling** swap protocol depends on it just as hard:
  *
  * - `adaptive-controller.ts` (the rolling δ/W controller) sizes packets with it,
- * - `@toon-protocol/swap`'s `rolling-engine.ts` prices every coupled fill with it,
- * - `stream-swap.ts` (legacy sender) computes its expected target amount with it.
+ * - `@toon-protocol/swap`'s `rolling-engine.ts` prices every coupled fill with it.
  *
  * It was relocated here by toon#210 (ADR 0003 stage 3) so that withdrawing the
- * legacy handler in stage 7 is a mechanical deletion of `swap-handler.ts`
- * rather than a deletion that silently breaks the rolling engine. The move is
- * source-only: `applyRate` and `ApplyRateParams` are still exported from
- * `@toon-protocol/sdk` under exactly the same names.
+ * legacy handler in toon#211 (ADR 0003 stage 7) was a mechanical deletion of
+ * `swap-handler.ts` and `stream-swap.ts` rather than a deletion that silently
+ * broke the rolling engine. The move is source-only: `applyRate` and
+ * `ApplyRateParams` are still exported from `@toon-protocol/sdk` under
+ * exactly the same names.
  *
  * @module
  */

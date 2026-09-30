@@ -9,9 +9,10 @@
  * received-claim / settle paths all consume it too.
  *
  * Relocated here by toon#210 (ADR 0003 stage 3) so that deleting
- * `stream-swap.ts` in stage 7 does not take the settlement surface with it.
- * The move is source-only: `AccumulatedClaim` is still exported from both
- * `@toon-protocol/sdk` and `@toon-protocol/sdk/swap` under the same name.
+ * `stream-swap.ts` in toon#211 (ADR 0003 stage 7) did not take the settlement
+ * surface with it. The move is source-only: `AccumulatedClaim` is still
+ * exported from both `@toon-protocol/sdk` and `@toon-protocol/sdk/swap` under
+ * the same name.
  *
  * @module
  */

@@ -21,9 +21,9 @@
  *   the maker's pubkey. No Receipt Secret exists or is provisioned.
  * - **Nonce provisioning.** rfc-0039's Verifier generates the Receipt Nonce
  *   and communicates it out-of-band (SPSP headers). Here the sender (who is
- *   its own verifier today) generates a 16-byte `streamNonce` per
- *   `streamSwap()` invocation and communicates it in-band as the rumor's
- *   `stream-nonce` tag. Legacy makers ignore the unknown tag.
+ *   its own verifier today) generates a 16-byte `streamNonce` per swap
+ *   invocation and communicates it in-band as the rumor's `stream-nonce`
+ *   tag. Legacy makers ignore the unknown tag.
  * - **Encoding.** JSON object inside the accept-metadata dict rather than a
  *   CANONICAL-OER STREAM frame. A deterministic length-prefixed binary
  *   encoding ({@link encodeReceiptSigningPayload}) is used ONLY as the

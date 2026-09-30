@@ -32,7 +32,6 @@ export {
   PricingError,
   GiftWrapError,
   SwapHandlerError,
-  StreamSwapError,
   SettlementTxError,
 } from './errors.js';
 
@@ -147,10 +146,11 @@ export type {
   DecryptFulfillClaimParams,
 } from './gift-wrap.js';
 
-// Rate conversion (toon#210): `applyRate` / `ApplyRateParams` are shared by
-// the legacy handler AND the rolling path (adaptive-controller.ts, and
-// @toon-protocol/swap's rolling-engine.ts), so they live in their own module.
-// The exported names are unchanged.
+// Rate conversion (toon#210, toon#211): `applyRate` / `ApplyRateParams` were
+// relocated out of the legacy handler so the rolling path
+// (adaptive-controller.ts, and @toon-protocol/swap's rolling-engine.ts) keeps
+// depending on them after toon#211 withdrew that handler. The exported names
+// are unchanged.
 export { applyRate } from './apply-rate.js';
 export type { ApplyRateParams } from './apply-rate.js';
 
@@ -159,28 +159,6 @@ export type { ApplyRateParams } from './apply-rate.js';
 // `IssueRollingClaimParams` / `RollingIssueClaimResult` extend, so they too
 // live outside the legacy handler. The exported names are unchanged.
 export type { IssueClaimParams, IssueClaimResult } from './claim-issuance.js';
-
-// Swap handler (Story 12.3)
-export {
-  createSwapHandler,
-  findSwapPair,
-  SWAP_HANDLER_REJECT_CODES,
-  SWAP_HANDLER_REJECT_MESSAGES,
-} from './swap-handler.js';
-
-export type {
-  CreateSwapHandlerConfig,
-  ClaimIssuer,
-  SwapHandlerLogger,
-  RateQuote,
-  // toon#204 — caller-supplied refusal classification seam.
-  SwapHandlerFailure,
-  SwapHandlerFailureContext,
-  SwapHandlerFailureMapper,
-  SwapHandlerFailureStage,
-  SwapHandlerRejection,
-  SwapHandlerRejectResponse,
-} from './swap-handler.js';
 
 // Adaptive δ/W controller (issue #83, rolling-swap spec §6)
 export {
@@ -226,28 +204,10 @@ export type {
   ReceiptSessionStoreLike,
 } from './stream-receipts.js';
 
-// Stream swap sender API (Story 12.5)
-export { streamSwap, streamSwapControlled } from './stream-swap.js';
-
-export type {
-  StreamSwapParams,
-  StreamSwapResult,
-  PacketProgress,
-  RateMonitorCallback,
-  StreamSwapController,
-} from './stream-swap.js';
-
 // toon#210: `AccumulatedClaim` is a settlement type shared by the rolling
-// path; it moved out of `stream-swap.ts` but is exported under the same name.
+// path; it moved out of the legacy `stream-swap.ts` sender (withdrawn by
+// toon#211) but is exported under the same name.
 export type { AccumulatedClaim } from './settlement/accumulated-claim.js';
-
-// Internal testing surface (NOT a stable public API). Exposed so cross-package
-// tests in `packages/swap` can drive helpers (e.g. `buildSwapRumor`) without
-// reaching across package boundaries via relative `../../sdk/src/*.js` paths
-// (which vitest cannot resolve cross-package). Underscore-prefixed name and
-// the `__streamSwapTesting` alias are intentional — do not import in product
-// code.
-export { __testing as __streamSwapTesting } from './stream-swap.js';
 
 // Settlement (Story 12.6)
 export {

@@ -32,8 +32,10 @@ describe('ilpCodeToSemantic / ILP_TO_SEMANTIC', () => {
     }
   });
 
-  it('maps every code the swap handler emits (issue #86 regression)', () => {
-    // packages/sdk/src/swap-handler.ts emits exactly these wire codes.
+  it('maps every code a swap handler emits (issue #86 regression)', () => {
+    // These are the wire codes ILP swap handlers emit (formerly
+    // packages/sdk/src/swap-handler.ts, withdrawn by toon#211; now the
+    // rolling swap handler in @toon-protocol/swap).
     const swapHandlerCodes = ['F01', 'F02', 'F04', 'F06', 'T00', 'T04'];
     for (const code of swapHandlerCodes) {
       expect(
