@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    # `synchronize` catches a PR that BECOMES a no-op after its branch is
+    # updated; `ready_for_review` re-runs the no-op merge guard on a draft
+    # leaving draft.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
@@ -233,24 +237,35 @@ jobs:
           GATE_GUARD_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: npx tsx .sandcastle/gate-guard-cli.ts speed-performance /tmp/gate-guard-jobs.json
 
-  # Fleet no-op merge guard (toon-meta#405), wired INTO this repo's aggregate
-  # required check so that it blocks a HUMAN merge and not just the fleet
-  # auto-merge pass (toon-meta#408). connector#1008 merged green, closed its
-  # ticket and changed zero files -- and it was a human who merged it, because
-  # a red NON-required check is only a warning on the merge button. This
-  # replaces the stand-alone empty-pr-guard-shim.yml, deleted in the same
-  # commit; running both would put two identical "No-op merge guard" check
-  # runs on every PR. Canonical caller snippet and full rationale:
-  # toon-meta scripts/factory/empty-pr-guard-gate-job.yml.
+  # No-op merge guard, wired INTO this repo's aggregate required check so that
+  # it blocks a HUMAN merge and not just the auto-merge pass: connector#1008
+  # merged green, closed its ticket and changed zero files. It was formerly a
+  # reusable workflow in toon-meta (now brought in-house); the logic and the
+  # rationale live in .github/scripts/no-op-merge-guard.sh, exercised by
+  # .sandcastle/no-op-merge-guard.test.ts.
   #
-  # No `secrets: inherit` -- the guard makes no API call and no write of any
-  # kind, so handing it FACTORY_OPS_TOKEN would widen a monitored credential
-  # for nothing. No `if:` either: this workflow also runs on push, where the
-  # guard passes with a plain "no merge result to evaluate"; a job-level `if:`
-  # would make it `skipped` there, and a skipped gating job must never read as
-  # a pass (toon-meta#279).
+  # No `if:` -- this workflow also runs on push, where the guard passes plainly;
+  # a job-level `if:` would make it `skipped`, and ci-ok asserts on it. The job
+  # must not be named exactly `guard`, `review`, `fix`, etc.: the factory strips
+  # those plumbing names from its check verdict.
   no-op-merge:
-    uses: toon-protocol/toon-meta/.github/workflows/empty-pr-guard.yml@main
+    name: No-op merge guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Depth 3 covers the merge commit and both parents.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 3
+
+      - name: A merge that changes nothing must not merge green
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+        run: bash .github/scripts/no-op-merge-guard.sh
 
   # Solana settlement redemption proof (toon#215), moved here from its own
   # stand-alone workflow and wired into the aggregate by toon#216. That
@@ -369,9 +384,8 @@ jobs:
     needs: [build, devbox-validate, gate-regression-guard, no-op-merge, solana-settlement-proof]
     if: always()
     steps:
-      # Fleet-wide aggregate required check per toon-meta#279: this single job
-      # is the repo's required status, so a skipped or cancelled gating job
-      # must never read as a pass. All four unconditional jobs are expected to
+      # Aggregate required check: this single job is the repo's required
+      # status, so a skipped or cancelled gating job must never read as a pass. All four unconditional jobs are expected to
       # run on every run of this workflow -- gate-regression-guard only skips
       # when a dependency failed, which must fail the aggregate anyway.
       # Anything other than 'success' (failure, cancelled, skipped) fails this
