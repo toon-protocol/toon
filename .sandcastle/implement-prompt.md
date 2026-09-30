@@ -24,7 +24,7 @@ push, open a PR or close the issue. The runner does all three once you finish.
   (the `--max-warnings 940` ceiling included), to get green.
 - A change to a published package needs a changeset (`pnpm changeset`), as `.changeset/` shows. Never
   run `npm publish`: it ships unresolved `workspace:*` ranges.
-- `solana-test-validator` is installed, so the Solana proof genuinely runs. `SDK_REQUIRE_SOLANA=1` turns
+- `solana-test-validator` (Solana CLI 2.1.21) is in the sandbox image, so the Solana proof genuinely runs. `SDK_REQUIRE_SOLANA=1` turns
   a missing validator from a skip into a failure. A test that reports zero duration skipped, so treat that
   as a failure.
 

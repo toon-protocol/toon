@@ -9,7 +9,7 @@
 // safe: an unreadable or empty change set runs it). The sandbox gate makes the same
 // decision from the same module over `git diff <base>...HEAD`, so a ticket that touches
 // that surface has to pass the proof before a PR opens, and one that doesn't pays
-// nothing. The image carries the Solana CLI for it (see the Dockerfile).
+// nothing. The shared sandbox image carries the Solana CLI (2.1.21, ci.yml's version) for it.
 
 import type * as sandcastle from '@ai-hero/sandcastle';
 import { decideSettlementSurface, UNKNOWN_CHANGE_SET } from './settlement-surface.ts';
