@@ -64,7 +64,7 @@
     },
     "dockerImageSize": {
       "status": "not yet measured",
-      "note": "The .sandcastle/Dockerfile agent image (sandcastle:toon) has no prior run that recorded its size — .github/workflows/agent-image.yml only ever asserted the image builds and its toolchain is correct. This change adds a 'Report agent image size' step (docker image inspect --format '{{.Size}}') to that workflow so the number is captured on its next run. This capture environment has neither a Docker daemon nor push access to trigger that workflow, so the figure could not be filled in here — update this field from that step's log output once available, without re-deriving the rest of the baseline."
+      "note": "The agent image (once built from .sandcastle/Dockerfile here as sandcastle:toon; now the shared ghcr.io/toon-protocol/sandcastle-agent, built from connector, with agent-image.yml deleted and nothing left to run the image-size guard) has no prior run that recorded its size — .github/workflows/agent-image.yml only ever asserted the image builds and its toolchain is correct. This change adds a 'Report agent image size' step (docker image inspect --format '{{.Size}}') to that workflow so the number is captured on its next run. This capture environment has neither a Docker daemon nor push access to trigger that workflow, so the figure could not be filled in here — update this field from that step's log output once available, without re-deriving the rest of the baseline."
     }
   },
   "gateCorrectness": {
