@@ -1,5 +1,12 @@
 # @toon-protocol/sdk
 
+## 4.0.1
+
+### Patch Changes
+
+- Updated dependencies [ea93694]
+  - @toon-protocol/core@3.6.0
+
 ## 4.0.0
 
 ### Major Changes
