@@ -1086,10 +1086,9 @@ describe('BootstrapService', () => {
     // now-retired apex (stale hints, expected to be superseded).
     const STALE_SEED: GenesisPeer = {
       pubkey: APEX_PUBKEY,
-      // Correct because toon-meta#310 keeps this hostname pointed at the
-      // relay box across the cutover, specifically so old clients can still
-      // reach *something* at the address they already trust.
-      relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
+      // The relay the seed names. Load-bearing: the announcement is queried
+      // there, so it must be the relay the announcer actually publishes to.
+      relayUrl: 'wss://relay.toonprotocol.dev',
       // Correct because this is what the (now-retired) apex used to
       // advertise -- a stale hint the client must NOT end up using.
       ilpAddress: 'g.toon.apex',
@@ -1104,9 +1103,9 @@ describe('BootstrapService', () => {
       // Correct because toon-meta#310 has the relay box own `g.toon.relay`
       // outright post-cutover.
       ilpAddress: 'g.toon.relay',
-      // Correct because this is the relay box's real BTP endpoint, distinct
-      // from the apex's retired one above.
-      btpEndpoint: 'wss://relay-ws.devnet.toonprotocol.dev/btp',
+      // The live connector's BTP endpoint, distinct from the apex's retired
+      // one above.
+      btpEndpoint: 'wss://toonprotocol.dev/ilp/btp',
       assetCode: 'USD',
       assetScale: 6,
     };

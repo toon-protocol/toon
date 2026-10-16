@@ -144,14 +144,13 @@ describe('GenesisPeerLoader', () => {
       }
     });
 
-    it('has exactly two entries: relay and store', () => {
-      // toon-meta#310 retired the devnet apex: the fleet is now two
-      // independent boxes, so the seed needs exactly one entry per surviving
-      // node. A future edit that empties the array or drops one node back to
-      // a single entry must fail here, not surface as a bootstrap 404 (the
-      // failure mode toon#56 already had once with a single-entry seed).
+    it('has exactly one entry: the one devnet connector', () => {
+      // The devnet was consolidated on 2026-10-16 from five connectors to one
+      // (toonprotocol.dev), so the seed carries exactly one entry. A future
+      // edit that empties the array must fail here, not surface as a
+      // bootstrap 404 (the failure mode toon#56 already had once).
       const peers = GenesisPeerLoader.loadGenesisPeers();
-      expect(peers).toHaveLength(2);
+      expect(peers).toHaveLength(1);
     });
 
     it('has no entries silently dropped by validation', () => {
@@ -161,36 +160,22 @@ describe('GenesisPeerLoader', () => {
       expect(loaded.length).toBe(genesisPeersJson.length);
     });
 
-    it('pins the relay box identity', () => {
-      // The relay box adopts the retired apex's announce identity
-      // (30fdd01d…, toon-meta#310/#311) so already-deployed clients repair
-      // themselves against the same author. relayUrl/btpEndpoint are the
-      // relay box's own endpoints, verified against its live kind:10032
-      // self-announce on wss://relay-ws.devnet.toonprotocol.dev.
+    it('pins the one devnet connector', () => {
+      // Every value is checked against the live devnet: `pubkey` is the
+      // x-only form of the connector's `edgeIdentity.publicKey` from
+      // `GET https://toonprotocol.dev/ilp`; `btpEndpoint` is that document's
+      // `btpEndpoint`; `relayUrl` and `ilpAddress` are the relay's NIP-11
+      // (`wss://relay.toonprotocol.dev`, `toon.ilp_address`).
       const peers = GenesisPeerLoader.loadGenesisPeers();
-      expect(peers).toContainEqual({
-        pubkey:
-          '30fdd01d55c3efeb4c19c2cbeda8247cbc40ae9b15c026e9a301a263001fa7a9',
-        relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
-        ilpAddress: 'g.toon.relay',
-        btpEndpoint: 'wss://proxy.relay.devnet.toonprotocol.dev/ilp/btp',
-      });
-    });
-
-    it('pins the store box identity', () => {
-      // The store keeps its own announce identity (unaffected by the
-      // cutover — only its publish path moves to the relay box) and, since
-      // relayUrl is a required field but the store fronts no relay of its
-      // own, names the relay box's relay-ws URL. Verified against the
-      // store's live kind:10032 self-announce.
-      const peers = GenesisPeerLoader.loadGenesisPeers();
-      expect(peers).toContainEqual({
-        pubkey:
-          '499cdd71c7c3eab8d9b35f88ec9cde29018461e4bef86389004abcd7cfa1108a',
-        relayUrl: 'wss://relay-ws.devnet.toonprotocol.dev',
-        ilpAddress: 'g.toon.ario',
-        btpEndpoint: 'wss://proxy.ario.devnet.toonprotocol.dev/ilp/btp',
-      });
+      expect(peers).toEqual([
+        {
+          pubkey:
+            '915d29908235be4b53f8f23cd7ac72c88c99be3bcca876dadf5c1a449433b8f9',
+          relayUrl: 'wss://relay.toonprotocol.dev',
+          ilpAddress: 'g.toon.relay',
+          btpEndpoint: 'wss://toonprotocol.dev/ilp/btp',
+        },
+      ]);
     });
   });
 

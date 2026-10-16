@@ -1,14 +1,8 @@
 [
   {
-    "pubkey": "30fdd01d55c3efeb4c19c2cbeda8247cbc40ae9b15c026e9a301a263001fa7a9",
-    "relayUrl": "wss://relay-ws.devnet.toonprotocol.dev",
+    "pubkey": "915d29908235be4b53f8f23cd7ac72c88c99be3bcca876dadf5c1a449433b8f9",
+    "relayUrl": "wss://relay.toonprotocol.dev",
     "ilpAddress": "g.toon.relay",
-    "btpEndpoint": "wss://proxy.relay.devnet.toonprotocol.dev/ilp/btp"
-  },
-  {
-    "pubkey": "499cdd71c7c3eab8d9b35f88ec9cde29018461e4bef86389004abcd7cfa1108a",
-    "relayUrl": "wss://relay-ws.devnet.toonprotocol.dev",
-    "ilpAddress": "g.toon.ario",
-    "btpEndpoint": "wss://proxy.ario.devnet.toonprotocol.dev/ilp/btp"
+    "btpEndpoint": "wss://toonprotocol.dev/ilp/btp"
   }
 ]
