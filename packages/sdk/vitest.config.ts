@@ -9,6 +9,8 @@ export default defineConfig({
     env: {
       TOON_GENESIS_PEERS: '[]',
     },
+    // ...and answer the live ArDrive peer query with no peers (see the file).
+    setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.ts'],
     exclude: [
       '**/node_modules/**',
