@@ -14,7 +14,7 @@ pnpm -r test
 
 ## Shared skills & project context
 
-Cross-cutting agent skills and docs historically lived in `toon-protocol/toon-meta` (being retired); nothing in this repo needs it to build, test or publish. Repo rules are in this file and `docs/agents/`.
+Cross-repo context (where each TOON repo lives, the cross-repo glossary, the decisions that bind several repos and the shared skills) lives in `toon-protocol/toon-meta`, the org's private home repo; nothing in this repo needs it to build, test or publish. Repo rules are in this file and `docs/agents/`.
 
 ## Cross-repo dependencies
 
