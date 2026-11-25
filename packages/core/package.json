@@ -1,7 +1,7 @@
 {
   "name": "@toon-protocol/core",
   "version": "3.6.1",
-  "description": "Core library for Nostr-based ILP peer discovery and settlement",
+  "description": "The TOON codec, NIP-34, base58 and the kind 5094 blob storage request builder and parser",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -18,10 +18,6 @@
     "./toon": {
       "types": "./dist/toon/index.d.ts",
       "import": "./dist/toon/index.js"
-    },
-    "./wire": {
-      "types": "./dist/wire/index.d.ts",
-      "import": "./dist/wire/index.js"
     }
   },
   "files": [
@@ -35,9 +31,9 @@
   },
   "keywords": [
     "nostr",
-    "interledger",
-    "ilp",
-    "settlement"
+    "toon",
+    "nip34",
+    "base58"
   ],
   "license": "MIT",
   "repository": {
@@ -53,25 +49,14 @@
     "access": "public"
   },
   "dependencies": {
-    "@ardrive/turbo-sdk": "^1.21.0",
-    "@noble/ciphers": "^2.0.0",
-    "@noble/curves": "^2.0.0",
-    "@noble/hashes": "^2.0.0",
-    "@scure/bip32": "^2.0.0",
-    "@scure/bip39": "^2.0.0",
     "@toon-format/toon": "^1.1.0",
-    "@toon-protocol/settlement-digest": "workspace:*",
-    "arweave": "^1.15.5",
     "nostr-tools": "^2.20.0",
-    "simple-git": "^3.32.3",
-    "ws": "^8.18.0"
+    "simple-git": "^3.32.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.10",
     "tsup": "^8.0.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0",
-    "yaml": "^2.8.2"
+    "vitest": "^1.0.0"
   }
 }

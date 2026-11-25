@@ -2,13 +2,13 @@
 
 The shared **library layer** of the TOON Protocol — an ILP-gated Nostr relay network (pay to write, free to read). This repo publishes `@toon-protocol/core` to npm:
 
-- **`@toon-protocol/core`** — protocol primitives: the TOON binary codec, Nostr peer discovery (kind:10032), bootstrap, ILP address derivation, settlement chain config, and the structural `ConnectorNode` interface (`EmbeddableConnectorLike`).
+- **`@toon-protocol/core`** — the TOON binary codec (`./toon`), NIP-34 (`./nip34`), `base58Encode` / `base58Decode`, and the kind 5094 blob storage request builder and parser.
 
 These are **libraries only** — no Docker image, no end-user CLI. The node products (`relay`, `swap`, `store`), the operator product (`hub`), and the `client` consume them from npm.
 
 ## How it relates to the connector
 
-`toon` does **not** vendor the [`@toon-protocol/connector`](https://github.com/toon-protocol/connector) (the ILP payment engine that validates claims, takes fees, and routes packets). `core` talks to it only through a structural interface and has no dependency on it. All payment-claim validation lives in the connector, never here.
+`toon` does **not** vendor the [`@toon-protocol/connector`](https://github.com/toon-protocol/connector) (the ILP payment engine that validates claims, takes fees, and routes packets). `core` has no dependency on it. All payment-claim validation lives in the connector, never here.
 
 ## Develop
 

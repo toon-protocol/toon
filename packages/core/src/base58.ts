@@ -1,11 +1,6 @@
 /**
  * Base58 (Bitcoin/Solana alphabet) encode/decode.
  *
- * Identical implementation to `@toon-protocol/sdk`'s `identity.ts` helpers —
- * relocated/duplicated here so `@toon-protocol/core` (and its `client`
- * consumer) can base58-encode Solana addresses and the Mina base58check
- * private-key format without depending on the SDK.
- *
  * @module
  */
 

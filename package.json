@@ -8,7 +8,7 @@
     "build": "pnpm -r run build",
     "test": "vitest run",
     "test:coverage": "vitest --coverage",
-    "lint": "eslint . --max-warnings 421",
+    "lint": "eslint . --max-warnings 12",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write \"packages/*/src/**/*.ts\"",
     "format:check": "prettier --check \"packages/*/src/**/*.ts\"",

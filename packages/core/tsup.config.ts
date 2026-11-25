@@ -5,7 +5,6 @@ export default defineConfig({
     'src/index.ts',
     'src/nip34/index.ts',
     'src/toon/index.ts',
-    'src/wire/index.ts',
   ],
   format: ['esm'],
   dts: true,

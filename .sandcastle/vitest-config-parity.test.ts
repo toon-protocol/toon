@@ -70,10 +70,7 @@ describe('root vitest config / per-package vitest config parity', () => {
   // A rename or deletion that leaves this guard silently iterating over an
   // empty list would make every assertion below vacuously pass.
   it('discovers the per-package vitest configs it is meant to guard', () => {
-    expect(packageConfigs.map((c) => c.name).sort()).toEqual([
-      'core',
-      'settlement-digest',
-    ]);
+    expect(packageConfigs.map((c) => c.name).sort()).toEqual(['core']);
   });
 
   it.each(packageConfigs)(

@@ -20,7 +20,7 @@ push, open a PR or close the issue. The runner does all three once you finish.
   `npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling`, `pnpm -r --parallel test --if-present`,
   and `npx vitest run .sandcastle/`.
   Run them yourself before you commit. Never weaken, skip or delete a test, and never loosen a lint
-  (the `--max-warnings 421` ceiling included), to get green.
+  (the `--max-warnings 12` ceiling included), to get green.
 - A change to a published package needs a changeset (`pnpm changeset`), as `.changeset/` shows. Never
   run `npm publish`: it ships unresolved `workspace:*` ranges.
 - A test that reports zero duration skipped, so treat that as a failure.

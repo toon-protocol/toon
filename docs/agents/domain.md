@@ -28,8 +28,7 @@ decisions actually get resolved.
 ├── CLAUDE.md
 ├── .changeset/
 └── packages/
-    ├── core/                ← @toon-protocol/core
-    └── settlement-digest/
+    └── core/                ← @toon-protocol/core
 ```
 
 ## Flag conflicts with cited decisions
