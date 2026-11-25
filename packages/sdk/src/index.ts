@@ -261,3 +261,13 @@ export type {
   BootstrapEvent,
   BootstrapEventListener,
 } from '@toon-protocol/core';
+
+// App intake
+export { createAppIntake } from './app-intake.js';
+export type {
+  AppIntakeAnswer,
+  AppIntakeConfig,
+  AppIntakeHandler,
+  AppIntakeLogger,
+  StatedPayment,
+} from './app-intake.js';
