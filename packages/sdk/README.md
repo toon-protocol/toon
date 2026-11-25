@@ -30,7 +30,9 @@ import { ConnectorNode } from '@toon-protocol/connector';
 // 1. Create an identity
 const identity = fromMnemonic('your twelve word mnemonic phrase here');
 
-// 2. Create an embedded ILP connector
+// 2. Create a connector. `ConnectorNode` exists only in the 3.x line of the
+//    optional peer `@toon-protocol/connector`; no embedded TypeScript connector
+//    ships any more (4.x is an HTTP client for the Rust connector).
 const connector = new ConnectorNode({
   nodeId: 'my-node',
   btpServerPort: 3000,

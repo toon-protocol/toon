@@ -66,9 +66,9 @@ bootstrap.addEventListener('phase', (e) => {
 await bootstrap.start();
 ```
 
-### Compose API (Embedded Connector)
+### Compose API
 
-Wire a full TOON node with zero-latency embedded connector.
+Wire a full TOON node around a connector you supply (any `EmbeddableConnectorLike`). No embedded TypeScript connector ships with this repo.
 
 ```ts
 import { createToonNode } from '@toon-protocol/core';
