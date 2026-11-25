@@ -1,6 +1,6 @@
 # toon
 
-The shared **library layer** of the TOON Protocol: `@toon-protocol/core` (protocol primitives — TOON codec, Nostr peer discovery, ILP address derivation, settlement config, the structural `EmbeddableConnectorLike` interface). **Libraries only — no Docker image, no end-user CLI.**
+The shared **library layer** of the TOON Protocol: `@toon-protocol/core` (the TOON codec, NIP-34, base58 and the kind 5094 blob storage request builder and parser). **Libraries only — no Docker image, no end-user CLI.**
 
 TOON Protocol = pay-to-write Nostr over Interledger (ILP), split into per-team repos. Reads are free; a write is an ILP packet carrying a TOON-encoded Nostr event + a signed payment-channel claim, validated by the connector.
 
@@ -19,12 +19,10 @@ Cross-repo context (where each TOON repo lives, the cross-repo glossary, the dec
 ## Cross-repo dependencies
 
 - This repo **publishes** `@toon-protocol/core` to npm. Only a few repos consume it, at pinned semver:
-  - **rig** (`packages/rig`, `packages/rig-web`) — core: `core/nip34`.
-  - **infra** (`sandbox/`).
+  - **rig** (`packages/rig`, `packages/rig-web`): `@toon-protocol/core/nip34` (kind constants).
+  - **infra** (`sandbox/scripts`): `buildBlobStorageRequest`.
 
   `@toon-protocol/sdk` and `@toon-protocol/settlement-digest` are no longer in this repo: their last published versions stay on npm, and the parked swap and store pin them from there (toon#238). toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
-- **What each live caller uses:** rig takes `@toon-protocol/core/nip34` (kind constants); infra's `sandbox/scripts` take `buildBlobStorageRequest`. Core also keeps the TOON codec (`./toon`) and `base58Encode` / `base58Decode`, which the parked store and swap use.
-
 - Nothing here imports or depends on `@toon-protocol/connector`.
 - The ILP payment engine is the separate **[toon-protocol/connector](https://github.com/toon-protocol/connector)** repo. **All payment-claim validation lives ONLY in the connector — never re-implement it here.**
 
