@@ -11,7 +11,9 @@ codebase. This repo is **single-context**: one library layer, `@toon-protocol/co
 - **`packages/*/README.md`** and the `.changeset/` entries: each package's public surface and its
   recent breaking changes.
 
-This repo has no `CONTEXT.md` and no `docs/adr/`. Shared glossary and ADRs historically lived in
+- **`CONTEXT.md`** at the repo root: terms specific to this repo (e.g. **app intake**).
+
+This repo has no `docs/adr/`. Shared glossary and ADRs historically lived in
 `toon-protocol/toon-meta` (being retired), and the ILP payment engine, with its own `CONTEXT.md` and ADRs,
 is [`toon-protocol/connector`](https://github.com/toon-protocol/connector). Neither is checked out
 here. When a ticket cites one of their decisions, take the ticket's account of it as settled.

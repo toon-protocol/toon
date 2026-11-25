@@ -45,4 +45,4 @@ The five canonical triage labels, names unchanged. They also drive the AFK facto
 
 ### Domain docs
 
-Single-context. This repo has no `CONTEXT.md` or ADRs of its own. See `docs/agents/domain.md`.
+Single-context. A root `CONTEXT.md` holds this repo's own terms; it has no ADRs. See `docs/agents/domain.md`.

@@ -27,7 +27,7 @@ export type AppIntakeAnswer =
       accept: true;
       /** Base64 payload returned to the sender. */
       data?: string;
-      /** Extra fields merged into the response body (e.g. `txId`). */
+      /** Extra fields merged into the response body (e.g. `txId`); they cannot override `accept`, `data` or the stated payment. */
       fields?: Record<string, unknown>;
     }
   | { accept: false; code: string; message: string };
@@ -63,6 +63,15 @@ function json(status: number, body: Record<string, unknown>): Response {
 
 function refuse(code: string, message: string): Response {
   return json(code === 'F00' ? 422 : 502, { accept: false, code, message });
+}
+
+/** `verifyEvent` throws on an event missing its fields; that is a bad signature too. */
+function isValidSignature(event: NostrEvent): boolean {
+  try {
+    return verifyEvent(event);
+  } catch {
+    return false;
+  }
 }
 
 function readPayment(headers: Headers): StatedPayment {
@@ -116,7 +125,7 @@ export function createAppIntake(
     }
     const nostrEvent = event as NostrEvent;
 
-    if (!config.devMode && !verifyEvent(nostrEvent)) {
+    if (!config.devMode && !isValidSignature(nostrEvent)) {
       return refuse('F00', 'Invalid event signature');
     }
 
@@ -143,7 +152,7 @@ export function createAppIntake(
         `[${prefix}] handler threw: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`
       );
       logJob('T00');
-      return refuse('T00', 'Internal error');
+      return refuse('T00', 'Internal handler error');
     }
 
     if (!answer.accept) {
@@ -152,12 +161,12 @@ export function createAppIntake(
     }
     logJob('accepted');
     return json(200, {
+      ...answer.fields,
       accept: true,
       data: answer.data,
       payer: payment.payer,
       amount: payment.amount?.toString(),
       chain: payment.chain,
-      ...answer.fields,
     });
   };
 }

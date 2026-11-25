@@ -62,6 +62,19 @@ describe('createAppIntake', () => {
       });
     });
 
+    it.each([
+      ['empty event', {}],
+      ['event missing fields', { kind: 5094 }],
+    ])('refuses an %s as a bad signature', async (_n, event) => {
+      const res = await intake()(post({ event }));
+      expect(res.status).toBe(422);
+      expect(await res.json()).toEqual({
+        accept: false,
+        code: 'F00',
+        message: 'Invalid event signature',
+      });
+    });
+
     it('dev mode skips the check', async () => {
       const event = { ...signed(), sig: 'bad' };
       const res = await intake({ devMode: true })(post({ event }));
@@ -130,6 +143,22 @@ describe('createAppIntake', () => {
       });
     });
 
+    it('extra fields cannot override accept or the stated payment', async () => {
+      const res = await intake({
+        handlers: {
+          5094: () => ({
+            accept: true,
+            fields: { accept: false, payer: 'forged', txId: 'abc' },
+          }),
+        },
+      })(post({ event: signed() }, { 'x-toon-payer': 'payer1' }));
+      expect(await res.json()).toEqual({
+        accept: true,
+        payer: 'payer1',
+        txId: 'abc',
+      });
+    });
+
     it('F00 refusal is 422', async () => {
       const res = await intake({
         handlers: {
@@ -169,7 +198,11 @@ describe('createAppIntake', () => {
         },
       })(post({ event: signed() }));
       expect(res.status).toBe(502);
-      expect(((await res.json()) as { code: string }).code).toBe('T00');
+      expect(await res.json()).toEqual({
+        accept: false,
+        code: 'T00',
+        message: 'Internal handler error',
+      });
       expect(logger.error).toHaveBeenCalledWith(
         expect.stringContaining('boom')
       );
@@ -232,18 +265,21 @@ describe('createAppIntake', () => {
     });
   });
 
-  // Parity with store's src/store-backend.test.ts cases (status + body).
+  // Parity with store's src/store-backend.test.ts cases (status + body): devMode,
+  // and the handler never runs.
   describe('parity with store backend', () => {
-    const parity: [string, () => Request, number, Record<string, unknown>][] = [
+    const invalidBody = {
+      accept: false,
+      code: 'F00',
+      message: 'Invalid request body',
+    };
+    const parity: [string, string, number, Record<string, unknown>][] = [
+      ['null body', 'null', 422, invalidBody],
+      ['a bare number body', '5', 422, invalidBody],
+      ['a bare string body', '"x"', 422, invalidBody],
       [
-        'invalid body',
-        () => post('[1]'),
-        422,
-        { accept: false, code: 'F00', message: 'Invalid request body' },
-      ],
-      [
-        'missing event',
-        () => post({}),
+        'object missing event',
+        JSON.stringify({ notEvent: true }),
         422,
         {
           accept: false,
@@ -251,17 +287,23 @@ describe('createAppIntake', () => {
           message: 'Missing required field: event',
         },
       ],
-      [
-        'bad signature',
-        () => post({ event: { ...signed(), id: 'f'.repeat(64) } }),
-        422,
-        { accept: false, code: 'F00', message: 'Invalid event signature' },
-      ],
     ];
-    it.each(parity)('%s', async (_n, req, status, body) => {
-      const res = await intake()(req());
+    it.each(parity)('%s', async (_n, rawBody, status, body) => {
+      const handler = vi.fn<
+        Parameters<AppIntakeHandler>,
+        ReturnType<AppIntakeHandler>
+      >(() => ({
+        accept: false,
+        code: 'F00',
+        message: 'should not be called',
+      }));
+      const res = await intake({
+        devMode: true,
+        handlers: { 5094: handler },
+      })(post(rawBody, { 'content-type': 'application/json' }));
       expect(res.status).toBe(status);
       expect(await res.json()).toEqual(body);
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 });
