@@ -32,7 +32,7 @@ import * as sandcastle from '@ai-hero/sandcastle';
 import { docker } from '@ai-hero/sandcastle/sandboxes/docker';
 import { sandboxSecrets } from './sandbox-secrets.ts';
 import { mintAppToken } from './mint-app-token.ts';
-import { fixPrompt, runGate, selectSteps } from './run-gate.ts';
+import { BUILD_STEPS, fixPrompt, runGate } from './run-gate.ts';
 
 const issueNumber: string = (() => {
   const value = process.env.SANDCASTLE_ISSUE_NUMBER?.trim();
@@ -242,8 +242,7 @@ async function main() {
     // 3. Gate: CI's own commands, run by this runner. A red gate gets a bounded
     //    number of fix sessions with the exact failure; after that the run fails
     //    rather than open a red PR.
-    const gateSteps = await selectSteps(sandbox, BASE);
-    let gate = await runGate(sandbox, gateSteps);
+    let gate = await runGate(sandbox, BUILD_STEPS);
     for (let attempt = 1; !gate.passed && attempt <= MAX_GATE_FIX_ATTEMPTS; attempt++) {
       console.log(`\nGate is red — fix attempt ${attempt}/${MAX_GATE_FIX_ATTEMPTS}.`);
       await sandbox.run({
@@ -253,7 +252,7 @@ async function main() {
         prompt: fixPrompt(gate.failure!, attempt, MAX_GATE_FIX_ATTEMPTS),
       });
       await pushBranch(sandbox, `push:gate-fix-${attempt}`, { bestEffort: true });
-      gate = await runGate(sandbox, gateSteps);
+      gate = await runGate(sandbox, BUILD_STEPS);
     }
     if (!gate.passed) {
       await pushBranch(sandbox, 'push:red', { bestEffort: true });

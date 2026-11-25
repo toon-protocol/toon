@@ -1,8 +1,7 @@
 # Domain Docs
 
 How the engineering skills should consume this repo's domain documentation when exploring the
-codebase. This repo is **single-context**: one library layer, `@toon-protocol/core` and
-`@toon-protocol/sdk`, in a pnpm workspace under `packages/*`.
+codebase. This repo is **single-context**: one library layer, `@toon-protocol/core`, in a pnpm workspace under `packages/*`.
 
 ## Before exploring, read these
 
@@ -30,7 +29,6 @@ decisions actually get resolved.
 ├── .changeset/
 └── packages/
     ├── core/                ← @toon-protocol/core
-    ├── sdk/                 ← @toon-protocol/sdk
     └── settlement-digest/
 ```
 
