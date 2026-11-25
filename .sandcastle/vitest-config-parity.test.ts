@@ -7,7 +7,7 @@
 // package under its OWN packages/<name>/vitest.config.ts. The root
 // vitest.config.ts is what a developer gets from `pnpm test` at the repo
 // root, and it is never the config CI runs a full suite under. That gap is
-// how toon#144 happened: a per-package vitest config set
+// how toon#144 happened: the (since deleted) sdk vitest config set
 // `TOON_GENESIS_PEERS: '[]'` to keep zero-known-peer fixtures hermetic
 // (toon#79), the root config never got the same setting, and so the root run
 // accumulated 50 failures against the live devnet genesis seed while CI

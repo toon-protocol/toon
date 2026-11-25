@@ -16,8 +16,9 @@ export default defineConfig({
     // (packages/core/src/discovery/genesis-peers.json) so zero-known-peer
     // fixtures stay zero-peer regardless of live seed content. See toon#79.
     //
-    // This MUST stay in sync with a package vitest config. It was
-    // missing here while the sdk config had it, so the root run bootstrapped
+    // This MUST stay in sync with the package vitest configs (guarded by
+    // .sandcastle/vitest-config-parity.test.ts). It was missing here while the
+    // now-deleted sdk config had it, so the root run bootstrapped
     // nodes against the live devnet apex in the seed; BootstrapService then
     // announced its own kind:10032 as a paid ILP PREPARE, adding an extra
     // sendPacket to fixtures that assert on exactly one published event and

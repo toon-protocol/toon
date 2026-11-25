@@ -603,22 +603,21 @@ describe('checkParallelismAssumption', () => {
   });
 });
 
-// toon#216. A conditional ci.yml job (formerly the Solana settlement redemption proof) runs
-// only on change sets touching the settlement surface, and it is excluded from
-// the frozen figures by name. These two functions are what keep that exclusion
+// toon#216. A conditional ci.yml job that runs only on some change sets is
+// excluded from the frozen figures by name. These two functions are what keep that exclusion
 // from becoming a hole in the ceiling.
 describe('resolveExcludedJobNames', () => {
   const withExclusions: GateBaseline = {
     ...baseline,
     gateSpeed: {
       ...baseline.gateSpeed,
-      excludedJobNames: ['Solana settlement redemption proof'],
+      excludedJobNames: ['Conditional proof'],
     },
   };
 
   it('unions the frozen baseline exclusions with the guard job passed in by the workflow', () => {
     expect(resolveExcludedJobNames(withExclusions, 'Gate speed guard')).toEqual([
-      'Solana settlement redemption proof',
+      'Conditional proof',
       'Gate speed guard',
     ]);
   });
@@ -628,12 +627,12 @@ describe('resolveExcludedJobNames', () => {
       ...baseline,
       gateSpeed: {
         ...baseline.gateSpeed,
-        excludedJobNames: ['Gate speed guard', 'Solana settlement redemption proof'],
+        excludedJobNames: ['Gate speed guard', 'Conditional proof'],
       },
     };
     expect(resolveExcludedJobNames(both, 'Gate speed guard')).toEqual([
       'Gate speed guard',
-      'Solana settlement redemption proof',
+      'Conditional proof',
     ]);
   });
 
