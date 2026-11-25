@@ -1,6 +1,6 @@
 # toon
 
-The shared **library layer** of the TOON Protocol: `@toon-protocol/core` (protocol primitives — TOON codec, Nostr peer discovery, ILP address derivation, settlement config, the structural `EmbeddableConnectorLike` interface) and `@toon-protocol/sdk` (the `createNode` framework, handler registry, Arweave DVM handler, swap + multi-chain settlement engines). **Libraries only — no Docker image, no end-user CLI.**
+The shared **library layer** of the TOON Protocol: `@toon-protocol/core` (protocol primitives — TOON codec, Nostr peer discovery, ILP address derivation, settlement config, the structural `EmbeddableConnectorLike` interface). **Libraries only — no Docker image, no end-user CLI.**
 
 TOON Protocol = pay-to-write Nostr over Interledger (ILP), split into per-team repos. Reads are free; a write is an ILP packet carrying a TOON-encoded Nostr event + a signed payment-channel claim, validated by the connector.
 
@@ -18,15 +18,13 @@ Cross-repo context (where each TOON repo lives, the cross-repo glossary, the dec
 
 ## Cross-repo dependencies
 
-- This repo **publishes** `@toon-protocol/{core,sdk}` to npm. Only a few repos consume them, at pinned semver:
-  - **swap** (`packages/swap`) — core and sdk: base58, receipts, `applyRate`, the settlement digests and signers, `buildSettlementTx`.
-  - **store** — sdk: `createArweaveDvmHandler`, `ChunkManager`, the `NodeConfig` type.
+- This repo **publishes** `@toon-protocol/core` to npm. Only a few repos consume it, at pinned semver:
   - **rig** (`packages/rig`, `packages/rig-web`) — core: `core/nip34`.
   - **infra** (`sandbox/`).
 
-  toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
+  `@toon-protocol/sdk` is no longer in this repo: its last published version stays on npm, and the parked swap and store pin it (and `@toon-protocol/settlement-digest`) from there. toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
 
-- `@toon-protocol/connector` is an **optional peer dependency** — `sdk` dynamically imports it at runtime; `core` never imports it (talks to it via a structural interface). `toon` builds and runs without it present.
+- Nothing here imports `@toon-protocol/connector`; `core` talks to it only through a structural interface.
 - The ILP payment engine is the separate **[toon-protocol/connector](https://github.com/toon-protocol/connector)** repo. **All payment-claim validation lives ONLY in the connector — never re-implement it here.**
 
 ## Publishing

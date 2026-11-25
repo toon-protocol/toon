@@ -2,13 +2,13 @@
   "name": "toon",
   "version": "0.3.0",
   "private": true,
-  "description": "Shared library layer for the TOON Protocol: @toon-protocol/core and @toon-protocol/sdk.",
+  "description": "Shared library layer for the TOON Protocol: @toon-protocol/core.",
   "type": "module",
   "scripts": {
     "build": "pnpm -r run build",
     "test": "vitest run",
     "test:coverage": "vitest --coverage",
-    "lint": "eslint . --max-warnings 940",
+    "lint": "eslint . --max-warnings 421",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write \"packages/*/src/**/*.ts\"",
     "format:check": "prettier --check \"packages/*/src/**/*.ts\"",
@@ -87,7 +87,6 @@
     "@changesets/cli": "^2.27.9"
   },
   "dependencies": {
-    "@ardrive/turbo-sdk": "^1.41.0",
-    "arweave": "^1.15.5"
+    "@ardrive/turbo-sdk": "^1.41.0"
   }
 }

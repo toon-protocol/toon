@@ -3,16 +3,8 @@
 // The commands are those of ci.yml's `build` job, in the same order, so passing here
 // means what passing there means. `run-gate.test.ts` reads ci.yml and fails when one
 // drifts. A gate that runs something *similar* to CI teaches the agent the wrong lesson.
-//
-// One CI job is conditional: `solana-settlement-proof`, which runs only when the change
-// set touches the Solana settlement surface (settlement-surface.ts decides, and fails
-// safe: an unreadable or empty change set runs it). The sandbox gate makes the same
-// decision from the same module over `git diff <base>...HEAD`, so a ticket that touches
-// that surface has to pass the proof before a PR opens, and one that doesn't pays
-// nothing. The shared sandbox image carries the Solana CLI (2.1.21, ci.yml's version) for it.
 
 import type * as sandcastle from '@ai-hero/sandcastle';
-import { decideSettlementSurface, UNKNOWN_CHANGE_SET } from './settlement-surface.ts';
 
 type Sandbox = Awaited<ReturnType<typeof sandcastle.createSandbox>>;
 
@@ -51,56 +43,7 @@ export const BUILD_STEPS: readonly GateStep[] = [
   { name: 'lint ceiling', command: 'npx tsx .sandcastle/gate-guard-cli.ts lint-ceiling' },
   { name: 'package tests', command: 'pnpm -r --parallel test --if-present' },
   { name: 'gate guard tests', command: 'npx vitest run .sandcastle/' },
-  {
-    name: 'connector contract canary',
-    command:
-      'pnpm --filter @toon-protocol/sdk test:integration ' +
-      'tests/integration/connector-contract.test.ts ' +
-      'tests/integration/connector-contract.multichain.test.ts && ' +
-      'pnpm --filter @toon-protocol/sdk exec tsc -p tests/integration/tsconfig.json',
-  },
 ];
-
-/**
- * ci.yml's `solana-settlement-proof` job. Its "prove it actually redeemed" assertions
- * are kept: a green run that collected nothing is what SDK_REQUIRE_SOLANA=1 exists to
- * prevent.
- */
-export const SOLANA_PROOF_STEP: GateStep = {
-  name: 'solana settlement proof',
-  command:
-    'SDK_REQUIRE_SOLANA=1 NO_COLOR=1 FORCE_COLOR=0 ' +
-    'pnpm --filter @toon-protocol/sdk test:integration ' +
-    'tests/integration/solana-claim-redeem.integration.test.ts > /tmp/solana-proof.log 2>&1; ' +
-    'status=$?; cat /tmp/solana-proof.log; test "$status" -eq 0 && ' +
-    "sed -r 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' /tmp/solana-proof.log > /tmp/solana-proof.plain && " +
-    "grep -qE 'Tests +5 passed \\(5\\)' /tmp/solana-proof.plain && " +
-    "grep -q '\\[solana-redeem\\] tx ' /tmp/solana-proof.plain",
-};
-
-/**
- * The gate for a change set. `changedFiles` is the branch's diff against the base, or
- * null when it could not be read, which the settlement-surface decision treats as
- * "touched" so the proof runs rather than being skipped for want of information.
- */
-export function gateSteps(changedFiles: readonly string[] | null): readonly GateStep[] {
-  const decision = decideSettlementSurface(changedFiles ?? [UNKNOWN_CHANGE_SET]);
-  console.log(`  [gate] solana settlement surface: ${decision.reason}`);
-  return decision.touched ? [...BUILD_STEPS, SOLANA_PROOF_STEP] : BUILD_STEPS;
-}
-
-/** The gate for what the branch changed against `baseBranch`. */
-export async function selectSteps(
-  sandbox: Sandbox,
-  baseBranch: string
-): Promise<readonly GateStep[]> {
-  const diff = await sandbox.exec(`git diff --name-only ${baseBranch}...HEAD`);
-  if (diff.exitCode !== 0) {
-    console.log('  [gate] could not read the changed-file list.');
-    return gateSteps(null);
-  }
-  return gateSteps(diff.stdout.split('\n'));
-}
 
 /**
  * Run `steps` in order, stopping at the first failure.

@@ -692,10 +692,9 @@ describe("the committed baseline's measured-job bookkeeping", () => {
     ]);
   });
 
-  it('excludes the guard job and the conditional Solana proof and changeset jobs, and nothing else', () => {
+  it('excludes the guard job and the conditional changeset job, and nothing else', () => {
     expect(committed.gateSpeed.excludedJobNames).toEqual([
       'Gate speed/performance no-regression guard',
-      'Solana settlement redemption proof',
       'Changeset validates a release plan',
     ]);
   });
@@ -709,15 +708,14 @@ describe("the committed baseline's measured-job bookkeeping", () => {
     expect(requiredNames.filter((name) => excluded.includes(name))).toEqual([]);
   });
 
-  it('replays a real run: build + devbox + no-op-merge measured, guard and proof excluded', () => {
+  it('replays a real run: build + devbox + no-op-merge measured, guard and changeset excluded', () => {
     // Job rows as the API returned them for run 32028945650 (push, 3590bb3),
-    // plus a proof job at its measured 94s. The proof and the guard must drop
-    // out; what remains must still be inside both frozen ceilings.
+    // plus a changeset job. The changeset job and the guard must drop out; what remains must still be inside both frozen ceilings.
     const apiJobs = [
       { name: 'build', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:17:20Z', created_at: '2026-08-17T12:15:28Z' },
       { name: 'Devbox Environment Validation', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:16:18Z', created_at: '2026-08-17T12:15:28Z' },
       { name: 'no-op merge guard', started_at: '2026-08-17T12:15:30Z', completed_at: '2026-08-17T12:15:36Z', created_at: '2026-08-17T12:15:28Z' },
-      { name: 'Solana settlement redemption proof', started_at: '2026-08-17T12:17:22Z', completed_at: '2026-08-17T12:18:56Z', created_at: '2026-08-17T12:17:20Z' },
+      { name: 'Changeset validates a release plan', started_at: '2026-08-17T12:17:22Z', completed_at: '2026-08-17T12:17:54Z', created_at: '2026-08-17T12:17:20Z' },
       { name: 'Gate speed/performance no-regression guard', started_at: '2026-08-17T12:17:24Z', completed_at: '2026-08-17T12:17:56Z', created_at: '2026-08-17T12:17:20Z' },
     ];
 
@@ -737,9 +735,6 @@ describe("the committed baseline's measured-job bookkeeping", () => {
     expect(checkRequiredJobsMeasured(Object.keys(durations.byName), committed).pass).toBe(true);
     expect(checkSpeedRegression(durations.longestJobSeconds, committed).pass).toBe(true);
     expect(checkPerformanceRegression(durations.sumRunnerSeconds, committed).pass).toBe(true);
-    // Without the exclusion, the proof's `needs: build` creation lag would also
-    // have tripped the parallelism check -- the second reason it cannot simply
-    // be folded into the measured set.
     expect(checkParallelismAssumption(durations).pass).toBe(true);
   });
 });

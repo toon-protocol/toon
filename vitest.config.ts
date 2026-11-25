@@ -7,7 +7,6 @@ export default defineConfig({
       '@toon-protocol/core/toon': resolve(__dirname, 'packages/core/src/toon/index.ts'),
       '@toon-protocol/core/nip34': resolve(__dirname, 'packages/core/src/nip34/index.ts'),
       '@toon-protocol/core': resolve(__dirname, 'packages/core/src/index.ts'),
-      '@toon-protocol/sdk': resolve(__dirname, 'packages/sdk/src/index.ts'),
     },
   },
   test: {
@@ -17,8 +16,8 @@ export default defineConfig({
     // (packages/core/src/discovery/genesis-peers.json) so zero-known-peer
     // fixtures stay zero-peer regardless of live seed content. See toon#79.
     //
-    // This MUST stay in sync with packages/sdk/vitest.config.ts. It was
-    // missing here while the sdk config had it, so the root run bootstrapped
+    // This MUST stay in sync with packages/core/vitest.config.ts. It was
+    // missing here while the package config had it, so the root run bootstrapped
     // nodes against the live devnet apex in the seed; BootstrapService then
     // announced its own kind:10032 as a paid ILP PREPARE, adding an extra
     // sendPacket to fixtures that assert on exactly one published event and

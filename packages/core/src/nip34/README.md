@@ -53,35 +53,6 @@ const nip34Handler = new NIP34Handler({
 });
 ```
 
-### Integrate with createNode()
-
-Register the handler against every NIP-34 event kind using `@toon-protocol/sdk`'s
-`createNode()` / `HandlerRegistry` pattern:
-
-```typescript
-import { createNode } from '@toon-protocol/sdk';
-import { NIP34_EVENT_KINDS } from '@toon-protocol/core/nip34';
-
-const node = createNode({
-  secretKey,
-  basePricePerByte: 10n,
-});
-
-// NIP-34 integration: one handler, registered for every NIP-34 kind
-for (const kind of NIP34_EVENT_KINDS) {
-  node.on(kind, async (ctx) => {
-    const event = ctx.decode();
-    const result = await nip34Handler.handleEvent(event);
-    console.log(`${result.operation}: ${result.message}`);
-    return result.success
-      ? ctx.accept(result.metadata)
-      : ctx.reject('T00', result.message);
-  });
-}
-
-await node.start();
-```
-
 ## Supported Operations
 
 ### Repository Announcement (kind 30617)

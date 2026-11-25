@@ -66,14 +66,6 @@
     "simple-git": "^3.32.3",
     "ws": "^8.18.0"
   },
-  "peerDependencies": {
-    "@toon-protocol/connector": ">=3.3.3"
-  },
-  "peerDependenciesMeta": {
-    "@toon-protocol/connector": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/ws": "^8.5.10",
