@@ -104,6 +104,8 @@ describe('@toon-protocol/sdk public API exports', () => {
       'createHandlerContext',
       // Handler registry (Story 1.2)
       'HandlerRegistry',
+      // App intake
+      'createAppIntake',
       // Pricing validator (Story 1.5)
       'createPricingValidator',
       // Verification pipeline (Story 1.4)
