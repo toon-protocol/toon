@@ -1,6 +1,6 @@
 {
   "name": "@toon-protocol/core",
-  "version": "3.6.1",
+  "version": "4.0.0",
   "description": "The TOON codec, NIP-34, base58 and the kind 5094 blob storage request builder and parser",
   "type": "module",
   "main": "./dist/index.js",
