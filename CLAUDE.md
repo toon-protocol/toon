@@ -18,7 +18,14 @@ Cross-repo context (where each TOON repo lives, the cross-repo glossary, the dec
 
 ## Cross-repo dependencies
 
-- This repo **publishes** `@toon-protocol/{core,sdk}` to npm; every other TOON repo consumes them at pinned semver.
+- This repo **publishes** `@toon-protocol/{core,sdk}` to npm. Only a few repos consume them, at pinned semver:
+  - **swap** (`packages/swap`): base58, receipts, `applyRate`, the settlement digests and signers, `buildSettlementTx`.
+  - **store**: `createArweaveDvmHandler`, `ChunkManager`, the `NodeConfig` type.
+  - **rig** (`packages/rig`, `packages/rig-web`): `core/nip34`.
+  - **infra** (`sandbox/`).
+
+  toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
+
 - `@toon-protocol/connector` is an **optional peer dependency** — `sdk` dynamically imports it at runtime; `core` never imports it (talks to it via a structural interface). `toon` builds and runs without it present.
 - The ILP payment engine is the separate **[toon-protocol/connector](https://github.com/toon-protocol/connector)** repo. **All payment-claim validation lives ONLY in the connector — never re-implement it here.**
 

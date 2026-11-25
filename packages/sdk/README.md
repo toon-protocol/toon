@@ -30,7 +30,8 @@ import { ConnectorNode } from '@toon-protocol/connector';
 // 1. Create an identity
 const identity = fromMnemonic('your twelve word mnemonic phrase here');
 
-// 2. Create an embedded ILP connector
+// 2. Create a connector (`@toon-protocol/connector` is an optional peer dependency;
+//    no embedded TypeScript connector ships with this repo)
 const connector = new ConnectorNode({
   nodeId: 'my-node',
   btpServerPort: 3000,

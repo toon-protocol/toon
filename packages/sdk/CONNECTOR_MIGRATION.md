@@ -1,5 +1,11 @@
 # `@toon-protocol/connector` Migration Guide
 
+> **No embedded TypeScript connector ships.** The connector is now a separate
+> Rust workspace ([toon-protocol/connector](https://github.com/toon-protocol/connector)).
+> `@toon-protocol/connector` is only an optional peer dependency of the SDK, and
+> this repo does not bundle or embed a TypeScript connector. Where this document
+> describes one, it records the historical API contract the SDK's canary checks.
+
 > **See also:** [`CONNECTOR_RELEASE_CONTRACT.md`](./CONNECTOR_RELEASE_CONTRACT.md) — the upstream `@toon-protocol/connector` release contract describing semver discipline for the `/admin/*` API surface, supply-chain signing, and digest-pinning strategy. This file (CONNECTOR_MIGRATION.md) is the runtime canary contract the SDK enforces; the contract file is the producer-side promise. Read both when bumping `@toon-protocol/connector` minor or major versions.
 
 This document records the **API contract** that `@toon-protocol/sdk` depends on
