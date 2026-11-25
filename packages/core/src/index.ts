@@ -1,262 +1,31 @@
 /**
  * @toon-protocol/core
  *
- * Core library for Nostr-based ILP peer discovery.
+ * The TOON codec, NIP-34 (`./nip34`), base58 and the kind 5094 blob storage
+ * request builder and parser.
  */
 
 export const VERSION = '0.1.0';
 
 // Event kind constants
 export {
-  ILP_PEER_INFO_KIND,
-  SERVICE_DISCOVERY_KIND,
-  SEED_RELAY_LIST_KIND,
-  TEE_ATTESTATION_KIND,
-  JOB_REQUEST_KIND_BASE,
-  JOB_RESULT_KIND_BASE,
-  JOB_FEEDBACK_KIND,
-  TEXT_GENERATION_KIND,
-  IMAGE_GENERATION_KIND,
-  TEXT_TO_SPEECH_KIND,
-  TRANSLATION_KIND,
   BLOB_STORAGE_REQUEST_KIND,
   BLOB_STORAGE_RESULT_KIND,
-  ILP_ROOT_PREFIX,
-  PREFIX_CLAIM_KIND,
-  PREFIX_GRANT_KIND,
-  PET_INTERACTION_REQUEST_KIND,
-  PET_INTERACTION_RESULT_KIND,
-  PET_INTERACTION_EVENT_KIND,
 } from './constants.js';
 
-// ILP address derivation and BTP prefix exchange
-export { deriveChildAddress } from './address/index.js';
-export {
-  isValidIlpAddressStructure,
-  validateIlpAddress,
-  extractPrefixFromHandshake,
-  buildPrefixHandshakeData,
-  validatePrefixConsistency,
-  checkAddressCollision,
-  assignAddressFromHandshake,
-  isGenesisNode,
-  AddressRegistry,
-  validatePrefix,
-} from './address/index.js';
-export type {
-  BtpHandshakeExtension,
-  PrefixValidationResult,
-} from './address/index.js';
-
-// TypeScript interfaces
-export type {
-  IlpPeerInfo,
-  SwapPair,
-  TeeAttestation,
-  Subscription,
-  OpenChannelParams,
-  OpenChannelResult,
-  ChannelState,
-  ConnectorChannelClient,
-} from './types.js';
-
 // Error classes
-export { ToonError, InvalidEventError, PeerDiscoveryError } from './errors.js';
+export { ToonError } from './errors.js';
 
-// Event parsers and builders
+// Kind 5094 blob storage request builder and parser
 export {
-  parseIlpPeerInfo,
-  validateChainId,
-  buildIlpPeerInfoEvent,
-  type BuildIlpPeerInfoOptions,
-  getEventExpiration,
-  isEventExpired,
-  EXPIRATION_TAG,
-  buildSeedRelayListEvent,
-  parseSeedRelayList,
-  type SeedRelayEntry,
-  buildServiceDiscoveryEvent,
-  parseServiceDiscovery,
-  type ServiceDiscoveryContent,
-  type SkillDescriptor,
-  buildAttestationEvent,
-  parseAttestation,
-  type AttestationEventOptions,
-  type ParsedAttestation,
-  buildJobRequestEvent,
-  buildJobResultEvent,
-  buildJobFeedbackEvent,
-  parseJobRequest,
-  parseJobResult,
-  parseJobFeedback,
-  type DvmJobStatus,
-  type JobRequestParams,
-  type JobResultParams,
-  type JobFeedbackParams,
-  type ParsedJobRequest,
-  type ParsedJobResult,
-  type ParsedJobFeedback,
-  buildWorkflowDefinitionEvent,
-  parseWorkflowDefinition,
-  WORKFLOW_CHAIN_KIND,
-  type WorkflowStep,
-  type WorkflowDefinitionParams,
-  type ParsedWorkflowDefinition,
-  buildSwarmRequestEvent,
-  buildSwarmSelectionEvent,
-  parseSwarmRequest,
-  parseSwarmSelection,
-  type SwarmRequestParams,
-  type SwarmSelectionParams,
-  type ParsedSwarmRequest,
-  type ParsedSwarmSelection,
-  buildPrefixClaimEvent,
-  parsePrefixClaimEvent,
-  buildPrefixGrantEvent,
-  parsePrefixGrantEvent,
-  type PrefixClaimContent,
-  type PrefixGrantContent,
   buildBlobStorageRequest,
   parseBlobStorageRequest,
   type BlobStorageRequestParams,
   type ParsedBlobStorageRequest,
-  AttestedResultVerifier,
-  hasRequireAttestation,
-  type AttestedResultVerificationOptions,
-  type AttestedResultVerificationResult,
-  buildJobReviewEvent,
-  parseJobReview,
-  buildWotDeclarationEvent,
-  parseWotDeclaration,
-  ReputationScoreCalculator,
-  hasMinReputation,
-  JOB_REVIEW_KIND,
-  WEB_OF_TRUST_KIND,
-  type JobReviewParams,
-  type ParsedJobReview,
-  type WotDeclarationParams,
-  type ParsedWotDeclaration,
-  type ReputationSignals,
-  type ReputationScore,
 } from './events/index.js';
 
-// Peer discovery
-export {
-  NostrPeerDiscovery,
-  GenesisPeerLoader,
-  type GenesisPeer,
-  ArDrivePeerRegistry,
-  SocialPeerDiscovery,
-  type SocialPeerDiscoveryConfig,
-  type SocialDiscoveryEvent,
-  type SocialDiscoveryEventListener,
-  SeedRelayDiscovery,
-  publishSeedRelayEntry,
-  type SeedRelayDiscoveryConfig,
-  type SeedRelayDiscoveryResult,
-  type PublishSeedRelayConfig,
-} from './discovery/index.js';
-
-// Fee calculation utilities
-export {
-  calculateRouteAmount,
-  type CalculateRouteAmountParams,
-  resolveRouteFees,
-  type ResolveRouteFeesParams,
-  type ResolveRouteFeesResult,
-} from './fee/index.js';
-
-// Settlement utilities
-export {
-  negotiateSettlementChain,
-  resolveTokenForChain,
-  // Canonical balance-proof hash/field layouts (single source of truth) + the
-  // base58 / Mina-key helpers used to build chain-specific claims.
-  hexToBytes,
-  bigintToBytes32BE,
-  concatBytes,
-  balanceProofHashEvm,
-  coopCloseHashEvm,
-  eip712DomainSeparatorEvm,
-  balanceProofMessageSolana,
-  SOLANA_BALANCE_PROOF_MESSAGE_SIZE,
-  balanceProofHashSolana,
-  minaHashToField,
-  balanceProofFieldsMina,
-  base58Encode,
-  base58Decode,
-  hexToMinaBase58PrivateKey,
-  deriveMinaPublicKeyBase58,
-} from './settlement/index.js';
-
-// Bootstrap service
-export {
-  BootstrapService,
-  BootstrapError,
-  createDiscoveryTracker,
-  type DiscoveryTracker,
-  type DiscoveryTrackerConfig,
-  createHttpIlpClient,
-  createHttpRuntimeClient,
-  createAgentRuntimeClient,
-  createDirectIlpClient,
-  createDirectRuntimeClient,
-  createDirectConnectorAdmin,
-  type KnownPeer,
-  type BootstrapConfig,
-  type BootstrapServiceConfig,
-  type BootstrapResult,
-  type ConnectorAdminClient,
-  type BootstrapPhase,
-  type BootstrapEvent,
-  type BootstrapEventListener,
-  type IlpClient,
-  type AgentRuntimeClient,
-  type IlpSendResult,
-  type ConnectorNodeLike,
-  type SendPacketParams,
-  type SendPacketResult,
-  type DirectRuntimeClientConfig,
-  type ConnectorAdminLike,
-  type RegisterPeerParams,
-  createDirectChannelClient,
-  type ConnectorChannelLike,
-  type DiscoveredPeer,
-  type SettlementConfig,
-  type ConnectorEdgeLookup,
-  type ConnectorEdgeIdentity,
-  type ConnectorEdgeRoutePrice,
-  createHttpConnectorAdmin,
-  createHttpRuntimeClientV2,
-  createHttpChannelClient,
-  AttestationVerifier,
-  AttestationState,
-  type VerificationResult,
-  type PeerDescriptor,
-  type AttestationVerifierConfig,
-  AttestationBootstrap,
-  type AttestationBootstrapConfig,
-  type AttestationBootstrapResult,
-  type AttestationBootstrapEvent,
-  type AttestationBootstrapEventListener,
-} from './bootstrap/index.js';
-
-// Compose - embedded connector orchestration
-export {
-  createToonNode,
-  type ToonNodeConfig,
-  type ToonNode,
-  type ToonNodeStartResult,
-  type EmbeddableConnectorLike,
-  type PacketHandler,
-  type HandlePacketRequest,
-  type HandlePacketAcceptResponse,
-  type HandlePacketRejectResponse,
-  type HandlePacketResponse,
-} from './compose.js';
-
-// Connector reject-code translation (ILP wire code → semantic reason)
-export { ILP_TO_SEMANTIC, ilpCodeToSemantic } from './utils/reject-code.js';
+// Base58 (Bitcoin/Solana alphabet)
+export { base58Encode, base58Decode } from './base58.js';
 
 // TOON codec
 export {
@@ -268,106 +37,6 @@ export {
   shallowParseToon,
   type ToonRoutingMeta,
 } from './toon/index.js';
-
-// Chain configuration
-export {
-  MOCK_USDC_ADDRESS,
-  USDC_DECIMALS,
-  USDC_SYMBOL,
-  USDC_NAME,
-  MOCK_USDC_CONFIG,
-  type MockUsdcConfig,
-} from './chain/usdc.js';
-
-// Chain presets and multi-environment configuration
-export {
-  resolveChainConfig,
-  resolveSolanaChainConfig,
-  resolveMinaChainConfig,
-  buildEip712Domain,
-  buildEvmProviderEntry,
-  buildSolanaProviderEntry,
-  buildMinaProviderEntry,
-  CHAIN_PRESETS,
-  SOLANA_CHAIN_PRESETS,
-  MINA_CHAIN_PRESETS,
-  type ChainPreset,
-  type ChainName,
-  type ChainType,
-  type SolanaChainName,
-  type MinaChainName,
-  type MultiChainName,
-  type SolanaChainPreset,
-  type MinaChainPreset,
-  type ChainProviderConfigEntry,
-  type EVMProviderConfigEntry,
-  type SolanaProviderConfigEntry,
-  type MinaProviderConfigEntry,
-} from './chain/chain-config.js';
-
-// Network-mode resolution (mainnet/testnet/devnet/custom → apex + node config)
-export {
-  resolveNetworkProfile,
-  resolveClientNetwork,
-  RELAY_ONLY_CHAIN,
-  type NetworkMode,
-  type NetworkProfile,
-  type NetworkNodeEnv,
-  type NetworkFamilyStatus,
-  type CustomEndpoints,
-  type ClientNetworkPresets,
-} from './chain/network-profile.js';
-
-// x402 protocol support (shared ILP PREPARE construction)
-export {
-  buildIlpPrepare,
-  type BuildIlpPrepareParams,
-  type IlpPreparePacket,
-} from './x402/index.js';
-
-// KMS Identity (TEE enclave-bound key derivation)
-export {
-  deriveFromKmsSeed,
-  KmsIdentityError,
-  type KmsKeypair,
-  type DeriveFromKmsSeedOptions,
-} from './identity/index.js';
-
-// Nix reproducible builds (TEE deployment)
-export {
-  NixBuilder,
-  type NixBuildResult,
-  type NixBuilderConfig,
-  verifyPcrReproducibility,
-  readDockerfileNix,
-  analyzeDockerfileForNonDeterminism,
-  PcrReproducibilityError,
-  type PcrReproducibilityResult,
-  type VerifyOptions,
-  type DeterminismReport,
-  type Violation,
-  type ForbiddenPattern,
-} from './build/index.js';
-
-// Structured logging
-export {
-  createLogger,
-  type Logger,
-  type LoggerConfig,
-  type LogLevel,
-  type LogEntry,
-} from './logger.js';
-
-// NIP-on-TOON UI renderer resolution (pure ui→kind:31036 coordinate helpers)
-export {
-  UI_RENDERER_KIND,
-  UI_TAG,
-  parseUiCoordinate,
-  buildUiCoordinate,
-  getUiCoordinate,
-  selectLatestAddressable,
-  type UiCoordinate,
-} from './ui/index.js';
 
 // NIP-34: Git stuff
 // NOTE: Import from '@toon-protocol/core/nip34' to use Git integration

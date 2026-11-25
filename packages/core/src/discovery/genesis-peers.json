@@ -1,8 +1,0 @@
-[
-  {
-    "pubkey": "915d29908235be4b53f8f23cd7ac72c88c99be3bcca876dadf5c1a449433b8f9",
-    "relayUrl": "wss://relay.toonprotocol.dev",
-    "ilpAddress": "g.toon.relay",
-    "btpEndpoint": "wss://toonprotocol.dev/ilp/btp"
-  }
-]

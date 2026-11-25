@@ -22,9 +22,10 @@ Cross-repo context (where each TOON repo lives, the cross-repo glossary, the dec
   - **rig** (`packages/rig`, `packages/rig-web`) — core: `core/nip34`.
   - **infra** (`sandbox/`).
 
-  `@toon-protocol/sdk` is no longer in this repo: its last published version stays on npm, and the parked swap and store pin it (and `@toon-protocol/settlement-digest`) from there. toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
+  `@toon-protocol/sdk` and `@toon-protocol/settlement-digest` are no longer in this repo: their last published versions stay on npm, and the parked swap and store pin them from there (toon#238). toon-client no longer depends on `@toon-protocol/core`, and the connector is a Rust workspace that never used it. A public export is not load-bearing across the fleet; check the consumers above before treating a change or removal as breaking.
+- **What each live caller uses:** rig takes `@toon-protocol/core/nip34` (kind constants); infra's `sandbox/scripts` take `buildBlobStorageRequest`. Core also keeps the TOON codec (`./toon`) and `base58Encode` / `base58Decode`, which the parked store and swap use.
 
-- Nothing here imports `@toon-protocol/connector`; `core` talks to it only through a structural interface.
+- Nothing here imports or depends on `@toon-protocol/connector`.
 - The ILP payment engine is the separate **[toon-protocol/connector](https://github.com/toon-protocol/connector)** repo. **All payment-claim validation lives ONLY in the connector — never re-implement it here.**
 
 ## Publishing

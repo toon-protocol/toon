@@ -45,8 +45,8 @@ jobs:
       # checked the result, so a reintroduced error would have merged silently.
       # `tsc --noEmit` exits non-zero on any error, so this step FAILS the
       # build -- it is not advisory. It must run AFTER `pnpm -r build`: the
-      # root tsconfig resolves cross-package imports (@toon-protocol/core,
-      # @toon-protocol/settlement-digest) through each package's published
+      # root tsconfig resolves cross-package imports (@toon-protocol/core)
+      # through each package's published
       # `types` entry under dist/, so typechecking a clean checkout without
       # dist/ produces ~90 phantom TS2307s.
       #

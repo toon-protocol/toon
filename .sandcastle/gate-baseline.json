@@ -9,7 +9,7 @@
   "timingsRecaptureMethod": "HISTORICAL (superseded by timingsRecaptureMethodUpdate below; kept for how the 2026-08-05 generation under supersededSampleRuns was produced). toon#151. `gateSpeed` and `gatePerformance.runnerMinutes` were re-measured against the workflow's CURRENT job set, via `gh api repos/toon-protocol/toon/actions/runs/<id>/attempts/1/jobs` for the 5 most recent `push`-to-`main` runs of ci.yml as of 2026-08-05 (run ids in `sampleRuns`; the same 5-most-recent-push-runs rule as the original capture). Only the two GATED jobs are counted — `build` and `Devbox Environment Validation`. The `Gate speed/performance no-regression guard` job itself is excluded: it observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API. Note that `Build sandcastle agent image` belongs to a DIFFERENT workflow (agent-image.yml) with its own run id, so it has never appeared in this run's job list and does not affect these figures — its size is gated separately by `dockerImageSize`. The recaptured summed runner-seconds (154.6) came out identical to the 2026-07-22 capture, i.e. the gate's compute has not drifted; only the wall-clock figure needed replacing, and it was replaced by a queue-immune metric rather than re-averaged.",
   "timingsRecaptureMethodUpdate": "toon#173. The 2026-08-05 capture above sampled only `push`-to-`main` runs, but `gate-regression-guard` gates every `pull_request` run too (ci.yml:3-6 triggers the workflow `on: pull_request` as well as `push` to `main`; the guard job at ci.yml:135 carries no event filter of its own and its `needs: [build, devbox-validate]` at ci.yml:137 both run on either event -- `build` is unconditional, `devbox-validate` is `if: github.event_name == 'push' || github.event_name == 'pull_request'` at ci.yml:112) -- so that sample undercounted real variance. Proof: the PR run that actually gated #157 (run 31187288497, head 7b125eb, merged as 430a358) measured a 120.0s longest job / 164.0s summed runner-seconds, both above every 2026-08-05 sampleRun, yet was never eligible for inclusion under the push-only rule. Re-recaptured 2026-08-07 from the 5 most recent COMPLETED ci.yml runs of EITHER event type (`gh run list --workflow=ci.yml --json databaseId,headSha,createdAt,event,conclusion --limit 15`, most recent first, skipping non-`success` runs), via the same per-run `gh api .../attempts/1/jobs` read as before. See `sampleRuns[].event` for which of the 5 were `push` vs `pull_request`.",
   "gateShape": {
-    "lint": "eslint . --max-warnings 421",
+    "lint": "eslint . --max-warnings 12",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run (via `pnpm -r test --if-present` in CI, plus `npx vitest run .sandcastle/` for the root-config guard + parity tests)",
     "build": "pnpm -r run build"
@@ -71,14 +71,14 @@
     }
   },
   "gateCorrectness": {
-    "description": "Current violation counts under the existing soft-gate ceiling (`eslint . --max-warnings 421`) and the known-debt typecheck gate. These are the frozen baseline the epic (toon-protocol/toon-meta#210) ratchets toward zero in follow-up slices — this issue only captures the number.",
+    "description": "Current violation counts under the existing soft-gate ceiling (`eslint . --max-warnings 12`) and the known-debt typecheck gate. These are the frozen baseline the epic (toon-protocol/toon-meta#210) ratchets toward zero in follow-up slices — this issue only captures the number.",
     "lint": {
       "command": "npx eslint .",
       "errors": 0,
-      "warnings": 421,
-      "maxWarningsCeiling": 421,
+      "warnings": 12,
+      "maxWarningsCeiling": 12,
       "byRule": {
-        "@typescript-eslint/no-non-null-assertion": 421
+        "@typescript-eslint/no-non-null-assertion": 12
       }
     },
     "typecheck": {
