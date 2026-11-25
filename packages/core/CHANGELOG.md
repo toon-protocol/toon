@@ -1,5 +1,11 @@
 # @toon-protocol/core
 
+## 3.6.1
+
+### Patch Changes
+
+- 3b2ff4f: Docs: no embedded TypeScript connector ships any more; the connector is a separate Rust workspace, and `@toon-protocol/connector@4` is only an HTTP client.
+
 ## 3.6.0
 
 ### Minor Changes
