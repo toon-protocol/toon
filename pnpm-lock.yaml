@@ -162,61 +162,6 @@ importers:
         specifier: ^2.8.2
         version: 2.8.2
 
-  packages/sdk:
-    dependencies:
-      '@ardrive/turbo-sdk':
-        specifier: ^1.19.0
-        version: 1.40.2(typescript@5.9.3)
-      '@noble/curves':
-        specifier: ^2.0.0
-        version: 2.0.1
-      '@noble/hashes':
-        specifier: ^2.0.0
-        version: 2.0.1
-      '@scure/bip32':
-        specifier: ^2.0.0
-        version: 2.0.1
-      '@scure/bip39':
-        specifier: ^2.0.0
-        version: 2.0.1
-      '@toon-protocol/core':
-        specifier: workspace:*
-        version: link:../core
-      '@toon-protocol/settlement-digest':
-        specifier: workspace:*
-        version: link:../settlement-digest
-      nostr-tools:
-        specifier: ^2.20.0
-        version: 2.23.1(typescript@5.9.3)
-    devDependencies:
-      '@toon-protocol/connector':
-        specifier: ^3.10.0
-        version: 3.10.0(@types/node@20.19.32)(typescript@5.9.3)
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.32
-      '@types/ws':
-        specifier: ^8.0.0
-        version: 8.18.1
-      mina-signer:
-        specifier: '>=3.0.0'
-        version: 3.1.0
-      tsup:
-        specifier: ^8.0.0
-        version: 8.5.1(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-      viem:
-        specifier: ^2.0.0
-        version: 2.45.1(typescript@5.9.3)(zod@3.25.76)
-      vitest:
-        specifier: ^1.0.0
-        version: 1.6.1(@types/node@20.19.32)
-      ws:
-        specifier: ^8.0.0
-        version: 8.19.0
-
   packages/settlement-digest:
     dependencies:
       '@noble/curves':

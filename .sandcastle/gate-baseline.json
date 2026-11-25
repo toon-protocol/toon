@@ -9,7 +9,7 @@
   "timingsRecaptureMethod": "HISTORICAL (superseded by timingsRecaptureMethodUpdate below; kept for how the 2026-08-05 generation under supersededSampleRuns was produced). toon#151. `gateSpeed` and `gatePerformance.runnerMinutes` were re-measured against the workflow's CURRENT job set, via `gh api repos/toon-protocol/toon/actions/runs/<id>/attempts/1/jobs` for the 5 most recent `push`-to-`main` runs of ci.yml as of 2026-08-05 (run ids in `sampleRuns`; the same 5-most-recent-push-runs rule as the original capture). Only the two GATED jobs are counted — `build` and `Devbox Environment Validation`. The `Gate speed/performance no-regression guard` job itself is excluded: it observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API. Note that `Build sandcastle agent image` belongs to a DIFFERENT workflow (agent-image.yml) with its own run id, so it has never appeared in this run's job list and does not affect these figures — its size is gated separately by `dockerImageSize`. The recaptured summed runner-seconds (154.6) came out identical to the 2026-07-22 capture, i.e. the gate's compute has not drifted; only the wall-clock figure needed replacing, and it was replaced by a queue-immune metric rather than re-averaged.",
   "timingsRecaptureMethodUpdate": "toon#173. The 2026-08-05 capture above sampled only `push`-to-`main` runs, but `gate-regression-guard` gates every `pull_request` run too (ci.yml:3-6 triggers the workflow `on: pull_request` as well as `push` to `main`; the guard job at ci.yml:135 carries no event filter of its own and its `needs: [build, devbox-validate]` at ci.yml:137 both run on either event -- `build` is unconditional, `devbox-validate` is `if: github.event_name == 'push' || github.event_name == 'pull_request'` at ci.yml:112) -- so that sample undercounted real variance. Proof: the PR run that actually gated #157 (run 31187288497, head 7b125eb, merged as 430a358) measured a 120.0s longest job / 164.0s summed runner-seconds, both above every 2026-08-05 sampleRun, yet was never eligible for inclusion under the push-only rule. Re-recaptured 2026-08-07 from the 5 most recent COMPLETED ci.yml runs of EITHER event type (`gh run list --workflow=ci.yml --json databaseId,headSha,createdAt,event,conclusion --limit 15`, most recent first, skipping non-`success` runs), via the same per-run `gh api .../attempts/1/jobs` read as before. See `sampleRuns[].event` for which of the 5 were `push` vs `pull_request`.",
   "gateShape": {
-    "lint": "eslint . --max-warnings 940",
+    "lint": "eslint . --max-warnings 421",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run (via `pnpm -r test --if-present` in CI, plus `npx vitest run .sandcastle/` for the root-config guard + parity tests)",
     "build": "pnpm -r run build"
@@ -32,10 +32,9 @@
     "requiredMeasuredJobNamesRationale": "toon#216. These are the jobs the frozen figures above were captured on, asserted present in every measurement by checkRequiredJobsMeasured. The list is a FLOOR, not the full measured set: any other job of the run that has finished by the time the guard reads the API is measured too and counts against both ceilings (today that is `no-op merge guard`, ~3-6s, added by toon#209 after these figures were captured -- unbaselined but well inside the 15% band, worth recapturing next time the baseline is refreshed). Its purpose is the inverse of checkMeasurementCoverage: coverage catches 'nothing was measured', this catches 'the expensive jobs quietly stopped being measured' -- an exclusion that grew a gated job, a rename that orphaned the baseline, or a job that stopped running.",
     "excludedJobNames": [
       "Gate speed/performance no-regression guard",
-      "Solana settlement redemption proof",
       "Changeset validates a release plan"
     ],
-    "excludedJobNamesRationale": "toon#216. Job display names dropped from the measurement, declared here rather than in a ci.yml env var so widening what the ceiling ignores is a reviewed diff to the frozen baseline. (1) `Gate speed/performance no-regression guard` -- the guard observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API (also passed in via GATE_GUARD_SELF_JOB_NAME). (2) `Solana settlement redemption proof` -- see gatePerformance.conditionalJobs.solanaSettlementProof for the measured cost and the full argument. (3) `Changeset validates a release plan` (toon#219) -- a pull_request-only job, see gatePerformance.conditionalJobs.changesetReleasePlan. None of the exclusions can hide gated work: dropping a name in requiredMeasuredJobNames fails checkRequiredJobsMeasured, and .sandcastle/settlement-surface.test.ts pins the proof's spelling here to the `name:` ci.yml declares so a rename cannot leave a dangling exclusion."
+    "excludedJobNamesRationale": "toon#216. Job display names dropped from the measurement, declared here rather than in a ci.yml env var so widening what the ceiling ignores is a reviewed diff to the frozen baseline. (1) `Gate speed/performance no-regression guard` -- the guard observes the run, it is not part of the work being measured, and it is always still in progress when it reads the API (also passed in via GATE_GUARD_SELF_JOB_NAME). (2) `Changeset validates a release plan` (toon#219) -- a pull_request-only job, see gatePerformance.conditionalJobs.changesetReleasePlan. None of the exclusions can hide gated work: dropping a name in requiredMeasuredJobNames fails checkRequiredJobsMeasured."
   },
   "gatePerformance": {
     "description": "Runner cost & cache efficiency. `toon` is a PUBLIC repo, so GitHub bills $0 regardless of minutes used (billable minutes always report 0 via the Actions API) — raw job-second totals are recorded instead as the cost proxy.",
@@ -59,17 +58,7 @@
         "measuredFrom": "run 36743410592 (pull_request, toon#220): 32s, warm pnpm cache -- checkout, pnpm/node setup, install, `pnpm changeset version`",
         "timeoutMinutes": 5,
         "timeoutMinutesRationale": "~9x the measured 32s; a hung install fails the job, and therefore `CI OK`, in minutes instead of the 360-minute default.",
-        "whyNotFoldedIntoTheCeiling": "Measured against the ceilings it did trip the performance guard: build 115s + devbox 48s + no-op 4s + this job 32s = 199s summed runner-seconds, over the 187.7s allowance (163.2s + 15%), while every gated job stayed the same size. The overage is exactly this job's own cost, not drift in the existing jobs (without it the run sums to 167s, inside the band). The job cannot be made cheaper than about 25s of setup, and folding it into `build` is not an option: `changeset version` mutates the tree and build's later steps must judge the author's tree (see the comment in ci.yml). It runs on pull requests only, so the push-and-PR samples the frozen figures were taken from do not describe it, and raising the always-on ceiling by ~20% to absorb a PR-only job would loosen the budget for the common path. Excluding it by name, like the Solana proof, keeps both frozen figures measuring the jobs they were captured on; the exclusion is a reviewed diff to this file, and the job's cost is capped by its own timeout-minutes."
-      },
-      "solanaSettlementProof": {
-        "ciYmlJobId": "solana-settlement-proof",
-        "jobDisplayName": "Solana settlement redemption proof",
-        "runsWhen": "the change set touches the Solana settlement surface — .sandcastle/settlement-surface.ts, decided per-run in the `build` job",
-        "measuredJobSeconds": [94, 89],
-        "measuredFrom": "the two real runs of the pre-toon#216 stand-alone workflow: run 32027376316 (pull_request, 08a6ef4, COLD Solana-CLI cache — the 30s installer ran) = 94s, run 32027610213 (push, bf74fac, warm cache) = 89s",
-        "timeoutMinutes": 10,
-        "timeoutMinutesRationale": "~6x the measured 89-94s. Loose enough that a slow runner or a sluggish validator boot cannot flake the gate, tight enough that a hung `solana-test-validator` fails in minutes instead of burning the 360-minute default. Raising it is a visible diff here and in ci.yml.",
-        "whyNotFoldedIntoTheCeiling": "Folding a 90s job into the always-on figures would have meant raising averagePerRunSeconds from 163.2s to ~253s (+55%) — a ceiling that no longer describes the common path, re-baselined against numbers taken from two runs rather than the documented 5-run sample. The longest-job figure would have survived (89-94s is under the 136.8s allowance) but the summed-runner-second figure would not, and `needs: build` also skews job creation past checkParallelismAssumption's 15s tolerance. Excluding it keeps both frozen figures measuring exactly the jobs they were captured on, and puts this job's cost under its own appropriate threshold instead."
+        "whyNotFoldedIntoTheCeiling": "Measured against the ceilings it did trip the performance guard: build 115s + devbox 48s + no-op 4s + this job 32s = 199s summed runner-seconds, over the 187.7s allowance (163.2s + 15%), while every gated job stayed the same size. The overage is exactly this job's own cost, not drift in the existing jobs (without it the run sums to 167s, inside the band). The job cannot be made cheaper than about 25s of setup, and folding it into `build` is not an option: `changeset version` mutates the tree and build's later steps must judge the author's tree (see the comment in ci.yml). It runs on pull requests only, so the push-and-PR samples the frozen figures were taken from do not describe it, and raising the always-on ceiling by ~20% to absorb a PR-only job would loosen the budget for the common path. Excluding it by name keeps both frozen figures measuring the jobs they were captured on; the exclusion is a reviewed diff to this file, and the job's cost is capped by its own timeout-minutes."
       }
     },
     "cacheHitRate": {
@@ -82,14 +71,14 @@
     }
   },
   "gateCorrectness": {
-    "description": "Current violation counts under the existing soft-gate ceiling (`eslint . --max-warnings 940`) and the known-debt typecheck gate. These are the frozen baseline the epic (toon-protocol/toon-meta#210) ratchets toward zero in follow-up slices — this issue only captures the number.",
+    "description": "Current violation counts under the existing soft-gate ceiling (`eslint . --max-warnings 421`) and the known-debt typecheck gate. These are the frozen baseline the epic (toon-protocol/toon-meta#210) ratchets toward zero in follow-up slices — this issue only captures the number.",
     "lint": {
       "command": "npx eslint .",
       "errors": 0,
-      "warnings": 940,
-      "maxWarningsCeiling": 940,
+      "warnings": 421,
+      "maxWarningsCeiling": 421,
       "byRule": {
-        "@typescript-eslint/no-non-null-assertion": 940
+        "@typescript-eslint/no-non-null-assertion": 421
       }
     },
     "typecheck": {

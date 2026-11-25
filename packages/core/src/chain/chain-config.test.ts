@@ -309,13 +309,12 @@ describe('Story 3.2: Multi-Environment Chain Configuration', () => {
   // Risk: E3-R009
   // --------------------------------------------------------------------------
   describe('viem-only enforcement (3.9-UNIT-001)', () => {
-    it('[P2] no ethers imports in Epic 3 code (packages/{core,sdk,town}/src)', () => {
+    it('[P2] no ethers imports in Epic 3 code (packages/{core,town}/src)', () => {
       // Static analysis: scan for ethers imports in Epic 3 source code
       // Exclude: test files, node_modules, connector package (architectural debt)
       const testExclude = /\.(test|spec)\.ts$/;
       const directories = [
         join(__dirname, '..', '..', '..', 'core', 'src'),
-        join(__dirname, '..', '..', '..', 'sdk', 'src'),
         join(__dirname, '..', '..', '..', 'town', 'src'),
       ];
 
